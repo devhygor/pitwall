@@ -55,6 +55,7 @@ class Frame:
     susp: tuple = (0.0, 0.0, 0.0, 0.0)         # curso da suspensão (m)
     session_time_left: float = -1.0            # ms até a bandeirada (-1 = desconhecido)
     game: str = "acc"
+    cut_penalty: bool = False                  # o jogo deu penalidade por cortar a pista
     extra: dict = field(default_factory=dict)
 
 
@@ -134,6 +135,7 @@ class ACCSource:
             last_sector_ms=g.last_sector_time,
             norm_pos=g.normalized_car_position,
             is_valid_lap=bool(g.is_valid_lap),
+            cut_penalty="Cutting" in getattr(g.penalty, "name", ""),
             in_pit_lane=bool(g.is_in_pit_lane),
             in_pit=bool(g.is_in_pit),
             fuel=p.fuel,

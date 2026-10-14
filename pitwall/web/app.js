@@ -241,7 +241,8 @@ async function renderSession(id) {
     const clean = l.valid && !l.out_lap && !l.in_lap;
     const status = l.out_lap ? `<span class="status pit">Saída do box</span>`
       : l.in_lap ? `<span class="status pit">Entrada no box</span>`
-      : l.valid ? `<span class="status ok">Válida</span>` : `<span class="status bad">Inválida</span>`;
+      : l.valid ? `<button class="status ok vbtn" data-valid="${l.id}" data-to="0" title="Cortou a pista e o jogo não pegou? Clique para marcar como inválida">Válida</button>`
+      : `<button class="status bad vbtn" data-valid="${l.id}" data-to="1" title="Clique para marcar como válida">Inválida</button>`;
     const d = best && clean ? l.lap_time_ms - best : null;
     const sec = (v, b) => `<td class="num ${clean && v && v === b ? "best" : ""}">${fmtSec(v)}</td>`;
     const checked = sessionState.selected.includes(l.id);
@@ -361,6 +362,16 @@ async function renderSession(id) {
     await api(`/api/sessions/${id}`, { method: "DELETE" });
     location.hash = "#/";
   };
+  view.querySelectorAll("[data-valid]").forEach((b) => b.onclick = async () => {
+    const to = b.dataset.to === "1";
+    if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = to ? "Marcar válida?" : "Marcar inválida?"; return; }
+    b.disabled = true;
+    try {
+      const r = await api(`/api/laps/${b.dataset.valid}/valid`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valid: to }) });
+      if (r.cloud && r.cloud.error) console.warn("nuvem:", r.cloud.error);
+    } catch (e) { b.textContent = e.message; return; }
+    renderSession(id);
+  });
   bindFuel();
   drawDegCharts(data.stint_trends);
   engineerPanel(s);
@@ -1861,7 +1872,8 @@ function evIcons(events) {
   for (const e of events) by[e.type] = (by[e.type] || 0) + 1;
   return Object.entries(by).map(([k, n]) => {
     const e = EV[k] || { icon: "•", name: k, cls: "" };
-    return `<span class="ev ${e.cls}" title="${esc(e.name)}">${e.icon}${n > 1 ? n : ""}</span>`;
+    const why = events.filter((x) => x.type === k && x.why).map((x) => x.why);
+    return `<span class="ev ${e.cls}" title="${esc(e.name)}${why.length ? ": " + esc(why.join("; ")) : ""}">${e.icon}${n > 1 ? n : ""}</span>`;
   }).join("");
 }
 function incidentMarkers(svg, events, ax, az, segs) {

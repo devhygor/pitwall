@@ -275,6 +275,14 @@ class Team:
                 break
         return {"sent": sent, "skipped": skipped, "errors": errors}
 
+    def sync_pb(self, car: str, track: str) -> dict:
+        """Depois de mudar a validade de uma volta: deixa na nuvem o recorde atual (ou nenhum)."""
+        pb = self.db.pb_for(car, track)
+        if pb:
+            return self.upload_lap(pb["lap_id"], force=True)
+        self._rest("DELETE", "laps", {"user_id": f"eq.{self.user['id']}", "car": f"eq.{car}", "track": f"eq.{track}"})
+        return {"sent": False, "removed": True}
+
     def upload_async_if_pb(self, lap_id: int, car: str, track: str):
         """Chamado depois de cada volta: se for recorde novo, envia em segundo plano."""
         if not (self.configured and self.settings.get("team_auto_upload")):

@@ -113,6 +113,33 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
             raise HTTPException(404, "volta não encontrada")
         return l
 
+    @app.put("/api/laps/{lap_id}/valid")
+    def lap_valid(lap_id: int, valid: bool = Body(..., embed=True)):
+        """Marca à mão uma volta como válida/inválida (ex.: corte que o jogo não pegou)."""
+        l = db.lap(lap_id, with_telemetry=False)
+        if not l:
+            raise HTTPException(404, "volta não encontrada")
+        before = db.pb_for(l["car"], l["track"])
+        db.set_lap_valid(lap_id, valid)
+        after = db.pb_for(l["car"], l["track"])
+        changed = (before or {}).get("lap_id") != (after or {}).get("lap_id")
+        cloud = None
+        if changed:
+            t = _team()
+            if t.configured:
+                from .team import TeamError
+                try:
+                    cloud = t.sync_pb(l["car"], l["track"])
+                except TeamError as e:
+                    cloud = {"error": str(e)}
+            if recorder and recorder.live_delta and getattr(recorder, "_session_key", None) \
+                    and recorder._session_key[3] == l["car"] and recorder._session_key[2] == l["track"]:
+                try:
+                    recorder.live_delta.load(l["car"], l["track"], recorder.session_id)
+                except Exception:  # noqa: BLE001
+                    pass
+        return {"ok": True, "pb_changed": changed, "pb": after, "cloud": cloud}
+
     @app.get("/api/tracks/{track}/laps")
     def track_laps(track: str):
         return db.laps_for_track(track)

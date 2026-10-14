@@ -205,6 +205,20 @@ class DB:
             out.setdefault((r["car"], r["track"]), dict(r))
         return out
 
+    def set_lap_valid(self, lap_id: int, valid: bool, reason: str | None = None):
+        """Marca uma volta como válida/inválida. `reason` (detecção automática) vira um evento da volta."""
+        with self._lock, self.connect() as c:
+            row = c.execute("SELECT events FROM laps WHERE id = ?", (lap_id,)).fetchone()
+            if row is None:
+                return
+            try:
+                ev = json.loads(row["events"] or "[]")
+            except (TypeError, ValueError):
+                ev = []
+            if reason and not valid:
+                ev.append({"type": "invalid", "d": 1.0, "t": None, "why": reason})
+            c.execute("UPDATE laps SET valid = ?, events = ? WHERE id = ?", (1 if valid else 0, json.dumps(ev), lap_id))
+
     def pb_for(self, car: str, track: str) -> dict | None:
         return self.personal_bests().get((car, track))
 

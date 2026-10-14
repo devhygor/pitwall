@@ -425,3 +425,6 @@ ol.plan li:last-child { border-bottom: 0; }
 .feat { text-align: left; margin: 20px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.9; }
 
 #tJoin, #tNew { width: 62%; }
+
+.vbtn { cursor: pointer; background: none; border: 0; padding: 0; font: inherit; }
+.vbtn:hover { text-decoration: underline; }

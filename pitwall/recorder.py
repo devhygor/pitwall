@@ -53,6 +53,7 @@ class Recorder:
         self.video = video          # VideoRecorder opcional
         self.on_session_start = []  # funções chamadas com (session_id, primeiro frame)
         self.extra_live: dict = {}  # informações extras para o status ao vivo (ex.: setup sugerido)
+        self._post = None           # conferência da última volta salva (ver _post_check)
         self.live_delta = None      # LiveDelta opcional (delta ao vivo contra o recorde)
         self.on_lap_saved = []      # funções chamadas com (lap_id, car, track) depois de gravar uma volta
         self.session_id: Optional[int] = None
@@ -143,6 +144,9 @@ class Recorder:
         self._detect_events(lap, f)
         if not f.is_valid_lap:
             lap.invalid = True
+        if f.cut_penalty and prev is not None and not prev.cut_penalty:
+            lap.invalid = True          # penalidade nova por corte de pista nesta volta
+        self._post_check(f)
         if f.in_pit_lane:
             lap.touched_pit = True
         self._sample(lap, f)
@@ -265,6 +269,34 @@ class Recorder:
                 lap.brake_t[i] += f.brake_temp[i]
             lap.tyre_n += 1
 
+    def _post_check(self, f: Frame):
+        """Confere a volta que acabou de ser salva nos primeiros segundos da volta seguinte.
+
+        O ACC às vezes só invalida um corte (ex.: na última chicane) depois de cruzar a linha,
+        e o melhor tempo oficial dele só considera voltas válidas: se a volta salva é mais rápida
+        que o melhor tempo do jogo, o jogo não aceitou a volta."""
+        pc = self._post
+        if not pc:
+            return
+        lap_id, lap_time, t_cross = pc
+        if f.t - t_cross > 4.0:
+            self._post = None
+            return
+        reason = None
+        # o melhor tempo do jogo pode demorar alguns quadros para atualizar: só confere depois de 2,5 s
+        if f.t - t_cross >= 2.5 and f.best_time_ms and f.best_time_ms > 0 and lap_time < f.best_time_ms - 2:
+            reason = "o jogo não aceitou como melhor volta"
+        elif not f.is_valid_lap and f.current_time_ms < 2000 and not f.in_pit_lane:
+            reason = "invalidada logo depois da linha"
+        if reason:
+            self._post = None
+            try:
+                self.db.set_lap_valid(lap_id, False, reason)
+                if self.live_delta and self._session_key:
+                    self.live_delta.load(self._session_key[3], self._session_key[2], self.session_id)
+            except Exception as e:  # noqa: BLE001
+                print(f"Aviso: {e}")
+
     def _flush_pending(self, frame: Optional[Frame] = None, force: bool = False):
         if not self._pending:
             return
@@ -331,6 +363,8 @@ class Recorder:
         )
         self.laps_saved += 1
         self._session_laps += 1
+        self._post = (lap_id, int(lap_time), cross_frame.t) \
+            if not (lap.invalid or out_lap or in_lap) and cross_frame.game == "acc" else None
         if self._session_key:
             for fn in self.on_lap_saved:
                 try:
