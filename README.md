@@ -16,9 +16,8 @@ Python nem de administrador. Se o Windows avisar "O Windows protegeu o
 computador", clique em **Mais informações → Executar assim mesmo** (o app não é
 assinado digitalmente).
 
-Para gerar uma versão nova do instalador: crie uma tag `vX.Y.Z` e envie
-(`git tag v0.2.0 && git push --tags`). O GitHub Actions monta o executável e
-publica em Releases.
+Versões novas saem sozinhas: a cada mudança no app enviada para a `main`, o
+GitHub Actions monta o executável e publica um instalador novo em Releases.
 
 ## Como usar (pelo código)
 
