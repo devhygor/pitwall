@@ -265,7 +265,10 @@ class Team:
 
     def upload_records(self) -> dict:
         sent, skipped, errors = 0, 0, []
+        demo = set(self.db.demo_session_ids())
         for pb in self.db.personal_bests().values():
+            if pb["session_id"] in demo:      # voltas do simulador não vão para a equipe
+                continue
             try:
                 r = self.upload_lap(pb["lap_id"])
                 sent += r["sent"]

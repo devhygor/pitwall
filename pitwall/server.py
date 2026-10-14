@@ -23,11 +23,11 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
     @app.get("/api/sessions")
     def sessions():
         pbs = db.personal_bests()
-        by_session = {pb["session_id"]: pb for pb in pbs.values()}
+        protected = db.protected_session_ids()
         out = []
         for s in db.sessions():
             pb = pbs.get((s["car"], s["track"]))
-            s["protected"] = s["id"] in by_session
+            s["protected"] = s["id"] in protected
             s["pb_ms"] = pb["lap_time_ms"] if pb else None
             s["has_video"] = _video_ok(s)
             out.append(s)
@@ -52,6 +52,25 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
             deleted.append(sid)
         return {"deleted": deleted, "skipped": skipped}
 
+    @app.post("/api/sessions/delete-demo")
+    def delete_demo():
+        """Apaga todas as sessões de demonstração (e as voltas demo enviadas para a equipe)."""
+        ids = db.demo_session_ids()
+        for sid in ids:
+            path = db.delete_session(sid)
+            if video:
+                video.delete_for(path)
+        cloud = None
+        t = _team()
+        if t.configured:
+            from .team import TeamError
+            try:
+                t._rest("DELETE", "laps", {"user_id": f"eq.{t.user['id']}", "game": "eq.demo"})
+                cloud = "ok"
+            except TeamError as e:
+                cloud = str(e)
+        return {"deleted": len(ids), "cloud": cloud}
+
     @app.get("/api/sessions/{sid}")
     def session(sid: int, extra_laps: int = 1):
         s = db.session(sid)
@@ -61,7 +80,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
         summ = analysis.session_summary(laps)
         s["has_video"] = _video_ok(s)
         pb = db.pb_for(s["car"], s["track"])
-        s["protected"] = bool(pb and pb["session_id"] == sid)
+        s["protected"] = sid in db.protected_session_ids()
         first = laps[0] if laps else {}
         sug = setups.suggest(db, s["car"], s["track"], s["session_type"], first.get("air_temp"), first.get("road_temp"),
                              basis=settings.get("setup_temp_basis") if settings else "air",

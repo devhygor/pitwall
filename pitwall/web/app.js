@@ -154,6 +154,10 @@ async function renderSessions() {
         <button class="btn danger ${st.confirm ? "armed" : ""}" id="fsDel">${st.confirm ? "Confirmar exclusão" : "Excluir selecionadas"}</button>` : ""}
     </div>
     <div id="fsOut"></div>
+    ${list.some((s) => s.game === "demo" || /^demo_/.test(s.track)) ? `<div class="demo-bar">
+      <div><b>${list.filter((s) => s.game === "demo" || /^demo_/.test(s.track)).length} sessões de demonstração</b>
+        <span class="sub">criadas pelo simulador para testar o app. Não são voltas suas.</span></div>
+      <button class="btn danger" id="demoDel">Apagar demonstrações</button></div>` : ""}
     ${Object.keys(byTrack).length ? Object.entries(byTrack).map(([track, ss]) => `
       <section class="tgroup">
         <div class="tghead">
@@ -193,6 +197,13 @@ async function renderSessions() {
   $("#fsCar").onchange = (e) => { st.car = e.target.value; re(); };
   $("#fsType").onchange = (e) => { st.type = e.target.value; re(); };
   $("#fsPeriod").onchange = (e) => { st.period = e.target.value; re(); };
+  if ($("#demoDel")) $("#demoDel").onclick = async () => {
+    const b = $("#demoDel");
+    if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmar: apagar todas"; return; }
+    b.disabled = true; b.textContent = "Apagando…";
+    await api("/api/sessions/delete-demo", { method: "POST" });
+    renderSessions();
+  };
   view.querySelectorAll("[data-sel]").forEach((cb) => cb.onchange = () => {
     const id = +cb.dataset.sel;
     cb.checked ? st.sel.add(id) : st.sel.delete(id);

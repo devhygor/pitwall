@@ -428,3 +428,6 @@ ol.plan li:last-child { border-bottom: 0; }
 
 .vbtn { cursor: pointer; background: none; border: 0; padding: 0; font: inherit; }
 .vbtn:hover { text-decoration: underline; }
+.demo-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; margin: 0 0 14px;
+  border: 1px dashed rgba(255,176,32,.45); border-radius: var(--radius); background: rgba(255,176,32,.05); }
+.demo-bar .sub { display: block; }

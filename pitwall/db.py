@@ -222,8 +222,16 @@ class DB:
     def pb_for(self, car: str, track: str) -> dict | None:
         return self.personal_bests().get((car, track))
 
+    def demo_session_ids(self) -> list[int]:
+        """Sessões do simulador (modo demo/--seed-demo), inclusive volta ideal/equipe em pista demo."""
+        with self.connect() as c:
+            return [r[0] for r in c.execute(
+                r"SELECT id FROM sessions WHERE game = 'demo' OR track LIKE 'demo\_%' ESCAPE '\'")]
+
     def protected_session_ids(self) -> set:
-        return {pb["session_id"] for pb in self.personal_bests().values()}
+        """Sessões com recorde pessoal não podem ser apagadas (as de demonstração podem)."""
+        demo = set(self.demo_session_ids())
+        return {pb["session_id"] for pb in self.personal_bests().values()} - demo
 
     def session(self, session_id: int) -> dict | None:
         with self.connect() as c:
