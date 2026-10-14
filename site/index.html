@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pitwall · Equipe</title>
+  <meta name="description" content="Pitwall: engenheiro de corrida para ACC e iRacing. Compare voltas com a sua equipe." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='7' fill='none' stroke='%23ffb020' stroke-width='2.5'/%3E%3Cpath d='M10 22V10h6.5a4 4 0 0 1 0 8H10' fill='none' stroke='%23ffb020' stroke-width='2.5'/%3E%3Ccircle cx='22' cy='22' r='2.2' fill='%23ffb020'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+        <rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="currentColor" stroke-width="2.5"/>
+        <path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+        <circle cx="22" cy="22" r="2.2" fill="currentColor"/>
+      </svg>
+      <span>Pitwall</span>
+    </a>
+    <span class="spacer"></span>
+    <div id="me"></div>
+  </header>
+  <main id="view"><div class="sub">Carregando…</div></main>
+  <footer class="foot">Pitwall · feito por pilotos, para pilotos · <a href="https://github.com/devhygor/pitwall" target="_blank" rel="noopener">código no GitHub</a></footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn>=0.29
+numpy>=1.26
+pyaccsharedmemory==1.0.0
+imageio-ffmpeg>=0.5
+pystray>=0.19
+Pillow>=10
+pyirsdk>=1.3

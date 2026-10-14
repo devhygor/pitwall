@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+*.mp4
+*.mkv
+auth.json
+settings.json
+.venv/
+venv/
