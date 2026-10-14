@@ -339,14 +339,18 @@ async function renderTeam(id) {
 }
 
 // ---------------------------------------------------------------- início
-sb.auth.onAuthStateChange(async (ev, s) => {
+// Importante: não chamar o Supabase direto dentro do onAuthStateChange (trava a sessão);
+// o tratamento roda logo depois, fora do callback.
+async function onSession(ev, s) {
   const changed = (s && s.user && s.user.id) !== (session && session.user && session.user.id);
   session = s;
   if (s && /[?&]code=/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
   if (!changed && ev !== "INITIAL_SESSION") return;
-  await loadProfile();
+  try { await loadProfile(); } catch (e) { /* segue com os dados da conta */ }
   renderMe();
   const pending = store.get(PENDING);
   if (session && pending && !location.hash.startsWith("#/join/")) { location.hash = `#/join/${pending}`; return; }
   route();
-});
+}
+view.innerHTML = `<div class="loading">Carregando…</div>`;
+sb.auth.onAuthStateChange((ev, s) => { setTimeout(() => onSession(ev, s), 0); });
