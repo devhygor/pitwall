@@ -21,6 +21,8 @@ def supported() -> bool:
 
 
 def command() -> str:
+    if getattr(sys, "frozen", False):        # instalado (Pitwall.exe)
+        return f'"{sys.executable}" --background'
     exe = Path(sys.executable)
     pyw = exe.with_name("pythonw.exe")
     if pyw.exists():

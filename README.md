@@ -7,7 +7,20 @@ comparada numa interface local.
 Projeto próprio, escrito do zero. Ele lê os dados pela shared memory oficial
 do ACC, a mesma interface pública que qualquer app de telemetria usa.
 
-## Como usar
+## Instalar (amigos)
+
+Baixe o **Pitwall-Setup.exe** em
+[Releases](https://github.com/devhygor/pitwall/releases/latest) (ou no site
+https://devhygor.github.io/pitwall/), abra e siga o instalador. Não precisa de
+Python nem de administrador. Se o Windows avisar "O Windows protegeu o
+computador", clique em **Mais informações → Executar assim mesmo** (o app não é
+assinado digitalmente).
+
+Para gerar uma versão nova do instalador: crie uma tag `vX.Y.Z` e envie
+(`git tag v0.2.0 && git push --tags`). O GitHub Actions monta o executável e
+publica em Releases.
+
+## Como usar (pelo código)
 
 1. Instale o Python 3.10 ou mais novo (python.org, marque "Add to PATH").
 2. Dê dois cliques em **`iniciar.bat`**. Na primeira vez ele cria o ambiente e

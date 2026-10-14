@@ -1,0 +1,76 @@
+name: Gerar instalador do Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-app.txt pyinstaller
+
+      - name: Versão
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; else v="0.0.${GITHUB_RUN_NUMBER}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          printf '__version__ = "%s"\n' "$v" > pitwall/_version.py
+
+      - name: Ícone
+        run: python -c "from pitwall import tray; tray.save_ico('packaging/pitwall.ico')"
+
+      - name: Executável (PyInstaller)
+        run: >
+          pyinstaller packaging/pitwall_app.py --name Pitwall --noconfirm --clean --windowed
+          --icon packaging/pitwall.ico
+          --add-data "pitwall/web;pitwall/web"
+          --collect-all imageio_ffmpeg
+          --collect-all webview
+          --collect-submodules pitwall
+          --hidden-import pystray._win32
+          --hidden-import irsdk
+          --hidden-import pyaccsharedmemory
+          --paths .
+
+      - name: Teste rápido do executável
+        shell: bash
+        run: |
+          test -f dist/Pitwall/Pitwall.exe
+          ls dist/Pitwall/_internal/pitwall/web | head
+
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc "/DAppVersion=${{ steps.ver.outputs.version }}" packaging\pitwall.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pitwall-Setup
+          path: dist/Pitwall-Setup.exe
+
+      - name: Publicar na página de downloads (Releases)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Pitwall-Setup.exe
+          name: Pitwall ${{ steps.ver.outputs.version }}
+          body: |
+            Baixe **Pitwall-Setup.exe**, abra e siga o instalador (não pede administrador).
+            O Windows pode avisar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.

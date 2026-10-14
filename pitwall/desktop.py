@@ -175,17 +175,20 @@ def create_shortcuts() -> dict:
     if sys.platform != "win32":
         return {"ok": False, "error": "só no Windows"}
     exe = Path(sys.executable)
-    pyw = exe.with_name("pythonw.exe")
-    target = pyw if pyw.exists() else exe
-    ico = icon_path()
-    launcher = ROOT / "pitwall.pyw"
+    if getattr(sys, "frozen", False):        # instalado: atalho direto para o Pitwall.exe
+        target, ico, workdir, args = exe, exe, exe.parent, ""
+    else:
+        pyw = exe.with_name("pythonw.exe")
+        target, ico, workdir = (pyw if pyw.exists() else exe), icon_path(), ROOT
+        args = f'"{ROOT / "pitwall.pyw"}"'
+    launcher = args
     ps = f"""
 $ws = New-Object -ComObject WScript.Shell
 foreach ($dir in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {{
   $s = $ws.CreateShortcut((Join-Path $dir 'Pitwall.lnk'))
   $s.TargetPath = '{target}'
-  $s.Arguments = '"{launcher}"'
-  $s.WorkingDirectory = '{ROOT}'
+  $s.Arguments = '{launcher}'
+  $s.WorkingDirectory = '{workdir}'
   $s.IconLocation = '{ico},0'
   $s.Description = 'Pitwall - engenheiro de corrida para o ACC'
   $s.Save()
