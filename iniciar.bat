@@ -11,6 +11,7 @@ if not exist .venv (
 echo Verificando dependencias...
 .venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements.txt
 .venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements-app.txt || echo Aviso: janela propria indisponivel, o Pitwall vai usar o navegador.
+.venv\Scripts\python -m pip install -q --disable-pip-version-check -r requirements-iracing.txt >nul 2>&1 || echo Aviso: suporte ao iRacing indisponivel nesta versao do Python ^(o ACC funciona normal^).
 if "%~1"=="" (
     .venv\Scripts\python -m pitwall --create-shortcuts
     start "" .venv\Scripts\pythonw.exe pitwall.pyw
