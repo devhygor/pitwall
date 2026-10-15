@@ -348,3 +348,5 @@ canvas.chart { width: 100%; display: block; }
 .seg button { white-space: nowrap; }
 .st2 b { font-size: 17px; white-space: nowrap; margin-right: 6px; }
 .mapbar .sub { white-space: nowrap; font-size: 13px; }
+.hint-an { margin-top: 10px; font-size: 14px; color: var(--fog); background: rgba(242,169,59,.08); border: 1px solid rgba(242,169,59,.25); border-radius: 10px; padding: 7px 12px; display: inline-block; }
+.hint-an b { color: var(--sodium); }

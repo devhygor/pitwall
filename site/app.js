@@ -294,7 +294,8 @@ async function renderTeam(id) {
   const mine = laps.filter((l) => l.user_id === me).length;
   view.innerHTML = `<div class="wrap page">
     <div class="page-head"><div class="team-title">${teamLogo(team)}<div><a class="back" href="#/" id="allTeams">Suas equipes</a><h1>${esc(team.name)}</h1>
-      <div class="sub">${members.length} ${members.length === 1 ? "piloto" : "pilotos"}, ${Object.keys(groups).length} ${Object.keys(groups).length === 1 ? "combinação" : "combinações"} de carro e pista</div></div></div></div>
+      <div class="sub">${members.length} ${members.length === 1 ? "piloto" : "pilotos"}, ${Object.keys(groups).length} ${Object.keys(groups).length === 1 ? "combinação" : "combinações"} de carro e pista</div>
+      <div class="hint-an">📈 Clique em <b>Analisar</b> ou <b>Comparar</b> numa volta para abrir a análise completa: onde perde tempo em cada curva, dicas, gráficos, mapa e vídeo.</div></div></div></div>
     <div class="layout">
       <div>${Object.keys(groups).length ? Object.values(groups).map((g) => {
         const lead = g[0].lap_time_ms;
@@ -383,7 +384,7 @@ function rowsHtml(g, me) {
     <span class="gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
     <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span>
     <span class="racts">${r.clip_path ? `<span class="pill" title="Tem vídeo da volta">▶</span>` : ""}${r.setup_name ? `<button class="pill" data-setup="${r.id}" title="Baixar o setup: ${esc(r.setup_name)}">⚙</button>` : ""}
-      <button class="btn small" data-cmp="${r.id}" data-combo="${esc(r.track + "|" + r.car + "|" + r.game)}" data-me="${r.user_id === me ? 1 : ""}">${r.user_id === me ? "Ver" : "Comparar"}</button></span></div>`).join("");
+      <button class="btn small" data-cmp="${r.id}" data-combo="${esc(r.track + "|" + r.car + "|" + r.game)}" data-me="${r.user_id === me ? 1 : ""}" title="Abrir a análise completa: curvas, dicas, gráficos, mapa e vídeo">📈 ${r.user_id === me ? "Analisar" : "Comparar"}</button></span></div>`).join("");
 }
 function bindRows(root) {
   root.querySelectorAll("[data-cmp]").forEach((b) => b.onclick = async () => {
