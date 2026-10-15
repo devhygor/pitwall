@@ -58,6 +58,7 @@ const routes = [
   [/^#\/progress(?:\?(.*))?$/, (m) => renderProgress(new URLSearchParams(m[1] || ""))],
   [/^#\/team$/, () => renderTeam()],
   [/^#\/lfm$/, () => renderLfm()],
+  [/^#\/community$/, () => renderCommunity()],
   [/^#\/overlay$/, () => renderOverlay()],
 ];
 let current = { name: "", id: null };
@@ -78,7 +79,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -2488,6 +2489,7 @@ async function renderTeam(tab) {
   current = { name: "team" };
   if (teamState.polling) { clearTimeout(teamState.polling); teamState.polling = null; }
   tab = tab || teamState.tab || "ranking";
+  if (tab === "community") tab = "ranking";
   teamState.tab = tab;
   view.innerHTML = `<div class="sub">Carregando…</div>`;
   let st;
@@ -2516,7 +2518,6 @@ async function renderTeam(tab) {
     ${st.last_error ? `<div class="note warn">Último envio automático: ${esc(st.last_error)}</div>` : ""}
     <div class="tabs2">
       <button class="${tab === "ranking" ? "on" : ""}" data-tab="ranking">Ranking da equipe</button>
-      <button class="${tab === "community" ? "on" : ""}" data-tab="community">Comunidade</button>
       <button class="${tab === "manage" ? "on" : ""}" data-tab="manage">Gerenciar</button>
     </div>
     <div id="tMain"></div>`;
@@ -2535,7 +2536,7 @@ async function renderTeam(tab) {
     } catch (e) { b.textContent = e.message; }
   };
   if (tab === "manage" || !team) return teamManage(teams, team, s);
-  if (tab === "community") return teamCommunity();
+  if (tab === "community") tab = "ranking";
   teamBoard(team);
 }
 
@@ -2607,8 +2608,8 @@ async function teamCommunity() {
   let rows, recs;
   try { [rows, recs] = await Promise.all([api("/api/team/community"), api("/api/records")]); }
   catch (e) { box.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
-  $("#thMembers").innerHTML = "";
-  if (!rows.length) { box.innerHTML = `<div class="panel empty"><b>Ninguém no ranking ainda</b>Seja o primeiro: clique em “Enviar meus recordes”.</div>`; return; }
+  if ($("#thMembers")) $("#thMembers").innerHTML = "";
+  if (!rows.length) { box.innerHTML = `<div class="panel empty"><b>Ninguém no ranking ainda</b>Seja o primeiro: envie seus recordes na tela Equipe.</div>`; return; }
   const combos = comboGroups(rows);
   const f = teamState.cfilter || (CTX.track ? { track: CTX.track, car: CTX.car } : {});
   const pick = combos.find((g) => g[0].track === f.track && g[0].car === f.car) || combos.find((g) => g.some((r) => r.me)) || combos[0];
@@ -2864,6 +2865,9 @@ const raceWhen = (iso) => {
     d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 };
 async function openExt(url) {
+  if (url.startsWith("https://lowfuelmotorsport.com/")) {
+    try { const r = await postJ("/api/lfm/window", { url }); if (r.window || r.opened) return; } catch (e) { /* segue */ }
+  }
   try { const r = await postJ("/api/open", { url }); if (r.opened) return; } catch (e) { /* abre no app */ }
   window.open(url, "_blank");
 }
@@ -2902,7 +2906,8 @@ async function renderLfm(force) {
         <button class="btn" data-ext="${esc(P.url)}">Perfil no LFM ↗</button>
         <button class="btn xs ghost" id="lfChange">Trocar perfil</button>
       </div>
-    </section>` : `<div class="panel"><div class="row"><button class="btn" id="lfRef">Tentar de novo</button><button class="btn xs ghost" id="lfChange">Trocar perfil</button></div></div>`}
+    </section>
+    ${lfmAccountBar(D)}` : `<div class="panel"><div class="row"><button class="btn" id="lfRef">Tentar de novo</button><button class="btn xs ghost" id="lfChange">Trocar perfil</button></div></div>`}
 
     ${N ? `<section class="lfm-next" style="${N.track_image ? `--img:url('${esc(N.track_image)}')` : ""}">
       <div class="ln-txt"><span class="sub">Próxima corrida</span>
@@ -2934,6 +2939,7 @@ async function renderLfm(force) {
         <div><b>${esc(x.name || "")}</b><span class="num">${x.rating ?? "—"}</span> ${licBadge(x.license)} <small class="sub">${x.ranked_races ?? 0} ranq.</small></div></div>`).join("")}</div>` : ""}
     </div>` : ""}
 
+    <div id="lfMine"></div>
     <div class="panel"><h2>Séries de ACC desta semana ${D.series ? `<small class="sub">${esc(D.series.season || "")}${D.series.week ? " · semana " + D.series.week : ""}</small>` : ""}</h2>
       <div class="lfm-series">${S.map((x) => `
         <div class="lser ${x.you && !x.you.eligible ? "locked" : ""}">
@@ -2944,11 +2950,16 @@ async function renderLfm(force) {
               ${x.you ? (x.you.eligible ? `<span class="okc">✓ você pode correr</span>` : `<span class="noc">falta ${esc(x.you.missing.join(", "))}</span>`) : ""}</div>
             ${x.next_race ? `<div class="ls-next"><span>${raceWhen(x.next_race)}</span><b class="num" data-cd="${esc(x.next_race)}">${countdown(x.next_race)}</b>
               ${x.signups != null ? `<small class="sub">${x.signups} inscritos</small>` : ""}</div>` : `<div class="sub">Sem corrida marcada</div>`}
-            <div class="row"><button class="btn xs primary" data-ext="${esc(x.sessions_url)}">Inscrever ↗</button><button class="btn xs" data-ext="${esc(x.url)}">Série</button></div>
+            <div class="ls-sess" data-ev="${x.event_id}"></div>
+            <div class="row"><button class="btn xs primary" data-ext="${esc(x.sessions_url)}">Inscrever</button><button class="btn xs" data-ext="${esc(x.url)}">Série</button>
+              ${x.next_race ? `<button class="bell" title="Me avisar quando o servidor abrir" data-bell="${esc(x.slug + "@" + x.next_race)}"
+                data-info='${esc(JSON.stringify({ series: x.name, slug: x.slug, track: x.track, date: x.next_race, url: x.sessions_url }))}'>🔔</button>` : ""}</div>
           </div></div>`).join("") || `<div class="sub">Nenhuma série encontrada.</div>`}</div>
-      <p class="sub" style="margin-top:12px">Dados públicos do lowfuelmotorsport.com, atualizados a cada 10–15 min. O Pitwall só lê; inscrição e pagamento ficam no site do LFM.</p>
-    </div>`;
+      <p class="sub" style="margin-top:12px">Dados do lowfuelmotorsport.com, atualizados a cada poucos minutos. A inscrição é feita na página do LFM, que abre numa janela do próprio Pitwall.</p>
+    </div>
+    <div id="lfAlerts"></div>`;
   view.querySelectorAll("[data-ext]").forEach((b) => b.onclick = () => openExt(b.dataset.ext));
+  lfmExtras(D);
   const ref = $("#lfRef"); if (ref) ref.onclick = () => renderLfm(true);
   const ch = $("#lfChange"); if (ch) ch.onclick = () => lfmSetup(D, true);
   lfmTimer = setInterval(() => {
@@ -2990,4 +3001,170 @@ function lfmSetup(D, changing) {
     try { await api("/api/lfm/user", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user: $("#lfId").value }) }); renderLfm(); }
     catch (e) { $("#lfMsg").innerHTML = `<span class="status bad">${esc(e.message)}</span>`; $("#lfSave").disabled = false; }
   };
+}
+
+function lfmAccountBar(D) {
+  const A = D.account || {};
+  if (A.connected) return `<div class="lfm-acc ok"><span>🔗 Conta do LFM conectada${A.name ? ` como <b>${esc(A.name)}</b>` : ""}.
+      O Pitwall vê suas inscrições e toca o alerta quando o servidor abrir.</span>
+    <button class="btn xs ghost" id="lfDisc">Desconectar</button></div>`;
+  return `<div class="lfm-acc"><span>${A.expired ? "A conexão com a sua conta do LFM expirou. " : ""}<b>Conecte sua conta do LFM</b> para ver suas inscrições,
+      os horários de cada servidor e receber o alerta de “Join liberado”. Você entra pela própria página do LFM${D.in_app ? ", numa janela do Pitwall" : ""}.</span>
+    <button class="btn primary sm" id="lfConn">Conectar conta do LFM</button></div>`;
+}
+
+const LFM_SOUNDS = [["ambos", "Ronco do motor + luzes da largada"], ["motor", "Ronco do motor"], ["largada", "Luzes da largada (bipes)"]];
+async function lfmExtras(D) {
+  const conn = $("#lfConn"), disc = $("#lfDisc");
+  if (conn) conn.onclick = async () => {
+    conn.disabled = true; conn.textContent = "Entre no LFM na janela que abriu…";
+    await openExt("https://lowfuelmotorsport.com/");
+    const t0 = Date.now();
+    const poll = async () => {
+      if (current.name !== "lfm") return;
+      try { const a = await api("/api/lfm/account"); if (a.connected) return renderLfm(); } catch (e) { /* tenta de novo */ }
+      if (Date.now() - t0 < 10 * 60e3) setTimeout(poll, 3000); else { conn.disabled = false; conn.textContent = "Conectar conta do LFM"; }
+    };
+    setTimeout(poll, 3000);
+  };
+  if (disc) disc.onclick = async () => { await api("/api/lfm/account", { method: "DELETE" }); renderLfm(); };
+
+  // sininhos (avisar quando o servidor abrir)
+  const bindBells = (root) => root.querySelectorAll("[data-bell]").forEach((b) => b.onclick = async () => {
+    const on = !b.classList.contains("on");
+    let info = {}; try { info = JSON.parse(b.dataset.info || "{}"); } catch (e) { /* ok */ }
+    b.disabled = true;
+    try { await api("/api/lfm/watch", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: b.dataset.bell, on, info }) });
+      root.querySelectorAll(`[data-bell="${CSS.escape(b.dataset.bell)}"]`).forEach((x) => x.classList.toggle("on", on));
+      toast(on ? "Combinado: vou tocar o alerta quando o servidor abrir." : "Alerta removido.");
+    } catch (e) { toast(e.message); }
+    b.disabled = false;
+  });
+
+  // painel de alertas
+  const { settings: st } = await api("/api/settings");
+  if (current.name !== "lfm") return;
+  const box = $("#lfAlerts");
+  if (box) {
+    box.innerHTML = `<div class="panel lfm-al"><h2>Alerta de “Join liberado”</h2>
+      <p class="sub">Toca quando o servidor de uma corrida em que você se inscreveu abre (ou que você marcou com 🔔), mesmo com a janela do Pitwall fechada.</p>
+      <div class="al-grid">
+        <label class="sw"><input type="checkbox" id="alOn" ${st.lfm_alerts_enabled ? "checked" : ""}> Alertas ligados</label>
+        <label>Som <select id="alKind">${LFM_SOUNDS.map(([k, n]) => `<option value="${k}" ${st.lfm_alert_sound === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <label>Volume <span class="vol"><input type="range" id="alVol" min="0" max="100" step="5" value="${st.lfm_alert_volume}"><b id="alVolV">${st.lfm_alert_volume}%</b></span></label>
+        <label>Aviso antes <select id="alPre">${[0, 2, 5, 10, 15].map((m) => `<option value="${m}" ${+st.lfm_alert_before_min === m ? "selected" : ""}>${m ? m + " min antes" : "não avisar antes"}</option>`).join("")}</select></label>
+        <button class="btn" id="alTest">▶ Testar som</button>
+      </div></div>`;
+    const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
+    $("#alOn").onchange = () => put({ lfm_alerts_enabled: $("#alOn").checked });
+    $("#alKind").onchange = () => put({ lfm_alert_sound: $("#alKind").value });
+    $("#alPre").onchange = () => put({ lfm_alert_before_min: +$("#alPre").value });
+    $("#alVol").oninput = () => { $("#alVolV").textContent = $("#alVol").value + "%"; };
+    $("#alVol").onchange = () => put({ lfm_alert_volume: +$("#alVol").value });
+    $("#alTest").onclick = async () => {
+      await put({ lfm_alert_volume: +$("#alVol").value, lfm_alert_sound: $("#alKind").value });
+      let r = {}; try { r = await postJ("/api/lfm/alerts/test", {}); } catch (e) { /* toca aqui */ }
+      if (!r.played) playAlert($("#alKind").value, +$("#alVol").value);
+    };
+  }
+
+  // minhas corridas + servidores de cada série
+  const S = await api("/api/lfm/sessions").catch(() => null);
+  if (current.name !== "lfm" || !S) { bindBells(view); return; }
+  const watched = new Set((S.watches || []).map((w) => w.key));
+  view.querySelectorAll("[data-bell]").forEach((b) => b.classList.toggle("on", watched.has(b.dataset.bell)));
+  const sess = S.sessions || [];
+  const bell = (r) => `<button class="bell ${r.watch || watched.has(String(r.race_id)) ? "on" : ""}" title="Me avisar quando o servidor abrir" data-bell="${r.race_id}"
+    data-info='${esc(JSON.stringify({ race_id: r.race_id, series: r.series, slug: r.slug, track: r.track, date: r.date, server_name: r.server_name, server_password: r.server_password, url: r.url }))}'>🔔</button>`;
+  view.querySelectorAll(".ls-sess").forEach((el) => {
+    const mine = sess.filter((r) => String(r.event_id) === el.dataset.ev && r.date && new Date(r.date) > Date.now() - 15 * 60e3).slice(0, 4);
+    if (!mine.length) return;
+    el.innerHTML = `<div class="sub" style="margin-top:4px">Próximos servidores</div>` + mine.map((r) => `
+      <div class="srv ${r.signed_up ? "me" : ""}"><span>${raceWhen(r.date)}</span>
+        <b class="num" data-cd="${esc(r.date)}">${countdown(r.date)}</b>
+        <small class="sub">${r.registered ?? 0}/${r.slots ?? "?"}</small>
+        ${r.signed_up ? `<span class="tag ok">inscrito</span>` : ""}${r.live ? `<span class="tag live">ao vivo</span>` : ""}${bell(r)}</div>`).join("");
+  });
+  const up = sess.filter((r) => r.signed_up && r.date && new Date(r.date) > Date.now() - 60 * 60e3);
+  const ws = (S.watches || []).filter((w) => w.date && new Date(w.date) > Date.now() - 60 * 60e3 && !up.some((r) => String(r.race_id) === w.key));
+  const mineBox = $("#lfMine");
+  if (mineBox && (S.account.connected || ws.length)) {
+    const card = (r, why) => `<div class="mine-r">
+        <div><b>${esc(r.series || "")}</b><div class="sub">${esc(r.track || "")} · ${raceWhen(r.date)} · ${why}</div>
+          ${r.server_name ? `<div class="srvname">Servidor: <code>${esc(r.server_name)}</code>${r.server_password ? ` · senha <code>${esc(r.server_password)}</code> <button class="btn xs" data-copy="${esc(r.server_password)}">copiar</button>` : ""}</div>` : ""}</div>
+        <div class="mr-cd"><small class="sub">${new Date(r.date) > Date.now() ? "servidor abre em" : "servidor aberto"}</small><b class="num" data-cd="${esc(r.date)}">${countdown(r.date)}</b></div></div>`;
+    mineBox.innerHTML = `<div class="panel"><h2>Minhas corridas</h2>
+      ${up.length || ws.length ? [...up.map((r) => card(r, "inscrito")), ...ws.map((r) => card(r, "🔔 alerta marcado"))].join("")
+        : `<div class="sub">${S.account.connected ? "Você não está inscrito em nenhuma corrida de ACC agora. Inscreva-se numa série abaixo — a página do LFM abre aqui no Pitwall." : ""}</div>`}
+      ${S.error ? `<div class="note warn">${esc(S.error)}</div>` : ""}</div>`;
+    mineBox.querySelectorAll("[data-copy]").forEach((b) => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("Senha copiada."); });
+  }
+  bindBells(view);
+}
+
+// ---------------------------------------------------------------- alerta global (qualquer tela)
+function playAlert(kind, vol) {
+  try { const a = new Audio(`/api/lfm/sound.wav?kind=${encodeURIComponent(kind || "ambos")}&vol=${vol ?? 80}`); a.play(); } catch (e) { /* ok */ }
+}
+function toast(msg) {
+  let t = $("#toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 3200);
+}
+const seenAlerts = new Set();
+let alertsPrimed = false;
+async function pollAlerts() {
+  if (document.body.classList.contains("overlay")) return;
+  try {
+    const r = await api("/api/lfm/alerts");
+    for (const ev of r.events || []) {
+      if (seenAlerts.has(ev.id)) continue;
+      seenAlerts.add(ev.id);
+      const recent = Date.now() - new Date(ev.t) < (ev.phase === "open" ? 10 : 3) * 60e3;
+      if (!alertsPrimed && !recent) continue;  // eventos antigos (de antes de abrir a janela)
+      if (alertsPrimed && !ev.played) playAlert(ev.phase === "open" ? undefined : "aviso");
+      showAlertBanner(ev);
+    }
+    alertsPrimed = true;
+  } catch (e) { /* servidor ocupado */ }
+}
+function showAlertBanner(ev) {
+  const b = document.createElement("div");
+  b.className = "race-alert " + ev.phase;
+  const R = ev.race || {};
+  b.innerHTML = `<div class="ra-lights">${"<i></i>".repeat(5)}</div>
+    <div class="ra-txt"><b>${esc(ev.title)}</b><span>${esc(ev.msg)}</span>
+      ${R.server_name ? `<small>Servidor: <code>${esc(R.server_name)}</code></small>` : ""}</div>
+    ${R.server_password ? `<button class="btn sm" data-copy="${esc(R.server_password)}">Copiar senha</button>` : ""}
+    <button class="btn sm ghost" data-x>Fechar</button>`;
+  document.body.appendChild(b);
+  b.querySelector("[data-x]").onclick = () => b.remove();
+  const c = b.querySelector("[data-copy]"); if (c) c.onclick = () => { navigator.clipboard.writeText(c.dataset.copy); toast("Senha copiada."); };
+  setTimeout(() => b.remove(), ev.phase === "open" ? 10 * 60e3 : 3 * 60e3);
+}
+setInterval(pollAlerts, 10000);
+setTimeout(pollAlerts, 1500);
+
+// ---------------------------------------------------------------- ranking geral da comunidade
+async function renderCommunity() {
+  current = { name: "community" };
+  view.innerHTML = `<div class="sub">Carregando…</div>`;
+  let st;
+  try { st = await api("/api/team/status"); } catch (e) { view.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
+  if (current.name !== "community") return;
+  view.innerHTML = `
+    <section class="team-hero comm-hero">
+      ${CAR_SVG("rgba(62,199,255,.14)", "bg")}
+      <div class="th-main"><div><span class="sub">Ranking geral</span><h1>Comunidade Pitwall</h1>
+        <div class="sub">O recorde de cada piloto que usa o Pitwall, em cada pista e carro — de todas as equipes.</div></div></div>
+      <div class="th-side"><a class="btn" href="${esc((st.site_url || "") + "#/ranking")}" target="_blank" rel="noopener">Ver no site</a></div>
+    </section>
+    <div id="tMain"></div>`;
+  if (!st.logged_in) {
+    $("#tMain").innerHTML = `<div class="panel empty"><b>Entre com o Google para ver o ranking</b>
+      <p class="sub">O ranking usa a mesma conta da tela Equipe (não precisa ter equipe).</p><a class="btn primary" href="#/team">Entrar</a></div>`;
+    return;
+  }
+  teamCommunity();
 }

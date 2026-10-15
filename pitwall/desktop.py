@@ -132,6 +132,50 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
         return ov["win"] is not None
     app.state.ui_overlay = overlay
 
+    # janela do LFM dentro do Pitwall (o próprio site do LFM, com o seu login)
+    lw = {"win": None}
+
+    def lfm_window(target: str):
+        if lw["win"] is not None:
+            try:
+                lw["win"].load_url(target)
+                lw["win"].show()
+                lw["win"].restore()
+                return True
+            except Exception:  # noqa: BLE001
+                lw["win"] = None
+        lw["win"] = webview.create_window("LFM · Low Fuel Motorsport", target, width=1360, height=900,
+                                          min_size=(900, 600), background_color="#0b0d10")
+        lw["win"].events.closed += lambda: lw.update(win=None)
+        threading.Thread(target=_lfm_token_watch, args=(lw["win"],), daemon=True).start()
+        return True
+
+    def _lfm_token_watch(w):
+        """Enquanto a janela do LFM está aberta, pega o login (token) para LER suas inscrições."""
+        import json
+        import time
+        lfm = getattr(app.state, "lfm", None)
+        last = None
+        while lw["win"] is w and not state["quitting"]:
+            time.sleep(3)
+            try:
+                if "lowfuelmotorsport.com" not in (w.get_current_url() or ""):
+                    continue
+                raw = w.evaluate_js("localStorage.getItem('currentUser')")
+            except Exception:  # noqa: BLE001
+                continue
+            if not raw or raw == last or lfm is None:
+                continue
+            last = raw
+            try:
+                cu = json.loads(raw)
+                tok = cu.get("accessToken")
+                if tok:
+                    lfm.set_account(tok, cu.get("userData") or {}, (cu.get("token") or {}).get("expires_at"))
+            except Exception:  # noqa: BLE001
+                pass
+    app.state.ui_lfm = lfm_window
+
     def auto_overlay():
         """Abre o delta sozinho ao entrar na pista (se ligado nas Configurações) e fecha ao sair."""
         import time
@@ -156,6 +200,9 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
         except Exception as e:  # noqa: BLE001
             print(f"Ícone na bandeja indisponível ({e})")
             icon = None
+    alerts = getattr(app.state, "lfm_alerts", None)
+    if alerts is not None and icon is not None:
+        alerts.notifiers.append(lambda msg, title: tray.notify(icon, msg, title))
     storage = data_dir() / "webview"
     storage.mkdir(exist_ok=True)
     webview.start(private_mode=False, storage_path=str(storage))

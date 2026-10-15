@@ -171,6 +171,12 @@ de ACC da semana com pista, requisitos (e se você já pode correr) e contador p
 Só leitura dos dados públicos do LFM, com cache de 10–15 min; o botão **Inscrever** abre a página do próprio LFM
 para você se inscrever com a sua conta.
 
+**Conta do LFM e alerta de “Join liberado”:** em LFM → *Conectar conta do LFM*, a página do LFM abre numa janela do
+Pitwall; entre normalmente. A partir daí o app lê (só lê) suas inscrições e os horários de cada servidor, e na hora em
+que o servidor da sua corrida abre toca um som (ronco de motor + luzes da largada, gerados pelo próprio app), mostra
+um aviso com o nome do servidor e a senha e uma notificação do Windows. Volume, tipo de som e aviso antecipado ficam
+na mesma tela. Também dá para marcar qualquer corrida com 🔔 sem conectar a conta.
+
 ## Vídeo da tela
 
 O vídeo é gravado pela GPU (NVENC na NVIDIA, AMF na AMD), com impacto mínimo

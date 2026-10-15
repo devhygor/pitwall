@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 API = "https://api3.lowfuelmotorsport.com/api/"
@@ -31,6 +31,10 @@ SIMS = {"acc": "1", "ac": "3", "ams2": "4", "raceroom": "6"}
 
 
 class LFMError(Exception):
+    pass
+
+
+class LFMAuthError(LFMError):
     pass
 
 
@@ -81,12 +85,17 @@ class LFM:
 
     # --- infraestrutura ---------------------------------------------------
     @staticmethod
-    def _http(path: str):
-        req = urllib.request.Request(API + path, headers={"Accept": "application/json", "User-Agent": UA})
+    def _http(path: str, token: str | None = None):
+        h = {"Accept": "application/json", "User-Agent": UA}
+        if token:
+            h["Authorization"] = "Bearer " + token
+        req = urllib.request.Request(API + path, headers=h)
         try:
             with urllib.request.urlopen(req, timeout=15) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
+            if e.code in (401, 403) and token:
+                raise LFMAuthError("a conta do LFM desconectou — entre de novo") from e
             if e.code == 404:
                 raise LFMError("perfil do LFM não encontrado") from e
             raise LFMError(f"LFM respondeu {e.code}") from e
@@ -100,9 +109,11 @@ class LFM:
             return None
         return self.cache_dir / (re.sub(r"[^a-zA-Z0-9]+", "_", key) + ".json")
 
-    def _get(self, path: str, ttl: int, force=False):
+    def _get(self, path: str, ttl: int, force=False, token: str | None = None):
         """Retorna (dado, idade_em_segundos, stale). Usa o cache se a rede falhar."""
         now = time.time()
+        if token:
+            return self._get_auth(path, ttl, force, token)
         with self._lock:
             hit = self._mem.get(path)
         if hit and not force and now - hit[0] < ttl:
@@ -252,3 +263,274 @@ class LFM:
         elig = [s for s in nxt if not s["you"] or s["you"]["eligible"]]
         res["next"] = (elig or nxt or [None])[0]
         return res
+
+    # --- conta do LFM (opcional) ---------------------------------------------------
+    # Quando você entra no LFM pela janela do próprio LFM dentro do Pitwall, o app
+    # guarda o seu token de acesso (fica só neste PC e só vai para o api3 do LFM)
+    # para LER as suas inscrições e os horários de cada servidor. Nada é escrito
+    # na sua conta pelo Pitwall: a inscrição é feita por você, na página do LFM.
+    def _get_auth(self, path, ttl, force, token):
+        now = time.time()
+        key = "auth:" + path
+        with self._lock:
+            hit = self._mem.get(key)
+        if hit and not force and now - hit[0] < ttl:
+            return hit[1], now - hit[0], False
+        try:
+            data = self._fetch(path, token)
+        except LFMAuthError:
+            self.clear_account(expired=True)
+            raise
+        except LFMError:
+            if hit:
+                return hit[1], now - hit[0], True
+            raise
+        with self._lock:
+            self._mem[key] = (now, data)
+        return data, 0.0, False
+
+    def _auth_file(self) -> Path | None:
+        return self.cache_dir / "conta.json" if self.cache_dir else None
+
+    def account(self) -> dict:
+        f = self._auth_file()
+        if f and f.exists():
+            try:
+                return json.loads(f.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                pass
+        return {}
+
+    def token(self) -> str | None:
+        return self.account().get("token") or None
+
+    def set_account(self, token: str, user: dict | None = None, expires_at: str | None = None) -> dict:
+        user = user or {}
+        cur = self.account()
+        acc = {"token": token, "user_id": str(user.get("id") or cur.get("user_id") or ""),
+               "name": user.get("name") or cur.get("name"), "expires_at": expires_at or cur.get("expires_at"),
+               "connected_at": cur.get("connected_at") if cur.get("token") == token else datetime.now(timezone.utc).isoformat()}
+        f = self._auth_file()
+        if f:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(acc), encoding="utf-8")
+        if acc["user_id"] and self.settings is not None and not self.user_id():
+            self.settings.update({"lfm_user_id": acc["user_id"]})
+        with self._lock:
+            for k in [k for k in self._mem if k.startswith("auth:")]:
+                self._mem.pop(k, None)
+        return self.account_status()
+
+    def clear_account(self, expired=False):
+        f = self._auth_file()
+        if f and f.exists():
+            try:
+                if expired:
+                    acc = self.account()
+                    acc.pop("token", None)
+                    acc["expired"] = True
+                    f.write_text(json.dumps(acc), encoding="utf-8")
+                else:
+                    f.unlink()
+            except OSError:
+                pass
+        with self._lock:
+            for k in [k for k in self._mem if k.startswith("auth:")]:
+                self._mem.pop(k, None)
+
+    def account_status(self) -> dict:
+        a = self.account()
+        return {"connected": bool(a.get("token")), "name": a.get("name"), "user_id": a.get("user_id"),
+                "expired": bool(a.get("expired")), "expires_at": a.get("expires_at")}
+
+    # --- sessões (servidores) de cada série -------------------------------------------
+    @staticmethod
+    def _tz_of(raw) -> timezone:
+        m = re.search(r"([+-])(\d{2}):?(\d{2})$", str(raw or ""))
+        if not m:
+            return timezone(timedelta(hours=1))   # o LFM usa +01:00 nas datas sem fuso
+        sign = 1 if m.group(1) == "+" else -1
+        return timezone(sign * timedelta(hours=int(m.group(2)), minutes=int(m.group(3))))
+
+    @staticmethod
+    def _local(s, tz) -> str | None:
+        if not s:
+            return None
+        try:
+            return datetime.strptime(str(s)[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=tz).astimezone(timezone.utc).isoformat()
+        except ValueError:
+            return _iso(s)
+
+    def sessions(self, force=False) -> list[dict]:
+        """Próximos servidores de todas as séries de ACC (precisa da conta conectada)."""
+        tok = self.token()
+        if not tok:
+            return []
+        data, *_ = self._get("v2/seasons/getMinifiedSeasonBySim", TTL_SEASON, force)
+        raw = (((data or {}).get("series") or {}).get("1") or {}).get("series") or {}
+        out = []
+        for o in (raw.values() if isinstance(raw, dict) else raw):
+            if not isinstance(o, dict) or not o.get("event_id"):
+                continue
+            tz = self._tz_of(o.get("next_race_date") or o.get("next_race"))
+            try:
+                res, *_ = self._get(f"v2/seasons/getUpcomingSessions/{o['event_id']}", TTL_SESSIONS, force, tok)
+            except LFMAuthError:
+                raise
+            except LFMError:
+                continue
+            for r in (res or {}).get("data") or []:
+                if not isinstance(r, dict) or not r.get("race_id"):
+                    continue
+                tr = r.get("track") or {}
+                out.append({
+                    "race_id": r.get("race_id"), "series": o.get("series_name"), "slug": o.get("slug"),
+                    "event_id": o.get("event_id"),
+                    "date": self._local(r.get("race_date"), tz),
+                    "signup_start": self._local(r.get("signupStart"), tz),
+                    "signup_closes": self._local(r.get("signupCloses"), tz),
+                    "signout_closes": self._local(r.get("signOutCloses"), tz),
+                    "signed_up": bool(r.get("signedUp")), "live": bool(r.get("isLive")),
+                    "registered": r.get("registered"), "slots": r.get("slots"),
+                    "region": r.get("server_region"),
+                    "server_name": r.get("server_name"), "server_password": r.get("server_password"),
+                    "lengths": r.get("sessions_length"), "start_times": r.get("start_times"),
+                    "weather": r.get("weather_settings"),
+                    "track": tr.get("track_name") or (o.get("active_track") or {}).get("track_name"),
+                    "track_image": tr.get("thumbnail"),
+                    "url": f"{SITE}/series/{o.get('slug')}/upcomingsessions",
+                })
+        out.sort(key=lambda r: r["date"] or "9999")
+        return out
+
+    # --- alertas (o "Join" liberou) ---------------------------------------------------
+    def _watch_file(self) -> Path | None:
+        return self.cache_dir / "avisos.json" if self.cache_dir else None
+
+    def watches(self) -> dict:
+        f = self._watch_file()
+        try:
+            return json.loads(f.read_text(encoding="utf-8")) if f and f.exists() else {}
+        except (ValueError, OSError):
+            return {}
+
+    def set_watch(self, key: str, on: bool, info: dict | None = None) -> dict:
+        w = self.watches()
+        if on:
+            w[key] = {**(info or {}), "key": key}
+        else:
+            w.pop(key, None)
+        now = datetime.now(timezone.utc) - timedelta(hours=6)
+        w = {k: v for k, v in w.items() if not v.get("date") or v["date"] > now.isoformat()}
+        f = self._watch_file()
+        if f:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(w), encoding="utf-8")
+        return w
+
+    def targets(self, force=False) -> list[dict]:
+        """Corridas que merecem alerta: as que você se inscreveu (conta) + as marcadas com o sininho."""
+        out = {}
+        try:
+            for r in self.sessions(force):
+                if r["signed_up"] and r["date"]:
+                    out[str(r["race_id"])] = {**r, "why": "inscrito"}
+        except LFMError:
+            pass
+        for k, v in self.watches().items():
+            if v.get("date") and k not in out:
+                out[k] = {**v, "why": "sininho"}
+        return sorted(out.values(), key=lambda r: r["date"])
+
+
+TTL_SESSIONS = 3 * 60
+
+
+class Alerts:
+    """Fica de olho nos horários e toca o som quando o servidor abre (Join liberado)."""
+
+    def __init__(self, lfm: LFM, settings, folder: Path):
+        self.lfm, self.settings, self.folder = lfm, settings, Path(folder)
+        self.notifiers: list = []
+        self.events: list[dict] = []
+        self._fired = self._load_fired()
+        self._stop = False
+
+    def _load_fired(self) -> dict:
+        try:
+            return json.loads((self.folder / "alertas_tocados.json").read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            return {}
+
+    def _save_fired(self):
+        cut = time.time() - 3 * 86400
+        self._fired = {k: v for k, v in self._fired.items() if v > cut}
+        try:
+            self.folder.mkdir(parents=True, exist_ok=True)
+            (self.folder / "alertas_tocados.json").write_text(json.dumps(self._fired), encoding="utf-8")
+        except OSError:
+            pass
+
+    def play(self, kind: str | None = None) -> bool:
+        from . import sound
+        kind = kind or self.settings.get("lfm_alert_sound")
+        return sound.play(kind, int(self.settings.get("lfm_alert_volume")), self.folder)
+
+    def fire(self, race: dict, phase: str):
+        when = race.get("date")
+        if phase == "open":
+            title = "Servidor aberto — Join liberado!"
+            msg = " · ".join(x for x in (race.get("series") or "LFM", race.get("track")) if x)
+            if race.get("server_password"):
+                msg += f" · senha: {race['server_password']}"
+            played = self.play()
+        else:
+            mins = int(self.settings.get("lfm_alert_before_min"))
+            title = f"Faltam {mins} min para abrir o servidor"
+            msg = " · ".join(x for x in (race.get("series") or "LFM", race.get("track")) if x)
+            played = self.play("aviso")
+        ev = {"t": datetime.now(timezone.utc).isoformat(), "phase": phase, "title": title, "msg": msg,
+              "race": {k: race.get(k) for k in ("race_id", "series", "track", "date", "server_name",
+                                                 "server_password", "url", "why")},
+              "played": played, "id": f"{race.get('race_id') or race.get('key')}:{phase}"}
+        self.events = (self.events + [ev])[-20:]
+        for n in self.notifiers:
+            try:
+                n(msg, title)
+            except Exception:  # noqa: BLE001
+                pass
+        return ev
+
+    def check(self, now: datetime | None = None, force=False) -> list[dict]:
+        if not self.settings.get("lfm_alerts_enabled"):
+            return []
+        now = now or datetime.now(timezone.utc)
+        before = timedelta(minutes=int(self.settings.get("lfm_alert_before_min")))
+        fired = []
+        for r in self.lfm.targets(force):
+            try:
+                t = datetime.fromisoformat(r["date"])
+            except (TypeError, ValueError):
+                continue
+            key = str(r.get("race_id") or r.get("key"))
+            if before.total_seconds() > 0 and t - before <= now < t and key + ":pre" not in self._fired:
+                self._fired[key + ":pre"] = time.time()
+                fired.append(self.fire(r, "pre"))
+            if t <= now < t + timedelta(minutes=10) and key + ":open" not in self._fired:
+                self._fired[key + ":open"] = time.time()
+                fired.append(self.fire(r, "open"))
+        if fired:
+            self._save_fired()
+        return fired
+
+    def run(self):
+        while not self._stop:
+            try:
+                self.check()
+            except Exception as e:  # noqa: BLE001
+                print(f"Alertas LFM: {e}")
+            time.sleep(15)
+
+    def start(self):
+        import threading as _t
+        _t.Thread(target=self.run, daemon=True).start()

@@ -132,9 +132,11 @@ def main(argv=None):
     from .server import create_app
 
     from .db import data_dir as _dd
-    from .lfm import LFM
+    from .lfm import LFM, Alerts
     lfm = LFM(settings, _dd() / "lfm")
-    app = create_app(db, recorder, settings, video, team, lfm)
+    alerts = Alerts(lfm, settings, _dd() / "lfm")
+    alerts.start()
+    app = create_app(db, recorder, settings, video, team, lfm, alerts)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning"))
     from . import desktop
     use_window = desktop.available() and not args.browser

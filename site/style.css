@@ -204,6 +204,7 @@ input.field:focus { outline: none; border-color: var(--sodium); box-shadow: 0 0 
 .topnav { display: flex; gap: 4px; margin-right: 10px; }
 .topnav a { text-decoration: none; color: var(--fog); padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 15px; }
 .topnav a:hover { color: var(--chalk); background: var(--asphalt); }
+.topnav a.on { color: var(--chalk); background: var(--asphalt); box-shadow: inset 0 -2px 0 var(--amber, #ffb020); }
 .team-title { display: flex; align-items: center; gap: 18px; }
 .tlogo { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; display: inline-grid; place-items: center; flex: none;
   background: linear-gradient(135deg, #24304a, #161e2d); border: 1px solid var(--line); color: var(--sodium); font: italic 800 26px/1 var(--display); }

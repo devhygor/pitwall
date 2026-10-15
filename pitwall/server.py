@@ -13,7 +13,7 @@ from .db import DB
 WEB = Path(__file__).parent / "web"
 
 
-def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None) -> FastAPI:
+def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None, alerts=None) -> FastAPI:
     app = FastAPI(title="Pitwall", docs_url="/api/docs")
 
     @app.get("/api/live")
@@ -237,6 +237,9 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
 
     # --- janela do app e atalhos ---------------------------------------------
     app.state.ui_show = None
+    app.state.ui_lfm = None
+    app.state.lfm = lfm
+    app.state.lfm_alerts = alerts
     app.state.ui_overlay = None
     app.state.settings = settings
 
@@ -424,7 +427,10 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
 
     @app.get("/api/lfm")
     def lfm_overview(force: bool = False):
-        return _lfm().overview(force)
+        o = _lfm().overview(force)
+        o["account"] = _lfm().account_status()
+        o["in_app"] = app.state.ui_lfm is not None
+        return o
 
     @app.put("/api/lfm/user")
     def lfm_user(body: dict = Body(...)):
@@ -451,6 +457,75 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             raise HTTPException(400, "endereço não permitido")
         import webbrowser
         return {"opened": bool(webbrowser.open(url)), "url": url}
+
+    @app.get("/api/lfm/account")
+    def lfm_account():
+        return _lfm().account_status()
+
+    @app.delete("/api/lfm/account")
+    def lfm_logout():
+        _lfm().clear_account()
+        return _lfm().account_status()
+
+    @app.post("/api/lfm/window")
+    def lfm_window(body: dict = Body(...)):
+        """Abre uma página do LFM numa janela do Pitwall (ou no navegador, se não houver janela)."""
+        from .lfm import SITE
+        url = str(body.get("url") or SITE + "/")
+        if not url.startswith(SITE + "/"):
+            raise HTTPException(400, "endereço não permitido")
+        if app.state.ui_lfm:
+            app.state.ui_lfm(url)
+            return {"window": True}
+        import webbrowser
+        return {"window": False, "opened": bool(webbrowser.open(url)), "url": url}
+
+    @app.get("/api/lfm/sessions")
+    def lfm_sessions(force: bool = False):
+        from .lfm import LFMError
+        L = _lfm()
+        w = L.watches()
+        try:
+            rows = L.sessions(force)
+            err = None
+        except LFMError as e:
+            rows, err = [], str(e)
+        for r in rows:
+            r["watch"] = str(r["race_id"]) in w
+        return {"account": L.account_status(), "sessions": rows, "error": err,
+                "watches": list(w.values())}
+
+    @app.put("/api/lfm/watch")
+    def lfm_watch(body: dict = Body(...)):
+        key = str(body.get("key") or "").strip()
+        if not key:
+            raise HTTPException(400, "faltou a corrida")
+        info = body.get("info") or {}
+        keep = ("race_id", "series", "slug", "track", "date", "server_name", "server_password", "url")
+        return {"watches": list(_lfm().set_watch(key, bool(body.get("on")), {k: info.get(k) for k in keep}).values())}
+
+    @app.get("/api/lfm/alerts")
+    def lfm_alerts():
+        if alerts is None:
+            return {"events": [], "targets": []}
+        from .lfm import LFMError
+        try:
+            targets = _lfm().targets()
+        except LFMError:
+            targets = []
+        return {"events": alerts.events, "targets": targets[:10]}
+
+    @app.post("/api/lfm/alerts/test")
+    def lfm_alert_test(body: dict = Body({})):
+        kind = body.get("kind")
+        played = alerts.play(kind) if alerts else False
+        return {"played": played}
+
+    @app.get("/api/lfm/sound.wav")
+    def lfm_sound(kind: str = "ambos", vol: int = 80):
+        from fastapi.responses import Response
+        from . import sound
+        return Response(sound.wav_bytes(kind, vol), media_type="audio/wav")
 
     @app.get("/api/lfm/profile/{uid}")
     def lfm_profile(uid: str):

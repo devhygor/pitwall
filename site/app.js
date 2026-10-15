@@ -46,17 +46,25 @@ function route() {
   if (!session) return renderLanding();
   if ((m = h.match(/^#\/team\/([0-9a-f-]{36})/))) return renderTeam(m[1]);
   if ((m = h.match(/^#\/compare\/([0-9a-f-]{36})(?:\/([0-9a-f-]{36}))?/))) return renderCompare(m[1], m[2]);
+  markTop();
   if (h.startsWith("#/ranking")) return renderCommunity();
   return renderHome();
 }
 window.addEventListener("hashchange", route);
 
+function markTop() {
+  const h = location.hash || "#/";
+  const top = h.startsWith("#/ranking") ? "ranking" : (h === "#/" || h === "#") ? "home" : "";
+  document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === top));
+}
+
 function renderMe() {
   const el = $("#me");
   if (!session) { el.innerHTML = `<a class="btn small quiet" href="#entrar" id="goLogin">Entrar</a>`; return; }
   const u = profile || {};
-  el.innerHTML = `<nav class="topnav"><a href="#/">Equipes</a><a href="#/ranking">Comunidade</a></nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
+  el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a></nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
     <button class="btn small quiet" id="logout">Sair</button>`;
+  markTop();
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
 }
 
