@@ -29,6 +29,8 @@ DEFAULTS = {
     "cloud_url": "",            # vazio = projeto padrão do Pitwall
     "cloud_key": "",
     "team_auto_upload": True,   # envia seus recordes automaticamente
+    "team_share_setup": True,   # envia o setup usado junto com o recorde
+    "team_share_clip": True,    # envia um clipe de vídeo (720p) do recorde
     # jogos
     "games": "auto",            # auto | acc | iracing
 }

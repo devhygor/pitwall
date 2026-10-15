@@ -252,6 +252,25 @@ def generate(db, base_id: int, changes: list[dict], name: str | None = None) -> 
     return {"id": sid, "name": path.stem, "path": str(path)}
 
 
+def save_shared(db, car: str, track: str, name: str, content: dict) -> dict:
+    """Guarda um setup recebido da equipe: no banco e na pasta do ACC (sem sobrescrever nada)."""
+    import datetime as dt
+    import hashlib
+    canon = json.dumps(content, sort_keys=True, separators=(",", ":"))
+    sha = hashlib.sha1(canon.encode()).hexdigest()
+    for s in db.setups_list():
+        if s["car"] == car and s["track"] == track:
+            full = db.setup(s["id"])
+            if full and full["sha1"] == sha:
+                return {"id": s["id"], "name": s["name"], "already": True}
+    path = _write_acc(car, track, name, content)
+    sid, _ = db.upsert_setup(
+        sha1=sha, car=car, track=track, name=path.stem, rel_path=path.relative_to(setups_root()).as_posix(),
+        content=canon, file_mtime=path.stat().st_mtime, imported_at=dt.datetime.now().isoformat(timespec="seconds"),
+        **{**parse_name(name), "source": "Equipe"})
+    return {"id": sid, "name": path.stem, "path": str(path)}
+
+
 def install(db, setup_id: int) -> dict:
     """Grava no ACC um setup que está só no banco (ex.: depois de formatar o PC)."""
     s = load(db, setup_id)

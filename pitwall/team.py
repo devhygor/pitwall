@@ -179,6 +179,24 @@ class Team:
         self._auth = {}
         self._save()
 
+    def _storage_put(self, bucket: str, path: str, data: bytes, content_type: str) -> str:
+        """Envia um arquivo para o armazenamento (substitui se já existir) e devolve a URL pública."""
+        url = f"{self.url}/storage/v1/object/{bucket}/{urllib.parse.quote(path)}"
+        req = urllib.request.Request(url, data=data, method="POST", headers={
+            "apikey": self.key, "Authorization": f"Bearer {self._token()}", "Content-Type": content_type,
+            "x-upsert": "true", "cache-control": "3600"})
+        try:
+            with urllib.request.urlopen(req, timeout=600) as r:
+                r.read()
+        except urllib.error.HTTPError as e:
+            raise TeamError(f"Não deu para enviar o arquivo: {e.read().decode(errors='replace')[:200]}") from None
+        except urllib.error.URLError as e:
+            raise TeamError(f"Sem conexão com a nuvem do Pitwall: {e.reason}") from None
+        return self.public_url(bucket, path)
+
+    def public_url(self, bucket: str, path: str) -> str:
+        return f"{self.url}/storage/v1/object/public/{bucket}/{urllib.parse.quote(path)}"
+
     def _rest(self, method: str, path: str, query: dict | None = None, body=None, prefer: str | None = None):
         url = f"{self.url}/rest/v1/{path}"
         if query:
@@ -202,7 +220,7 @@ class Team:
 
     def teams(self) -> list[dict]:
         me = self.user["id"]
-        rows = self._rest("GET", "team_members", {"select": "role,teams(id,name,invite_code,owner,created_at)",
+        rows = self._rest("GET", "team_members", {"select": "role,teams(id,name,invite_code,owner,created_at,logo_url)",
                                                   "user_id": f"eq.{me}"}) or []
         out = []
         for r in rows:
@@ -229,15 +247,45 @@ class Team:
     def board(self, team_id: str) -> dict:
         members = self._rest("GET", "team_members", {"select": "role,joined_at,user_id,profiles(name,avatar_url)",
                                                       "team_id": f"eq.{team_id}", "order": "joined_at.asc"}) or []
-        laps = self._rest("POST", "rpc/team_leaderboard", body={"t": team_id}) or []
+        laps = self._rest("POST", "rpc/team_board", body={"t": team_id}) or []
         me = self.user["id"]
         for l in laps:
             l["me"] = l["user_id"] == me
+            l["clip_url"] = self.public_url("clips", l["clip_path"]) if l.get("clip_path") else None
         return {"members": [{"user_id": m["user_id"], "role": m["role"], "joined_at": m["joined_at"],
                              "name": (m.get("profiles") or {}).get("name") or "?",
                              "avatar_url": (m.get("profiles") or {}).get("avatar_url"),
                              "me": m["user_id"] == me} for m in members],
                 "laps": laps}
+
+    def community(self) -> list[dict]:
+        """Ranking da comunidade: o recorde de cada piloto do Pitwall em cada carro/pista."""
+        rows = self._rest("GET", "laps", {
+            "select": "id,user_id,game,car,track,lap_time_ms,s1_ms,s2_ms,s3_ms,recorded_at,setup_name,clip_path,profiles(name,avatar_url)",
+            "order": "track.asc,car.asc,lap_time_ms.asc", "limit": "3000"}) or []
+        me = self.user["id"]
+        for r in rows:
+            p = r.pop("profiles", None) or {}
+            r["driver"], r["avatar_url"], r["me"] = p.get("name") or "?", p.get("avatar_url"), r["user_id"] == me
+            r["clip_url"] = self.public_url("clips", r["clip_path"]) if r.get("clip_path") else None
+        return rows
+
+    def set_logo(self, team_id: str, data: bytes, content_type: str) -> str:
+        if len(data) > 2 * 1024 * 1024:
+            raise TeamError("A imagem precisa ter até 2 MB.")
+        ext = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg"}.get(content_type)
+        if not ext:
+            raise TeamError("Use uma imagem PNG, JPG, WEBP ou SVG.")
+        url = self._storage_put("team-logos", f"{team_id}/logo.{ext}", data, content_type) + f"?v={int(time.time())}"
+        self._rest("PATCH", "teams", {"id": f"eq.{team_id}"}, {"logo_url": url}, prefer="return=minimal")
+        return url
+
+    def set_logo_url(self, team_id: str, url: str) -> str:
+        url = (url or "").strip()
+        if url and not re.match(r"^https://", url):
+            raise TeamError("O link da logo precisa começar com https://")
+        self._rest("PATCH", "teams", {"id": f"eq.{team_id}"}, {"logo_url": url or None}, prefer="return=minimal")
+        return url
 
     # --- envio ----------------------------------------------------------------
     def upload_lap(self, lap_id: int, force: bool = False) -> dict:
@@ -258,10 +306,61 @@ class Team:
                "s3_ms": lap.get("s3_ms"), "air_temp": lap.get("air_temp"), "road_temp": lap.get("road_temp"),
                "recorded_at": (lap.get("recorded_at") or dt.datetime.now().isoformat()),
                "uploaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-               "telemetry": base64.b64encode(pack(tel)).decode()}
+               "telemetry": base64.b64encode(pack(tel)).decode(), "setup_name": None, "setup_json": None,
+               "clip_path": None}
+        setup = self.db.setup(sess["setup_id"]) if sess.get("setup_id") else None
+        if setup and self.settings.get("team_share_setup"):
+            row["setup_name"], row["setup_json"] = setup["name"], json.dumps(setup["content"])
         self._rest("POST", "laps", {"on_conflict": "user_id,game,car,track"}, [row],
                    prefer="resolution=merge-duplicates,return=minimal")
-        return {"sent": True}
+        if self.settings.get("team_share_clip"):
+            self._clip_async(lap, game)
+        return {"sent": True, "setup": bool(row["setup_name"])}
+
+    # --- clipe de vídeo da volta ------------------------------------------------
+    def _clip_async(self, lap: dict, game: str):
+        def go():
+            try:
+                self.upload_clip(lap, game)
+            except Exception as e:  # noqa: BLE001
+                self.last_error = f"Clipe: {e}"
+        threading.Thread(target=go, daemon=True).start()
+
+    def upload_clip(self, lap: dict, game: str) -> str | None:
+        """Corta do vídeo da sessão só esta volta (720p, ~2 Mbps) e envia. Um clipe por carro/pista."""
+        import subprocess
+        import tempfile
+        sess = self.db.session(lap["session_id"]) or {}
+        vp, v0 = sess.get("video_path"), sess.get("video_start")
+        if not (vp and v0 and lap.get("start_wall") and os.path.exists(vp)):
+            return None
+        start = max(0.0, lap["start_wall"] - v0 + (sess.get("video_offset") or 0) - 1.0)
+        dur = lap["lap_time_ms"] / 1000 + 2.0
+        try:
+            import imageio_ffmpeg
+            ff = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:  # noqa: BLE001
+            return None
+        out = os.path.join(tempfile.gettempdir(), f"pitwall-clip-{lap['id']}.mp4")
+        cmd = [ff, "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-i", vp, "-t", f"{dur:.2f}",
+               "-vf", "scale=-2:720", "-c:v", "libx264", "-preset", "veryfast", "-crf", "27",
+               "-maxrate", "2500k", "-bufsize", "5000k", "-an", "-movflags", "+faststart", out]
+        flags = 0x08000000 if os.name == "nt" else 0
+        subprocess.run(cmd, check=True, timeout=900, creationflags=flags)
+        try:
+            safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", f"{game}_{lap['car']}_{lap['track']}")
+            path = f"{self.user['id']}/{safe}.mp4"
+            with open(out, "rb") as fh:
+                self._storage_put("clips", path, fh.read(), "video/mp4")
+            self._rest("PATCH", "laps", {"user_id": f"eq.{self.user['id']}", "game": f"eq.{game}",
+                                          "car": f"eq.{lap['car']}", "track": f"eq.{lap['track']}"},
+                       {"clip_path": path}, prefer="return=minimal")
+            return path
+        finally:
+            try:
+                os.remove(out)
+            except OSError:
+                pass
 
     def upload_records(self) -> dict:
         sent, skipped, errors = 0, 0, []
@@ -310,10 +409,34 @@ class Team:
         r = rows[0]
         tel = unpack(base64.b64decode(r["telemetry"]))
         driver = (r.get("profiles") or {}).get("name") or "Equipe"
-        return self.db.replace_external(
+        lap_id = self.db.replace_external(
             "team", r["car"], r["track"], driver, str(r["recorded_at"])[:19],
             {"lap_number": 0, "stint": 1, "lap_time_ms": r["lap_time_ms"], "s1_ms": r.get("s1_ms"),
              "s2_ms": r.get("s2_ms"), "s3_ms": r.get("s3_ms"), "valid": 1, "out_lap": 0, "in_lap": 0,
-             "air_temp": r.get("air_temp"), "road_temp": r.get("road_temp"),
+             "air_temp": r.get("air_temp"), "road_temp": r.get("road_temp"), "start_wall": 1000.0,
              "recorded_at": str(r["recorded_at"])[:19], "telemetry": tel, "events": []},
             remote_id=r["id"])
+        # clipe de vídeo: baixa para assistir lado a lado na Análise e no Replay
+        if r.get("clip_path"):
+            try:
+                vdir = data_dir() / "videos" / "equipe"
+                vdir.mkdir(parents=True, exist_ok=True)
+                dest = vdir / f"{r['id']}.mp4"
+                if not dest.exists():
+                    urllib.request.urlretrieve(self.public_url("clips", r["clip_path"]), dest)
+                sid = self.db.lap(lap_id, with_telemetry=False)["session_id"]
+                self.db.set_session_video(sid, video_path=str(dest), video_start=999.0)   # clipe começa 1 s antes
+            except Exception as e:  # noqa: BLE001
+                self.last_error = f"Clipe da equipe: {e}"
+        return lap_id
+
+    def import_setup(self, remote_id: str) -> dict:
+        """Salva no ACC (e na biblioteca) o setup que o companheiro usou nessa volta."""
+        rows = self._rest("GET", "laps", {"select": "car,track,setup_name,setup_json,profiles(name)", "id": f"eq.{remote_id}"}) or []
+        if not rows or not rows[0].get("setup_json"):
+            raise TeamError("Essa volta não tem setup.")
+        r = rows[0]
+        from . import setups
+        driver = (r.get("profiles") or {}).get("name") or "Equipe"
+        return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {driver} - {r['setup_name']}",
+                                  json.loads(r["setup_json"]))

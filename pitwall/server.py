@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -390,6 +390,25 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
     @app.post("/api/team/upload")
     def team_upload():
         return _team_call(lambda: _team().upload_records())
+
+    @app.get("/api/team/community")
+    def team_community():
+        return _team_call(lambda: _team().community())
+
+    @app.post("/api/team/setup")
+    def team_setup(id: str = Body(..., embed=True)):
+        return _team_call(lambda: _team().import_setup(id))
+
+    @app.post("/api/team/logo")
+    async def team_logo(request: Request):
+        """Corpo = a imagem; ?team_id=... (ou JSON {team_id, url} para usar um link)."""
+        team_id = request.query_params.get("team_id", "")
+        ctype = request.headers.get("content-type", "").split(";")[0]
+        if ctype == "application/json":
+            body = await request.json()
+            return {"logo_url": _team_call(lambda: _team().set_logo_url(body.get("team_id") or team_id, body.get("url", "")))}
+        data = await request.body()
+        return {"logo_url": _team_call(lambda: _team().set_logo(team_id, data, ctype))}
 
     @app.post("/api/team/import")
     def team_import(id: str = Body(..., embed=True)):

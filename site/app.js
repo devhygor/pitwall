@@ -38,12 +38,15 @@ async function rpc(name, args) {
 // ---------------------------------------------------------------- roteador
 function route() {
   if (stopCircuit) { stopCircuit(); stopCircuit = null; }
+  if (stopCompare) { stopCompare(); stopCompare = null; }
   window.scrollTo(0, 0);
   const h = location.hash || "#/";
   let m;
   if ((m = h.match(/^#\/join\/([A-Za-z0-9]{8})/))) return joinRoute(m[1].toUpperCase());
   if (!session) return renderLanding();
   if ((m = h.match(/^#\/team\/([0-9a-f-]{36})/))) return renderTeam(m[1]);
+  if ((m = h.match(/^#\/compare\/([0-9a-f-]{36})(?:\/([0-9a-f-]{36}))?/))) return renderCompare(m[1], m[2]);
+  if (h.startsWith("#/ranking")) return renderCommunity();
   return renderHome();
 }
 window.addEventListener("hashchange", route);
@@ -52,7 +55,7 @@ function renderMe() {
   const el = $("#me");
   if (!session) { el.innerHTML = `<a class="btn small quiet" href="#entrar" id="goLogin">Entrar</a>`; return; }
   const u = profile || {};
-  el.innerHTML = `${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
+  el.innerHTML = `<nav class="topnav"><a href="#/">Equipes</a><a href="#/ranking">Comunidade</a></nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
     <button class="btn small quiet" id="logout">Sair</button>`;
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
 }
@@ -267,9 +270,9 @@ function appPanel() {
 async function renderTeam(id) {
   view.innerHTML = `<div class="loading">Carregando a equipe…</div>`;
   const [{ data: team, error: e1 }, { data: members, error: e2 }, board] = await Promise.all([
-    sb.from("teams").select("id,name,invite_code,owner").eq("id", id).maybeSingle(),
+    sb.from("teams").select("id,name,invite_code,owner,logo_url").eq("id", id).maybeSingle(),
     sb.from("team_members").select("role,user_id,joined_at,profiles(name,avatar_url)").eq("team_id", id).order("joined_at"),
-    rpc("team_leaderboard", { t: id }).catch(() => []),
+    rpc("team_board", { t: id }).catch(() => []),
   ]);
   if (e1 || e2 || !team) {
     view.innerHTML = `<div class="wrap page"><div class="panel empty"><b>Equipe não encontrada</b>
@@ -282,8 +285,8 @@ async function renderTeam(id) {
   for (const r of laps) (groups[[r.track, r.car, r.game].join("|")] = groups[[r.track, r.car, r.game].join("|")] || []).push(r);
   const mine = laps.filter((l) => l.user_id === me).length;
   view.innerHTML = `<div class="wrap page">
-    <div class="page-head"><div><a class="back" href="#/" id="allTeams">Suas equipes</a><h1>${esc(team.name)}</h1>
-      <div class="sub">${members.length} ${members.length === 1 ? "piloto" : "pilotos"}, ${Object.keys(groups).length} ${Object.keys(groups).length === 1 ? "combinação" : "combinações"} de carro e pista</div></div></div>
+    <div class="page-head"><div class="team-title">${teamLogo(team)}<div><a class="back" href="#/" id="allTeams">Suas equipes</a><h1>${esc(team.name)}</h1>
+      <div class="sub">${members.length} ${members.length === 1 ? "piloto" : "pilotos"}, ${Object.keys(groups).length} ${Object.keys(groups).length === 1 ? "combinação" : "combinações"} de carro e pista</div></div></div></div>
     <div class="layout">
       <div>${Object.keys(groups).length ? Object.values(groups).map((g) => {
         const lead = g[0].lap_time_ms;
@@ -292,12 +295,7 @@ async function renderTeam(id) {
           <div class="rows">
             <div class="row head"><span class="p">Pos</span><span>Piloto</span><span style="text-align:right">Tempo</span><span style="text-align:right">Diferença</span>
               <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span></div>
-            ${g.map((r, i) => `<div class="row ${i === 0 ? "first" : ""} ${r.user_id === me ? "mine" : ""}">
-              <span class="p">${i + 1}</span>
-              <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${esc(r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${fmtDate(r.recorded_at)}</em></span></span>
-              <span class="time">${fmtLap(r.lap_time_ms)}</span>
-              <span class="gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
-              <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span></div>`).join("")}
+            ${rowsHtml(g, me)}
           </div></section>`;
       }).join("") : `<div class="panel empty"><b>Ninguém enviou voltas ainda</b><p>No app do PC, abra Equipe e clique em “Enviar meus recordes”.</p></div>`}
       ${mine ? "" : appPanel()}</div>
@@ -312,10 +310,29 @@ async function renderTeam(id) {
             ${navigator.share ? `<button class="btn small" id="share">Compartilhar</button>` : ""}
             ${owner ? `<button class="btn small quiet" id="newInv">Trocar link</button>` : ""}</div>
           <p class="help">Quem abrir o link entra com o Google e já fica na equipe. Mande só para quem é da equipe.</p></div>
+        ${owner ? `<div class="panel"><h2>Logo da equipe</h2>
+          <div class="inline" style="align-items:center">${teamLogo(team, "lg")}
+            <label class="btn small">Enviar imagem<input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label></div>
+          <p class="help" id="logoOut">PNG, JPG, WEBP ou SVG até 2 MB.</p></div>` : ""}
         <button class="btn danger small" id="leave">${owner ? "Apagar equipe" : "Sair da equipe"}</button>
       </aside>
     </div></div>`;
   $("#allTeams").onclick = () => store.set("pitwall.stayHome", "1");
+  bindRows(view);
+  const lf = $("#logoFile");
+  if (lf) lf.onchange = async () => {
+    const f = lf.files[0]; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { $("#logoOut").textContent = "A imagem precisa ter até 2 MB."; return; }
+    $("#logoOut").textContent = "Enviando…";
+    const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg" }[f.type] || "png";
+    const path = `${id}/logo.${ext}`;
+    const up = await sb.storage.from("team-logos").upload(path, f, { upsert: true, contentType: f.type });
+    if (up.error) { $("#logoOut").textContent = up.error.message; return; }
+    const url = sb.storage.from("team-logos").getPublicUrl(path).data.publicUrl + "?v=" + Date.now();
+    const { error } = await sb.from("teams").update({ logo_url: url }).eq("id", id);
+    if (error) { $("#logoOut").textContent = error.message; return; }
+    renderTeam(id);
+  };
   $("#copy").onclick = () => { navigator.clipboard.writeText($("#inv").textContent).catch(() => {}); $("#copy").textContent = "Link copiado"; };
   if ($("#share")) $("#share").onclick = () => navigator.share({ title: `${team.name} no Pitwall`, text: `Entra na equipe ${team.name} no Pitwall:`, url: $("#inv").textContent }).catch(() => {});
   if ($("#newInv")) $("#newInv").onclick = async (ev) => {
@@ -336,6 +353,220 @@ async function renderTeam(id) {
     store.set("pitwall.stayHome", "1");
     location.hash = "#/";
   };
+}
+
+// ---------------------------------------------------------------- linhas do ranking (equipe e comunidade)
+const teamLogo = (t, cls = "") => t && t.logo_url
+  ? `<img class="tlogo ${cls}" src="${esc(t.logo_url)}" alt="">`
+  : `<span class="tlogo ${cls}">${esc((t && t.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase())}</span>`;
+let myRecs = null;
+async function myRecords() {
+  if (myRecs) return myRecs;
+  const { data } = await sb.from("laps").select("id,car,track,game").eq("user_id", session.user.id);
+  myRecs = data || [];
+  return myRecs;
+}
+function rowsHtml(g, me) {
+  const lead = g[0].lap_time_ms;
+  return g.map((r, i) => `<div class="row ${i === 0 ? "first" : ""} ${r.user_id === me ? "mine" : ""}">
+    <span class="p">${i + 1}</span>
+    <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${esc(r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${fmtDate(r.recorded_at)}</em></span></span>
+    <span class="time">${fmtLap(r.lap_time_ms)}</span>
+    <span class="gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
+    <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span>
+    <span class="racts">${r.clip_path ? `<span class="pill" title="Tem vídeo da volta">▶</span>` : ""}${r.setup_name ? `<button class="pill" data-setup="${r.id}" title="Baixar o setup: ${esc(r.setup_name)}">⚙</button>` : ""}
+      <button class="btn small" data-cmp="${r.id}" data-combo="${esc(r.track + "|" + r.car + "|" + r.game)}" data-me="${r.user_id === me ? 1 : ""}">${r.user_id === me ? "Ver" : "Comparar"}</button></span></div>`).join("");
+}
+function bindRows(root) {
+  root.querySelectorAll("[data-cmp]").forEach((b) => b.onclick = async () => {
+    if (b.dataset.me) { location.hash = `#/compare/${b.dataset.cmp}`; return; }
+    const [track, car, game] = b.dataset.combo.split("|");
+    const mine = (await myRecords()).find((x) => x.track === track && x.car === car && x.game === game);
+    location.hash = mine ? `#/compare/${mine.id}/${b.dataset.cmp}` : `#/compare/${b.dataset.cmp}`;
+  });
+  root.querySelectorAll("[data-setup]").forEach((b) => b.onclick = async () => {
+    const { data, error } = await sb.from("laps").select("setup_name,setup_json,car,track").eq("id", b.dataset.setup).maybeSingle();
+    if (error || !data || !data.setup_json) return;
+    const blob = new Blob([JSON.stringify(JSON.parse(data.setup_json), null, "\t")], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `${data.setup_name}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+}
+
+// ---------------------------------------------------------------- ranking da comunidade
+async function renderCommunity() {
+  view.innerHTML = `<div class="loading">Carregando o ranking…</div>`;
+  const { data, error } = await sb.from("laps").select("id,user_id,game,car,track,lap_time_ms,s1_ms,s2_ms,s3_ms,recorded_at,setup_name,clip_path,profiles(name,avatar_url)")
+    .order("track").order("car").order("lap_time_ms").limit(3000);
+  if (error) { view.innerHTML = `<div class="wrap page"><div class="panel">${esc(error.message)}</div></div>`; return; }
+  const rows = (data || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?", avatar_url: (r.profiles || {}).avatar_url }));
+  const groups = {};
+  for (const r of rows) (groups[[r.track, r.car, r.game].join("|")] = groups[[r.track, r.car, r.game].join("|")] || []).push(r);
+  const keys = Object.keys(groups);
+  const me = session.user.id;
+  let sel = store.get("pitwall.comm");
+  if (!groups[sel]) sel = keys.find((k) => groups[k].some((r) => r.user_id === me)) || keys[0];
+  const g = groups[sel] || [];
+  const pos = g.findIndex((r) => r.user_id === me);
+  view.innerHTML = `<div class="wrap page">
+    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">O recorde de cada piloto do Pitwall, por pista e carro.</div></div></div>
+    ${keys.length ? `<div class="inline" style="align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <select class="field" id="combo" style="max-width:420px">${keys.map((k) => { const [t, c] = k.split("|"); return `<option value="${esc(k)}" ${k === sel ? "selected" : ""}>${esc(pretty(t))} · ${esc(pretty(c))} (${groups[k].length})</option>`; }).join("")}</select>
+      ${pos >= 0 ? `<span class="mypos">Você está em <b>${pos + 1}º</b> de ${g.length}</span>` : ""}</div>
+    <section class="combo"><div class="combo-head"><h3>${esc(pretty(g[0].track))}</h3><small>${esc(pretty(g[0].car))}</small></div>
+      <div class="rows"><div class="row head"><span class="p">Pos</span><span>Piloto</span><span style="text-align:right">Tempo</span><span style="text-align:right">Diferença</span>
+        <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span><span></span></div>${rowsHtml(g.slice(0, 200), me)}</div></section>`
+      : `<div class="panel empty"><b>Ninguém no ranking ainda</b><p>Envie seus recordes pelo app do PC.</p></div>`}</div>`;
+  const c = $("#combo");
+  if (c) c.onchange = () => { store.set("pitwall.comm", c.value); renderCommunity(); };
+  bindRows(view);
+}
+
+// ---------------------------------------------------------------- comparar duas voltas (site)
+async function decodeTel(b64) {
+  const bin = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  const stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return JSON.parse(await new Response(stream).text());
+}
+function resample(tel, N) {
+  const d = tel.d, n = d.length, out = { t: [], speed: [], gas: [], brake: [], x: [], z: [], gear: [] };
+  // garante distância crescente
+  const idx = []; let last = -1;
+  for (let i = 0; i < n; i++) if (d[i] > last) { idx.push(i); last = d[i]; }
+  let j = 0;
+  for (let k = 0; k < N; k++) {
+    const v = idx.length ? d[idx[0]] + (d[idx[idx.length - 1]] - d[idx[0]]) * k / (N - 1) : 0;
+    while (j < idx.length - 2 && d[idx[j + 1]] < v) j++;
+    const a = idx[j], b = idx[Math.min(j + 1, idx.length - 1)];
+    const u = d[b] > d[a] ? (v - d[a]) / (d[b] - d[a]) : 0;
+    for (const key of Object.keys(out)) {
+      const arr = tel[key]; if (!arr) { out[key].push(null); continue; }
+      out[key].push(arr[a] == null || arr[b] == null ? (arr[a] ?? arr[b]) : arr[a] + (arr[b] - arr[a]) * u);
+    }
+  }
+  return out;
+}
+
+let stopCompare = null;
+async function renderCompare(idA, idB) {
+  if (stopCompare) { stopCompare(); stopCompare = null; }
+  view.innerHTML = `<div class="loading">Carregando as voltas…</div>`;
+  const ids = [idA, idB].filter(Boolean);
+  const { data, error } = await sb.from("laps").select("*,profiles(name,avatar_url)").in("id", ids);
+  if (error || !data || !data.length) { view.innerHTML = `<div class="wrap page"><div class="panel empty"><b>Volta não encontrada</b></div></div>`; return; }
+  const LA = data.find((r) => r.id === idA), LB = idB ? data.find((r) => r.id === idB) : null;
+  const N = 1500;
+  const A = resample(await decodeTel(LA.telemetry), N), B = LB ? resample(await decodeTel(LB.telemetry), N) : null;
+  const nameOf = (L) => (L.profiles || {}).name || "?";
+  const diff = LB ? LA.lap_time_ms - LB.lap_time_ms : null;
+  const clip = (L) => L && L.clip_path ? sb.storage.from("clips").getPublicUrl(L.clip_path).data.publicUrl : null;
+  const cA = clip(LA), cB = clip(LB);
+  const card = (L, tag) => `<div class="lapc ${tag}"><i></i>${avatar({ name: nameOf(L), avatar_url: (L.profiles || {}).avatar_url })}
+    <div><small>${esc(nameOf(L))}${L.user_id === session.user.id ? " (você)" : ""}</small><b>${fmtLap(L.lap_time_ms)}</b><em>${fmtDate(L.recorded_at)}</em></div>
+    ${L.setup_name ? `<button class="btn small" data-setup="${L.id}" title="${esc(L.setup_name)}">Baixar setup</button>` : ""}</div>`;
+  view.innerHTML = `<div class="wrap page cmp">
+    <div class="page-head"><div><a class="back" href="javascript:history.back()">Voltar</a><h1>${esc(pretty(LA.track))}</h1><div class="sub">${esc(pretty(LA.car))}</div></div>
+      ${LB ? `<div class="bigdelta ${diff > 0 ? "neg" : "pos"}"><small>Diferença</small>${diff > 0 ? "+" : "−"}${(Math.abs(diff) / 1000).toFixed(3)} s</div>` : ""}</div>
+    <div class="lapcs">${card(LA, "a")}${LB ? card(LB, "b") : ""}</div>
+    <div class="stagebox panel"><canvas id="stage"></canvas>
+      <div class="hud"><span class="num" id="clock">0:00.000</span><span class="num" id="hdelta"></span></div></div>
+    ${cA || cB ? `<div class="clips">${[cA ? `<div class="clipv a"><span>${esc(nameOf(LA))}</span><video id="va" src="${esc(cA)}" muted playsinline preload="auto"></video></div>` : "",
+      cB ? `<div class="clipv b"><span>${esc(nameOf(LB))}</span><video id="vb" src="${esc(cB)}" muted playsinline preload="auto"></video></div>` : ""].join("")}</div>` : ""}
+    <div class="ctrl panel"><button class="btn go small" id="play">▶</button>
+      ${[0.5, 1, 2].map((x) => `<button class="btn small ${x === 1 ? "on" : ""}" data-rate="${x}">${String(x).replace(".", ",")}×</button>`).join("")}
+      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Posição na volta"></div>
+    <div class="panel"><h2>Velocidade</h2><canvas class="chart" id="cSpeed" height="170"></canvas>
+      ${LB ? `<h2 style="margin-top:14px">Diferença ao longo da volta</h2><canvas class="chart" id="cDelta" height="120"></canvas>` : ""}
+      <h2 style="margin-top:14px">Freio e acelerador</h2><canvas class="chart" id="cPedal" height="120"></canvas>
+      <p class="help">Laranja: ${esc(nameOf(LA))}${LB ? ` · Azul: ${esc(nameOf(LB))}` : ""}. Delta acima de zero = ${esc(nameOf(LA))} mais lento naquele ponto.</p></div>
+  </div>`;
+  bindRows(view);
+  // ---- desenho
+  const colA = "#f2a93b", colB = "#5cc8ff";
+  const delta = LB ? A.t.map((t, i) => (t != null && B.t[i] != null ? (t - B.t[i]) / 1000 : null)) : null;
+  const pts = A.x.map((x, i) => [x, A.z[i]]).filter((p) => p[0] != null);
+  const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
+  const bb = [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
+  const cv = $("#stage"), ctx = cv.getContext("2d");
+  const tEnd = LA.lap_time_ms;
+  const S = { T: 0, playing: false, rate: 1, last: 0, raf: 0 };
+  const idxAt = (L, ms) => { let lo = 0, hi = N - 1; while (lo < hi) { const m = (lo + hi) >> 1; if ((L.t[m] ?? -1) < ms) lo = m + 1; else hi = m; } return lo; };
+  function fit() { const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  function draw() {
+    const W = cv.clientWidth, H = cv.clientHeight; if (!W) return;
+    const sc = Math.min(W / (bb[2] - bb[0]), H / (bb[3] - bb[1])) * 0.88;
+    const ox = W / 2 - sc * (bb[0] + bb[2]) / 2, oz = H / 2 - sc * (bb[1] + bb[3]) / 2;
+    const P = (x, z) => [ox + sc * x, oz + sc * z];
+    ctx.fillStyle = "#0b0f18"; ctx.fillRect(0, 0, W, H);
+    const line = (L, col, w) => { ctx.beginPath(); let pen = false; for (let i = 0; i < N; i++) { if (L.x[i] == null) { pen = false; continue; } const [x, y] = P(L.x[i], L.z[i]); pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = "round"; ctx.stroke(); };
+    line(A, "#1d2738", 14);
+    if (B) line(B, colB, 2);
+    line(A, colA, 2);
+    const car = (L, col) => { const i = idxAt(L, S.T); if (L.x[i] == null) return; const [x, y] = P(L.x[i], L.z[i]); ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#0b0f18"; ctx.stroke(); };
+    if (B) car(B, colB);
+    car(A, colA);
+    const iA = idxAt(A, S.T);
+    $("#clock").textContent = S.T <= 0 ? "0:00.000" : fmtLap(Math.round(S.T));
+    if (delta) { const dv = delta[iA]; const el = $("#hdelta"); el.textContent = dv == null ? "" : (dv > 0 ? "+" : "−") + Math.abs(dv).toFixed(3) + " s"; el.className = "num " + (dv > 0 ? "neg" : "pos"); }
+    $("#scrub").value = Math.round(S.T / tEnd * 1000);
+    cursor(iA);
+  }
+  // ---- gráficos simples (canvas)
+  const charts = [];
+  function chart(id, series, lo, hi) {
+    const c = $(id); if (!c) return;
+    const r = c.getBoundingClientRect(), dpr = devicePixelRatio || 1; c.width = r.width * dpr; c.height = c.getAttribute("height") * dpr;
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = r.width, H = +c.getAttribute("height");
+    const vals = series.flatMap((s) => s.data).filter((v) => v != null);
+    const mn = lo ?? Math.min(...vals), mx = hi ?? Math.max(...vals), span = mx - mn || 1;
+    const base = () => {
+      g.clearRect(0, 0, W, H);
+      if (mn < 0 && mx > 0) { const y0 = H - (0 - mn) / span * H; g.strokeStyle = "#2a3548"; g.beginPath(); g.moveTo(0, y0); g.lineTo(W, y0); g.stroke(); }
+      for (const s of series) {
+        g.beginPath(); let pen = false;
+        s.data.forEach((v, i) => { if (v == null) { pen = false; return; } const x = i / (N - 1) * W, y = H - (v - mn) / span * H; pen ? g.lineTo(x, y) : g.moveTo(x, y); pen = true; });
+        g.strokeStyle = s.color; g.lineWidth = s.w || 1.6; g.stroke();
+      }
+    };
+    base();
+    charts.push({ c, g, W, H, base });
+    c.onpointermove = (e) => { const f = (e.clientX - c.getBoundingClientRect().left) / W; const i = Math.max(0, Math.min(N - 1, Math.round(f * (N - 1)))); if (!S.playing && A.t[i] != null) { S.T = A.t[i]; draw(); } };
+  }
+  function cursor(i) {
+    for (const ch of charts) { ch.base(); const x = i / (N - 1) * ch.W; ch.g.strokeStyle = "rgba(238,242,247,.6)"; ch.g.lineWidth = 1; ch.g.beginPath(); ch.g.moveTo(x, 0); ch.g.lineTo(x, ch.H); ch.g.stroke(); }
+  }
+  function drawCharts() {
+    charts.length = 0;
+    chart("#cSpeed", [B && { data: B.speed, color: colB }, { data: A.speed, color: colA, w: 2 }].filter(Boolean));
+    if (delta) chart("#cDelta", [{ data: delta, color: colA, w: 2 }], -Math.max(0.2, ...delta.map((v) => Math.abs(v || 0))), Math.max(0.2, ...delta.map((v) => Math.abs(v || 0))));
+    chart("#cPedal", [B && { data: B.brake, color: "rgba(92,200,255,.8)" }, { data: A.brake, color: "#ff5a5f", w: 2 }, B && { data: B.gas, color: "rgba(92,200,255,.45)" }, { data: A.gas, color: "#39d98a" }].filter(Boolean), 0, 1);
+  }
+  // ---- vídeos (o clipe começa 1 s antes da linha)
+  const va = $("#va"), vb = $("#vb");
+  const syncV = (v, ms) => {
+    if (!v || ms == null || v.readyState < 1) return;
+    const target = 1 + ms / 1000;
+    if (S.playing) { v.playbackRate = S.rate; if (Math.abs(v.currentTime - target) > 0.3) v.currentTime = target; if (v.paused) v.play().catch(() => {}); }
+    else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - target) > 0.05) v.currentTime = target; }
+  };
+  function loop(ts) {
+    if (S.playing) { S.T += (S.last ? ts - S.last : 0) * S.rate; if (S.T >= tEnd) { S.T = tEnd; S.playing = false; $("#play").textContent = "▶"; } }
+    S.last = ts;
+    draw();
+    syncV(va, S.T);
+    if (vb && LB) syncV(vb, Math.min(S.T, LB.lap_time_ms));
+    S.raf = requestAnimationFrame(loop);
+  }
+  $("#play").onclick = () => { if (S.T >= tEnd) S.T = 0; S.playing = !S.playing; $("#play").textContent = S.playing ? "❚❚" : "▶"; };
+  view.querySelectorAll("[data-rate]").forEach((b) => b.onclick = () => { S.rate = +b.dataset.rate; view.querySelectorAll("[data-rate]").forEach((x) => x.classList.toggle("on", x === b)); });
+  $("#scrub").oninput = (e) => { S.playing = false; $("#play").textContent = "▶"; S.T = +e.target.value / 1000 * tEnd; };
+  const onResize = () => { fit(); drawCharts(); };
+  window.addEventListener("resize", onResize);
+  onResize();
+  S.raf = requestAnimationFrame(loop);
+  stopCompare = () => { cancelAnimationFrame(S.raf); window.removeEventListener("resize", onResize); };
 }
 
 // ---------------------------------------------------------------- início

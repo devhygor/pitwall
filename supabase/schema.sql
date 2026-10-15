@@ -174,3 +174,45 @@ revoke execute on function public.handle_new_user() from authenticated;
 -- Observação: o Supabase avisa que create_team/join_team/new_invite_code/team_leaderboard e as
 -- funções is_* podem ser chamadas por quem está logado. É de propósito: são as ações do app,
 -- e cada uma confere o usuário (auth.uid()) por dentro.
+
+-- v2: setup e clipe junto com a volta, logo da equipe, ranking da comunidade ------------
+alter table public.laps add column if not exists setup_name text;
+alter table public.laps add column if not exists setup_json text;
+alter table public.laps add column if not exists clip_path text;
+alter table public.teams add column if not exists logo_url text;
+create policy "voltas: comunidade vê" on public.laps for select to authenticated using (true);
+create policy "perfil: comunidade vê" on public.profiles for select to authenticated using (true);
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('clips', 'clips', true, 62914560, array['video/mp4']),
+       ('team-logos', 'team-logos', true, 2097152, array['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
+on conflict (id) do nothing;
+create policy "clipes: leitura" on storage.objects for select to authenticated using (bucket_id = 'clips');
+create policy "clipes: envio do dono" on storage.objects for insert to authenticated
+  with check (bucket_id = 'clips' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "clipes: troca do dono" on storage.objects for update to authenticated
+  using (bucket_id = 'clips' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'clips' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "clipes: apaga do dono" on storage.objects for delete to authenticated
+  using (bucket_id = 'clips' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "logos: leitura" on storage.objects for select to authenticated using (bucket_id = 'team-logos');
+create policy "logos: envio do dono da equipe" on storage.objects for insert to authenticated
+  with check (bucket_id = 'team-logos' and exists (select 1 from public.teams t where t.id::text = (storage.foldername(name))[1] and t.owner = auth.uid()));
+create policy "logos: troca do dono da equipe" on storage.objects for update to authenticated
+  using (bucket_id = 'team-logos' and exists (select 1 from public.teams t where t.id::text = (storage.foldername(name))[1] and t.owner = auth.uid()))
+  with check (bucket_id = 'team-logos' and exists (select 1 from public.teams t where t.id::text = (storage.foldername(name))[1] and t.owner = auth.uid()));
+create policy "logos: apaga do dono da equipe" on storage.objects for delete to authenticated
+  using (bucket_id = 'team-logos' and exists (select 1 from public.teams t where t.id::text = (storage.foldername(name))[1] and t.owner = auth.uid()));
+create or replace function public.team_board(t uuid)
+returns table (id uuid, user_id uuid, driver text, avatar_url text, game text, car text, track text,
+               lap_time_ms integer, s1_ms integer, s2_ms integer, s3_ms integer,
+               air_temp real, road_temp real, recorded_at timestamptz, setup_name text, clip_path text)
+language sql stable security invoker set search_path = '' as $$
+  select l.id, l.user_id, p.name, p.avatar_url, l.game, l.car, l.track, l.lap_time_ms, l.s1_ms, l.s2_ms,
+         l.s3_ms, l.air_temp, l.road_temp, l.recorded_at, l.setup_name, l.clip_path
+  from public.laps l
+  join public.team_members m on m.user_id = l.user_id and m.team_id = t
+  join public.profiles p on p.id = l.user_id
+  where public.is_team_member(t)
+  order by l.track, l.car, l.lap_time_ms
+$$;
+grant execute on function public.team_board(uuid) to authenticated;
