@@ -3047,16 +3047,19 @@ async function lfmExtras(D) {
   const box = $("#lfAlerts");
   if (box) {
     box.innerHTML = `<div class="panel lfm-al"><h2>Alerta de “Join liberado”</h2>
-      <p class="sub">Toca quando o servidor de uma corrida em que você se inscreveu abre (ou que você marcou com 🔔), mesmo com a janela do Pitwall fechada.</p>
+      <p class="sub">Para as corridas em que você se inscreveu (ou marcou com 🔔): um aviso antecipado, se quiser, e o alerta principal
+        no segundo em que o contador zera e o servidor abre — mesmo com a janela do Pitwall fechada.</p>
       <div class="al-grid">
         <label class="sw"><input type="checkbox" id="alOn" ${st.lfm_alerts_enabled ? "checked" : ""}> Alertas ligados</label>
+        <label class="sw"><input type="checkbox" id="alZero" ${st.lfm_alert_at_zero ? "checked" : ""}> Avisar quando o contador zerar</label>
         <label>Som <select id="alKind">${LFM_SOUNDS.map(([k, n]) => `<option value="${k}" ${st.lfm_alert_sound === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <label>Volume <span class="vol"><input type="range" id="alVol" min="0" max="100" step="5" value="${st.lfm_alert_volume}"><b id="alVolV">${st.lfm_alert_volume}%</b></span></label>
-        <label>Aviso antes <select id="alPre">${[0, 2, 5, 10, 15].map((m) => `<option value="${m}" ${+st.lfm_alert_before_min === m ? "selected" : ""}>${m ? m + " min antes" : "não avisar antes"}</option>`).join("")}</select></label>
+        <label>Aviso antecipado <select id="alPre">${[0, 1, 2, 5, 10, 15, 30].map((m) => `<option value="${m}" ${+st.lfm_alert_before_min === m ? "selected" : ""}>${m ? m + " min antes" : "sem aviso antes"}</option>`).join("")}</select></label>
         <button class="btn" id="alTest">▶ Testar som</button>
       </div></div>`;
     const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
     $("#alOn").onchange = () => put({ lfm_alerts_enabled: $("#alOn").checked });
+    $("#alZero").onchange = () => put({ lfm_alert_at_zero: $("#alZero").checked });
     $("#alKind").onchange = () => put({ lfm_alert_sound: $("#alKind").value });
     $("#alPre").onchange = () => put({ lfm_alert_before_min: +$("#alPre").value });
     $("#alVol").oninput = () => { $("#alVolV").textContent = $("#alVol").value + "%"; };
@@ -3127,8 +3130,17 @@ async function pollAlerts() {
       showAlertBanner(ev);
     }
     alertsPrimed = true;
+    for (const t of r.targets || []) {
+      for (const ms of [new Date(t.date) - Date.now()]) {
+        if (ms > 0 && ms < 15000 && !scheduledZero.has(t.date)) {
+          scheduledZero.add(t.date);
+          setTimeout(() => { pollAlerts(); setTimeout(pollAlerts, 1500); }, ms + 600);
+        }
+      }
+    }
   } catch (e) { /* servidor ocupado */ }
 }
+const scheduledZero = new Set();
 function showAlertBanner(ev) {
   const b = document.createElement("div");
   b.className = "race-alert " + ev.phase;

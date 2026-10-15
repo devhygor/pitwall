@@ -516,12 +516,33 @@ class Alerts:
             if before.total_seconds() > 0 and t - before <= now < t and key + ":pre" not in self._fired:
                 self._fired[key + ":pre"] = time.time()
                 fired.append(self.fire(r, "pre"))
-            if t <= now < t + timedelta(minutes=10) and key + ":open" not in self._fired:
+            at_zero = self.settings.get("lfm_alert_at_zero")
+            if at_zero and t <= now < t + timedelta(minutes=10) and key + ":open" not in self._fired:
                 self._fired[key + ":open"] = time.time()
                 fired.append(self.fire(r, "open"))
         if fired:
             self._save_fired()
         return fired
+
+    def next_due(self, now: datetime | None = None) -> float:
+        """Segundos até o próximo alerta (para tocar exatamente quando o contador zerar)."""
+        now = now or datetime.now(timezone.utc)
+        before = timedelta(minutes=int(self.settings.get("lfm_alert_before_min")))
+        best = 15.0
+        try:
+            targets = self.lfm.targets()
+        except Exception:  # noqa: BLE001
+            return best
+        for r in targets:
+            try:
+                t = datetime.fromisoformat(r["date"])
+            except (TypeError, ValueError):
+                continue
+            for moment in (t - before, t):
+                d = (moment - now).total_seconds()
+                if 0 < d < best:
+                    best = d
+        return max(0.2, best)
 
     def run(self):
         while not self._stop:
@@ -529,7 +550,11 @@ class Alerts:
                 self.check()
             except Exception as e:  # noqa: BLE001
                 print(f"Alertas LFM: {e}")
-            time.sleep(15)
+            try:
+                wait = self.next_due() + 0.05
+            except Exception:  # noqa: BLE001
+                wait = 15
+            time.sleep(wait)
 
     def start(self):
         import threading as _t

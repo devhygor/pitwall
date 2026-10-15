@@ -36,6 +36,7 @@ DEFAULTS = {
     "lfm_alerts_enabled": True,  # toca um som quando o servidor da corrida abre
     "lfm_alert_sound": "ambos",  # motor | largada | ambos
     "lfm_alert_volume": 80,      # 0–100
+    "lfm_alert_at_zero": True,   # avisa no momento em que o contador zera (servidor abre)
     "lfm_alert_before_min": 5,   # aviso antes de abrir (0 = desligado)
     "games": "auto",            # auto | acc | iracing
 }
