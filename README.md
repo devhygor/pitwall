@@ -163,6 +163,14 @@ Os dados ficam em `%LOCALAPPDATA%\Pitwall\pitwall.db` (SQLite).
   porque o iRacing não informa o ângulo de deriva ao vivo. Le Mans Ultimate ainda
   não é suportado.
 
+## Low Fuel Motorsport (LFM)
+
+Menu **LFM**: cole o link do seu perfil (ex.: `lowfuelmotorsport.com/profile/326481`) uma vez e o app mostra
+ELO e Safety Rating (com gráfico de progressão), licenças, divisão, estatísticas, ratings por simulador e as séries
+de ACC da semana com pista, requisitos (e se você já pode correr) e contador para a próxima corrida.
+Só leitura dos dados públicos do LFM, com cache de 10–15 min; o botão **Inscrever** abre a página do próprio LFM
+para você se inscrever com a sua conta.
+
 ## Vídeo da tela
 
 O vídeo é gravado pela GPU (NVENC na NVIDIA, AMF na AMD), com impacto mínimo

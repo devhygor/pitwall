@@ -13,7 +13,7 @@ from .db import DB
 WEB = Path(__file__).parent / "web"
 
 
-def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> FastAPI:
+def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None) -> FastAPI:
     app = FastAPI(title="Pitwall", docs_url="/api/docs")
 
     @app.get("/api/live")
@@ -416,6 +416,50 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
         return {"lap_id": lap_id}
 
     # --- backup -------------------------------------------------------------
+    # --- Low Fuel Motorsport (só leitura) ---------------------------------------
+    def _lfm():
+        if lfm is None:
+            raise HTTPException(400, "integração com o LFM indisponível")
+        return lfm
+
+    @app.get("/api/lfm")
+    def lfm_overview(force: bool = False):
+        return _lfm().overview(force)
+
+    @app.put("/api/lfm/user")
+    def lfm_user(body: dict = Body(...)):
+        from .lfm import LFMError, parse_user_id
+        raw = str(body.get("user") or "").strip()
+        uid = parse_user_id(raw)
+        if raw and not uid:
+            raise HTTPException(400, "cole o link do seu perfil do LFM (…/profile/NÚMERO) ou só o número")
+        if uid:
+            try:
+                _lfm().profile(uid, force=True)
+            except LFMError as e:
+                if "conexão" not in str(e):   # sem internet: salva assim mesmo
+                    raise HTTPException(400, str(e))
+        settings.update({"lfm_user_id": uid})
+        return _lfm().overview()
+
+    @app.post("/api/open")
+    def open_external(body: dict = Body(...)):
+        """Abre no navegador do sistema (só endereços conhecidos)."""
+        url = str(body.get("url") or "")
+        allowed = ("https://lowfuelmotorsport.com/", "https://devhygor.github.io/pitwall")
+        if not url.startswith(allowed):
+            raise HTTPException(400, "endereço não permitido")
+        import webbrowser
+        return {"opened": bool(webbrowser.open(url)), "url": url}
+
+    @app.get("/api/lfm/profile/{uid}")
+    def lfm_profile(uid: str):
+        from .lfm import LFMError
+        try:
+            return _lfm().profile(uid)
+        except LFMError as e:
+            raise HTTPException(400, str(e))
+
     @app.get("/api/backups")
     def backups():
         from . import backup

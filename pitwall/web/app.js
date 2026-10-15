@@ -57,10 +57,12 @@ const routes = [
   [/^#\/replay(?:\?(.*))?$/, (m) => renderReplay(new URLSearchParams(m[1] || ""))],
   [/^#\/progress(?:\?(.*))?$/, (m) => renderProgress(new URLSearchParams(m[1] || ""))],
   [/^#\/team$/, () => renderTeam()],
+  [/^#\/lfm$/, () => renderLfm()],
   [/^#\/overlay$/, () => renderOverlay()],
 ];
 let current = { name: "", id: null };
 let plots = [];
+let lfmTimer = null;
 function route() {
   plots.forEach((p) => p.destroy()); plots = [];
   if (player) { player.destroy(); player = null; }
@@ -68,6 +70,7 @@ function route() {
   view.classList.remove("wide");
   closeLapPicker();
   if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
+  if (lfmTimer) { clearInterval(lfmTimer); lfmTimer = null; }
   document.body.classList.remove("overlay");
   const h = location.hash || "#/";
   for (const [re, fn] of routes) {
@@ -75,7 +78,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -2837,3 +2840,154 @@ async function backupList() {
 
 route();
 if (!location.hash.startsWith("#/overlay")) { pollLive(); renderCtx(); }
+
+// ---------------------------------------------------------------- Low Fuel Motorsport (só leitura)
+const LIC_COL = { ROOKIE: "#9aa3b2", IRON: "#8d7b6a", BRONZE: "#cd7f32", SILVER: "#c8ced8", GOLD: "#ffcf3f",
+  PLATINUM: "#7fe3d6", DIAMOND: "#7fb6ff", ALIEN: "#c38bff" };
+const SR_COL = { A: "#3fd68b", B: "#9be35b", C: "#ffd23f", D: "#ffb020", E: "#ff8a3d", F: "#ff5d5d" };
+const licBadge = (lic) => {
+  const base = String(lic || "").replace("+", "").toUpperCase();
+  return `<span class="lic" style="--c:${LIC_COL[base] || "#8a93a3"}">${esc(lic || "—")}</span>`;
+};
+const srBadge = (l) => `<span class="lic sr" style="--c:${SR_COL[String(l || "").toUpperCase()] || "#8a93a3"}">SR ${esc(l || "—")}</span>`;
+const flag = (cc) => cc && /^[A-Z]{2}$/i.test(cc) ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "";
+function countdown(iso) {
+  const ms = new Date(iso) - Date.now();
+  if (!(ms > 0)) return "agora";
+  const d = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, m = Math.floor(ms / 6e4) % 60, s = Math.floor(ms / 1e3) % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return d ? `${d}d ${p(h)}h ${p(m)}m` : `${p(h)}:${p(m)}:${p(s)}`;
+}
+const raceWhen = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" }) + " · " +
+    d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+};
+async function openExt(url) {
+  try { const r = await postJ("/api/open", { url }); if (r.opened) return; } catch (e) { /* abre no app */ }
+  window.open(url, "_blank");
+}
+
+async function renderLfm(force) {
+  current = { name: "lfm" };
+  view.innerHTML = `<div class="sub">Carregando dados do LFM…</div>`;
+  let D;
+  try { D = await api("/api/lfm" + (force ? "?force=true" : "")); } catch (e) {
+    view.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return;
+  }
+  if (current.name !== "lfm") return;
+  if (!D.user_id) return lfmSetup(D);
+  const P = D.profile, S = (D.series && D.series.series) || [], N = D.next;
+  const st = (P && P.stats) || {};
+  const acc = (P && P.acc) || {};
+  const pct = (a, b) => b ? Math.round((a / b) * 100) + "%" : "—";
+  view.innerHTML = `
+    ${D.errors.length ? `<div class="note warn">${D.errors.map(esc).join(" · ")}${(P && P.stale) || (D.series && D.series.stale) ? " — mostrando o último dado salvo." : ""}</div>` : ""}
+    ${P ? `<section class="lfm-hero">
+      <div class="lh-id">
+        ${P.avatar ? `<img class="lh-av" src="${esc(P.avatar)}" alt="" onerror="this.style.visibility='hidden'">` : `<div class="lh-av"></div>`}
+        <div><span class="sub">Low Fuel Motorsport ${flag(P.country)}</span>
+          <h1>${esc(P.name)}</h1>
+          <div class="sub">${esc([P.first_name, P.last_name].filter(Boolean).join(" "))}${P.team && P.team.name ? ` · ${P.team.logo ? `<img class="lh-tl" src="${esc(P.team.logo)}" alt="">` : ""}${esc(P.team.name)}` : ""}</div></div>
+      </div>
+      <div class="lh-kpis">
+        <div class="kpi"><span>ELO</span><b class="num">${P.elo ?? "—"}</b>
+          ${P.elo_delta != null ? `<small class="${P.elo_delta >= 0 ? "posg" : "neg"}">${P.elo_delta >= 0 ? "▲" : "▼"} ${Math.abs(P.elo_delta)} na última corrida</small>` : ""}</div>
+        <div class="kpi"><span>Licença</span>${licBadge(P.license)}<small>Divisão ${P.division ?? "—"}</small></div>
+        <div class="kpi"><span>Safety Rating</span><b class="num">${P.safety_rating != null ? P.safety_rating.toFixed(2) : "—"}</b>${srBadge(P.sr_license)}</div>
+        ${acc.rating ? `<div class="kpi"><span>ACC</span><b class="num">${acc.rating}</b>${licBadge(acc.license)}<small>${acc.ranked_races ?? 0} corridas ranqueadas</small></div>` : ""}
+      </div>
+      <div class="lh-act">
+        <button class="btn" id="lfRef" title="Buscar de novo no LFM">Atualizar</button>
+        <button class="btn" data-ext="${esc(P.url)}">Perfil no LFM ↗</button>
+        <button class="btn xs ghost" id="lfChange">Trocar perfil</button>
+      </div>
+    </section>` : `<div class="panel"><div class="row"><button class="btn" id="lfRef">Tentar de novo</button><button class="btn xs ghost" id="lfChange">Trocar perfil</button></div></div>`}
+
+    ${N ? `<section class="lfm-next" style="${N.track_image ? `--img:url('${esc(N.track_image)}')` : ""}">
+      <div class="ln-txt"><span class="sub">Próxima corrida</span>
+        <h2>${esc(N.name)}</h2>
+        <div>${esc(N.track || "")} · ${raceWhen(N.next_race)} · ${N.race_length ? N.race_length + " min" : ""} ${N.class ? "· " + esc(N.class) : ""}</div>
+        <div class="ln-req">Requisitos: ${licBadge(N.requirements.license)} SR ${N.requirements.sr ?? "—"}${N.requirements.elo ? ` · ELO ${N.requirements.elo}` : ""}
+          ${N.signups != null ? ` · <b>${N.signups}</b> inscritos` : ""}</div></div>
+      <div class="ln-cd"><b class="num" data-cd="${esc(N.next_race)}">${countdown(N.next_race)}</b>
+        <div class="row"><button class="btn primary" data-ext="${esc(N.sessions_url)}">Inscrever no LFM ↗</button>
+          <button class="btn" data-ext="${esc(N.url)}">Ver série</button></div>
+        <small class="sub">A inscrição é feita no site do LFM, com a sua conta.</small></div>
+    </section>` : ""}
+
+    ${P ? `<div class="grid2">
+      <div class="panel"><h2>Progressão do ELO</h2><div id="lfElo" class="chart"></div></div>
+      <div class="panel"><h2>Progressão do Safety Rating</h2><div id="lfSr" class="chart"></div></div>
+    </div>
+    <div class="panel"><h2>Estatísticas</h2>
+      <div class="lfm-stats">
+        ${[["Largadas", st.starts], ["Vitórias", st.wins], ["Pódios", st.podium], ["Top 5", st.top5], ["Top 10", st.top10],
+           ["Poles", st.poles], ["Abandonos", st.dnf], ["Ranqueadas", st.ranked]].map(([k, v]) => `<div><b class="num">${v ?? "—"}</b><span>${k}</span></div>`).join("")}
+        <div><b class="num">${st.avg_q != null ? "P" + st.avg_q.toFixed(1) : "—"}</b><span>Média classif.</span></div>
+        <div><b class="num">${st.avg_r != null ? "P" + st.avg_r.toFixed(1) : "—"}</b><span>Média chegada</span></div>
+        <div><b class="num">${st.avg_ip != null ? st.avg_ip.toFixed(1) : "—"}</b><span>Incidentes/corrida</span></div>
+        <div><b class="num">${pct(st.top10, st.starts)}</b><span>Top 10</span></div>
+      </div>
+      ${P.sims && P.sims.length > 1 ? `<h3 class="sub" style="margin:16px 0 8px">Ratings & licenças por simulador</h3>
+      <div class="lfm-sims">${P.sims.map((x) => `<div class="lsim">${x.logo ? `<img src="${esc(x.logo)}" alt="" onerror="this.remove()">` : ""}
+        <div><b>${esc(x.name || "")}</b><span class="num">${x.rating ?? "—"}</span> ${licBadge(x.license)} <small class="sub">${x.ranked_races ?? 0} ranq.</small></div></div>`).join("")}</div>` : ""}
+    </div>` : ""}
+
+    <div class="panel"><h2>Séries de ACC desta semana ${D.series ? `<small class="sub">${esc(D.series.season || "")}${D.series.week ? " · semana " + D.series.week : ""}</small>` : ""}</h2>
+      <div class="lfm-series">${S.map((x) => `
+        <div class="lser ${x.you && !x.you.eligible ? "locked" : ""}">
+          <div class="ls-img" style="${x.track_image ? `background-image:url('${esc(x.track_image)}')` : ""}">${x.class ? `<span>${esc(x.class)}</span>` : ""}</div>
+          <div class="ls-body"><b>${esc(x.name)}</b>
+            <div class="sub">${esc(x.track || "")}${x.race_length ? ` · ${x.race_length} min` : ""}${x.team_event ? " · equipes" : ""}</div>
+            <div class="ls-req">${licBadge(x.requirements.license)} <span>SR ${x.requirements.sr ?? "—"}</span>${x.requirements.elo ? `<span>ELO ${x.requirements.elo}</span>` : ""}
+              ${x.you ? (x.you.eligible ? `<span class="okc">✓ você pode correr</span>` : `<span class="noc">falta ${esc(x.you.missing.join(", "))}</span>`) : ""}</div>
+            ${x.next_race ? `<div class="ls-next"><span>${raceWhen(x.next_race)}</span><b class="num" data-cd="${esc(x.next_race)}">${countdown(x.next_race)}</b>
+              ${x.signups != null ? `<small class="sub">${x.signups} inscritos</small>` : ""}</div>` : `<div class="sub">Sem corrida marcada</div>`}
+            <div class="row"><button class="btn xs primary" data-ext="${esc(x.sessions_url)}">Inscrever ↗</button><button class="btn xs" data-ext="${esc(x.url)}">Série</button></div>
+          </div></div>`).join("") || `<div class="sub">Nenhuma série encontrada.</div>`}</div>
+      <p class="sub" style="margin-top:12px">Dados públicos do lowfuelmotorsport.com, atualizados a cada 10–15 min. O Pitwall só lê; inscrição e pagamento ficam no site do LFM.</p>
+    </div>`;
+  view.querySelectorAll("[data-ext]").forEach((b) => b.onclick = () => openExt(b.dataset.ext));
+  const ref = $("#lfRef"); if (ref) ref.onclick = () => renderLfm(true);
+  const ch = $("#lfChange"); if (ch) ch.onclick = () => lfmSetup(D, true);
+  lfmTimer = setInterval(() => {
+    if (current.name !== "lfm") { clearInterval(lfmTimer); lfmTimer = null; return; }
+    view.querySelectorAll("[data-cd]").forEach((el) => { el.textContent = countdown(el.dataset.cd); });
+  }, 1000);
+  if (!P) return;
+  const lfChart = (el, pts, color, opts = {}) => {
+    if (!el) return;
+    if (pts.length < 2) { el.innerHTML = `<div class="sub">Precisa de 2 corridas ou mais.</div>`; return; }
+    const lbl = (u, v) => v.map((i) => (Number.isInteger(i) && pts[i] ? new Date(pts[i].date + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : ""));
+    plots.push(new uPlot({
+      width: el.clientWidth, height: 220, scales: { x: { time: false }, ...(opts.scales || {}) },
+      axes: [axis({ values: lbl }), axis({ size: 52 })],
+      series: [{}, { label: opts.label, stroke: color, width: 2.4, fill: color + "22", points: { size: 6, fill: color } }],
+      cursor: { drag: { x: false, y: false } },
+    }, [pts.map((_, i) => i), pts.map((p) => p.rating)], el));
+  };
+  lfChart($("#lfElo"), P.elo_graph, "#ffb020", { label: "ELO" });
+  lfChart($("#lfSr"), P.sr_graph, "#3fd68b", { label: "SR" });
+}
+
+function lfmSetup(D, changing) {
+  view.innerHTML = `
+    <section class="lfm-hero setup">
+      <div><span class="sub">Low Fuel Motorsport</span><h1>Conecte o seu perfil do LFM</h1>
+        <p class="sub">Veja aqui o seu ELO, Safety Rating, licenças, estatísticas e um contador para a próxima corrida.
+          É só leitura: o Pitwall não entra na sua conta nem faz inscrições sozinho.</p>
+        <ol class="sub"><li>Abra o seu perfil em lowfuelmotorsport.com (clique na sua foto → Profile).</li>
+          <li>Copie o endereço da página (ex.: lowfuelmotorsport.com/profile/<b>326481</b>) e cole abaixo.</li></ol>
+        <div class="row"><input id="lfId" placeholder="Link do perfil ou número" value="${esc(changing ? D.user_id : "")}" style="min-width:320px">
+          <button class="btn primary" id="lfSave">Conectar</button>
+          <button class="btn" data-ext="https://lowfuelmotorsport.com/">Abrir o LFM ↗</button></div>
+        <div id="lfMsg" class="sub" style="margin-top:8px"></div></div>
+    </section>`;
+  view.querySelectorAll("[data-ext]").forEach((b) => b.onclick = () => openExt(b.dataset.ext));
+  $("#lfSave").onclick = async () => {
+    $("#lfSave").disabled = true; $("#lfMsg").textContent = "Procurando o perfil…";
+    try { await api("/api/lfm/user", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user: $("#lfId").value }) }); renderLfm(); }
+    catch (e) { $("#lfMsg").innerHTML = `<span class="status bad">${esc(e.message)}</span>`; $("#lfSave").disabled = false; }
+  };
+}

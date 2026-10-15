@@ -131,7 +131,10 @@ def main(argv=None):
     import uvicorn
     from .server import create_app
 
-    app = create_app(db, recorder, settings, video, team)
+    from .db import data_dir as _dd
+    from .lfm import LFM
+    lfm = LFM(settings, _dd() / "lfm")
+    app = create_app(db, recorder, settings, video, team, lfm)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning"))
     from . import desktop
     use_window = desktop.available() and not args.browser

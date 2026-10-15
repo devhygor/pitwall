@@ -32,6 +32,7 @@ DEFAULTS = {
     "team_share_setup": True,   # envia o setup usado junto com o recorde
     "team_share_clip": True,    # envia um clipe de vídeo (720p) do recorde
     # jogos
+    "lfm_user_id": "",          # número ou link do perfil no lowfuelmotorsport.com
     "games": "auto",            # auto | acc | iracing
 }
 
