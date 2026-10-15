@@ -307,7 +307,7 @@ class Team:
                "recorded_at": (lap.get("recorded_at") or dt.datetime.now().isoformat()),
                "uploaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                "telemetry": base64.b64encode(pack(tel)).decode(), "setup_name": None, "setup_json": None,
-               "clip_path": None}
+               "clip_path": None, "events": lap.get("events") or []}
         setup = self.db.setup(sess["setup_id"]) if sess.get("setup_id") else None
         if setup and self.settings.get("team_share_setup"):
             row["setup_name"], row["setup_json"] = setup["name"], json.dumps(setup["content"])

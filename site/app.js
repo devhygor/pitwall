@@ -38,14 +38,14 @@ async function rpc(name, args) {
 // ---------------------------------------------------------------- roteador
 function route() {
   if (stopCircuit) { stopCircuit(); stopCircuit = null; }
-  if (stopCompare) { stopCompare(); stopCompare = null; }
+  if (typeof stopAnalysis === "function") stopAnalysis();
   window.scrollTo(0, 0);
   const h = location.hash || "#/";
   let m;
   if ((m = h.match(/^#\/join\/([A-Za-z0-9]{8})/))) return joinRoute(m[1].toUpperCase());
   if (!session) return renderLanding();
   if ((m = h.match(/^#\/team\/([0-9a-f-]{36})/))) return renderTeam(m[1]);
-  if ((m = h.match(/^#\/compare\/([0-9a-f-]{36})(?:\/([0-9a-f-]{36}))?/))) return renderCompare(m[1], m[2]);
+  if ((m = h.match(/^#\/compare\/([0-9a-f-]{36})(?:\/([0-9a-f-]{36}))?/))) return renderAnalysis(m[1], m[2]);
   markTop();
   if (h.startsWith("#/ranking")) return renderCommunity();
   return renderHome();
@@ -437,146 +437,6 @@ async function decodeTel(b64) {
   const stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate"));
   return JSON.parse(await new Response(stream).text());
 }
-function resample(tel, N) {
-  const d = tel.d, n = d.length, out = { t: [], speed: [], gas: [], brake: [], x: [], z: [], gear: [] };
-  // garante distância crescente
-  const idx = []; let last = -1;
-  for (let i = 0; i < n; i++) if (d[i] > last) { idx.push(i); last = d[i]; }
-  let j = 0;
-  for (let k = 0; k < N; k++) {
-    const v = idx.length ? d[idx[0]] + (d[idx[idx.length - 1]] - d[idx[0]]) * k / (N - 1) : 0;
-    while (j < idx.length - 2 && d[idx[j + 1]] < v) j++;
-    const a = idx[j], b = idx[Math.min(j + 1, idx.length - 1)];
-    const u = d[b] > d[a] ? (v - d[a]) / (d[b] - d[a]) : 0;
-    for (const key of Object.keys(out)) {
-      const arr = tel[key]; if (!arr) { out[key].push(null); continue; }
-      out[key].push(arr[a] == null || arr[b] == null ? (arr[a] ?? arr[b]) : arr[a] + (arr[b] - arr[a]) * u);
-    }
-  }
-  return out;
-}
-
-let stopCompare = null;
-async function renderCompare(idA, idB) {
-  if (stopCompare) { stopCompare(); stopCompare = null; }
-  view.innerHTML = `<div class="loading">Carregando as voltas…</div>`;
-  const ids = [idA, idB].filter(Boolean);
-  const { data, error } = await sb.from("laps").select("*,profiles(name,avatar_url)").in("id", ids);
-  if (error || !data || !data.length) { view.innerHTML = `<div class="wrap page"><div class="panel empty"><b>Volta não encontrada</b></div></div>`; return; }
-  const LA = data.find((r) => r.id === idA), LB = idB ? data.find((r) => r.id === idB) : null;
-  const N = 1500;
-  const A = resample(await decodeTel(LA.telemetry), N), B = LB ? resample(await decodeTel(LB.telemetry), N) : null;
-  const nameOf = (L) => (L.profiles || {}).name || "?";
-  const diff = LB ? LA.lap_time_ms - LB.lap_time_ms : null;
-  const clip = (L) => L && L.clip_path ? sb.storage.from("clips").getPublicUrl(L.clip_path).data.publicUrl : null;
-  const cA = clip(LA), cB = clip(LB);
-  const card = (L, tag) => `<div class="lapc ${tag}"><i></i>${avatar({ name: nameOf(L), avatar_url: (L.profiles || {}).avatar_url })}
-    <div><small>${esc(nameOf(L))}${L.user_id === session.user.id ? " (você)" : ""}</small><b>${fmtLap(L.lap_time_ms)}</b><em>${fmtDate(L.recorded_at)}</em></div>
-    ${L.setup_name ? `<button class="btn small" data-setup="${L.id}" title="${esc(L.setup_name)}">Baixar setup</button>` : ""}</div>`;
-  view.innerHTML = `<div class="wrap page cmp">
-    <div class="page-head"><div><a class="back" href="javascript:history.back()">Voltar</a><h1>${esc(pretty(LA.track))}</h1><div class="sub">${esc(pretty(LA.car))}</div></div>
-      ${LB ? `<div class="bigdelta ${diff > 0 ? "neg" : "pos"}"><small>Diferença</small>${diff > 0 ? "+" : "−"}${(Math.abs(diff) / 1000).toFixed(3)} s</div>` : ""}</div>
-    <div class="lapcs">${card(LA, "a")}${LB ? card(LB, "b") : ""}</div>
-    <div class="stagebox panel"><canvas id="stage"></canvas>
-      <div class="hud"><span class="num" id="clock">0:00.000</span><span class="num" id="hdelta"></span></div></div>
-    ${cA || cB ? `<div class="clips">${[cA ? `<div class="clipv a"><span>${esc(nameOf(LA))}</span><video id="va" src="${esc(cA)}" muted playsinline preload="auto"></video></div>` : "",
-      cB ? `<div class="clipv b"><span>${esc(nameOf(LB))}</span><video id="vb" src="${esc(cB)}" muted playsinline preload="auto"></video></div>` : ""].join("")}</div>` : ""}
-    <div class="ctrl panel"><button class="btn go small" id="play">▶</button>
-      ${[0.5, 1, 2].map((x) => `<button class="btn small ${x === 1 ? "on" : ""}" data-rate="${x}">${String(x).replace(".", ",")}×</button>`).join("")}
-      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Posição na volta"></div>
-    <div class="panel"><h2>Velocidade</h2><canvas class="chart" id="cSpeed" height="170"></canvas>
-      ${LB ? `<h2 style="margin-top:14px">Diferença ao longo da volta</h2><canvas class="chart" id="cDelta" height="120"></canvas>` : ""}
-      <h2 style="margin-top:14px">Freio e acelerador</h2><canvas class="chart" id="cPedal" height="120"></canvas>
-      <p class="help">Laranja: ${esc(nameOf(LA))}${LB ? ` · Azul: ${esc(nameOf(LB))}` : ""}. Delta acima de zero = ${esc(nameOf(LA))} mais lento naquele ponto.</p></div>
-  </div>`;
-  bindRows(view);
-  // ---- desenho
-  const colA = "#f2a93b", colB = "#5cc8ff";
-  const delta = LB ? A.t.map((t, i) => (t != null && B.t[i] != null ? (t - B.t[i]) / 1000 : null)) : null;
-  const pts = A.x.map((x, i) => [x, A.z[i]]).filter((p) => p[0] != null);
-  const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
-  const bb = [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
-  const cv = $("#stage"), ctx = cv.getContext("2d");
-  const tEnd = LA.lap_time_ms;
-  const S = { T: 0, playing: false, rate: 1, last: 0, raf: 0 };
-  const idxAt = (L, ms) => { let lo = 0, hi = N - 1; while (lo < hi) { const m = (lo + hi) >> 1; if ((L.t[m] ?? -1) < ms) lo = m + 1; else hi = m; } return lo; };
-  function fit() { const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
-  function draw() {
-    const W = cv.clientWidth, H = cv.clientHeight; if (!W) return;
-    const sc = Math.min(W / (bb[2] - bb[0]), H / (bb[3] - bb[1])) * 0.88;
-    const ox = W / 2 - sc * (bb[0] + bb[2]) / 2, oz = H / 2 - sc * (bb[1] + bb[3]) / 2;
-    const P = (x, z) => [ox + sc * x, oz + sc * z];
-    ctx.fillStyle = "#0b0f18"; ctx.fillRect(0, 0, W, H);
-    const line = (L, col, w) => { ctx.beginPath(); let pen = false; for (let i = 0; i < N; i++) { if (L.x[i] == null) { pen = false; continue; } const [x, y] = P(L.x[i], L.z[i]); pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = "round"; ctx.stroke(); };
-    line(A, "#1d2738", 14);
-    if (B) line(B, colB, 2);
-    line(A, colA, 2);
-    const car = (L, col) => { const i = idxAt(L, S.T); if (L.x[i] == null) return; const [x, y] = P(L.x[i], L.z[i]); ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#0b0f18"; ctx.stroke(); };
-    if (B) car(B, colB);
-    car(A, colA);
-    const iA = idxAt(A, S.T);
-    $("#clock").textContent = S.T <= 0 ? "0:00.000" : fmtLap(Math.round(S.T));
-    if (delta) { const dv = delta[iA]; const el = $("#hdelta"); el.textContent = dv == null ? "" : (dv > 0 ? "+" : "−") + Math.abs(dv).toFixed(3) + " s"; el.className = "num " + (dv > 0 ? "neg" : "pos"); }
-    $("#scrub").value = Math.round(S.T / tEnd * 1000);
-    cursor(iA);
-  }
-  // ---- gráficos simples (canvas)
-  const charts = [];
-  function chart(id, series, lo, hi) {
-    const c = $(id); if (!c) return;
-    const r = c.getBoundingClientRect(), dpr = devicePixelRatio || 1; c.width = r.width * dpr; c.height = c.getAttribute("height") * dpr;
-    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const W = r.width, H = +c.getAttribute("height");
-    const vals = series.flatMap((s) => s.data).filter((v) => v != null);
-    const mn = lo ?? Math.min(...vals), mx = hi ?? Math.max(...vals), span = mx - mn || 1;
-    const base = () => {
-      g.clearRect(0, 0, W, H);
-      if (mn < 0 && mx > 0) { const y0 = H - (0 - mn) / span * H; g.strokeStyle = "#2a3548"; g.beginPath(); g.moveTo(0, y0); g.lineTo(W, y0); g.stroke(); }
-      for (const s of series) {
-        g.beginPath(); let pen = false;
-        s.data.forEach((v, i) => { if (v == null) { pen = false; return; } const x = i / (N - 1) * W, y = H - (v - mn) / span * H; pen ? g.lineTo(x, y) : g.moveTo(x, y); pen = true; });
-        g.strokeStyle = s.color; g.lineWidth = s.w || 1.6; g.stroke();
-      }
-    };
-    base();
-    charts.push({ c, g, W, H, base });
-    c.onpointermove = (e) => { const f = (e.clientX - c.getBoundingClientRect().left) / W; const i = Math.max(0, Math.min(N - 1, Math.round(f * (N - 1)))); if (!S.playing && A.t[i] != null) { S.T = A.t[i]; draw(); } };
-  }
-  function cursor(i) {
-    for (const ch of charts) { ch.base(); const x = i / (N - 1) * ch.W; ch.g.strokeStyle = "rgba(238,242,247,.6)"; ch.g.lineWidth = 1; ch.g.beginPath(); ch.g.moveTo(x, 0); ch.g.lineTo(x, ch.H); ch.g.stroke(); }
-  }
-  function drawCharts() {
-    charts.length = 0;
-    chart("#cSpeed", [B && { data: B.speed, color: colB }, { data: A.speed, color: colA, w: 2 }].filter(Boolean));
-    if (delta) chart("#cDelta", [{ data: delta, color: colA, w: 2 }], -Math.max(0.2, ...delta.map((v) => Math.abs(v || 0))), Math.max(0.2, ...delta.map((v) => Math.abs(v || 0))));
-    chart("#cPedal", [B && { data: B.brake, color: "rgba(92,200,255,.8)" }, { data: A.brake, color: "#ff5a5f", w: 2 }, B && { data: B.gas, color: "rgba(92,200,255,.45)" }, { data: A.gas, color: "#39d98a" }].filter(Boolean), 0, 1);
-  }
-  // ---- vídeos (o clipe começa 1 s antes da linha)
-  const va = $("#va"), vb = $("#vb");
-  const syncV = (v, ms) => {
-    if (!v || ms == null || v.readyState < 1) return;
-    const target = 1 + ms / 1000;
-    if (S.playing) { v.playbackRate = S.rate; if (Math.abs(v.currentTime - target) > 0.3) v.currentTime = target; if (v.paused) v.play().catch(() => {}); }
-    else { if (!v.paused) v.pause(); if (Math.abs(v.currentTime - target) > 0.05) v.currentTime = target; }
-  };
-  function loop(ts) {
-    if (S.playing) { S.T += (S.last ? ts - S.last : 0) * S.rate; if (S.T >= tEnd) { S.T = tEnd; S.playing = false; $("#play").textContent = "▶"; } }
-    S.last = ts;
-    draw();
-    syncV(va, S.T);
-    if (vb && LB) syncV(vb, Math.min(S.T, LB.lap_time_ms));
-    S.raf = requestAnimationFrame(loop);
-  }
-  $("#play").onclick = () => { if (S.T >= tEnd) S.T = 0; S.playing = !S.playing; $("#play").textContent = S.playing ? "❚❚" : "▶"; };
-  view.querySelectorAll("[data-rate]").forEach((b) => b.onclick = () => { S.rate = +b.dataset.rate; view.querySelectorAll("[data-rate]").forEach((x) => x.classList.toggle("on", x === b)); });
-  $("#scrub").oninput = (e) => { S.playing = false; $("#play").textContent = "▶"; S.T = +e.target.value / 1000 * tEnd; };
-  const onResize = () => { fit(); drawCharts(); };
-  window.addEventListener("resize", onResize);
-  onResize();
-  S.raf = requestAnimationFrame(loop);
-  stopCompare = () => { cancelAnimationFrame(S.raf); window.removeEventListener("resize", onResize); };
-}
-
 // ---------------------------------------------------------------- início
 // Importante: não chamar o Supabase direto dentro do onAuthStateChange (trava a sessão);
 // o tratamento roda logo depois, fora do callback.

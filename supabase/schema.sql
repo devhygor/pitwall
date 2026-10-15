@@ -216,3 +216,6 @@ language sql stable security invoker set search_path = '' as $$
   order by l.track, l.car, l.lap_time_ms
 $$;
 grant execute on function public.team_board(uuid) to authenticated;
+
+-- v3: problemas da volta (travadas, rodadas, limite de pista) para a Análise no site
+alter table public.laps add column if not exists events jsonb not null default '[]'::jsonb;
