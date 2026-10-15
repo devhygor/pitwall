@@ -653,6 +653,8 @@ async function renderCompare(params) {
       <div class="seg-switch"><span class="btn sm on">Análise</span><a class="btn sm" href="#/replay?a=${a}${b ? "&b=" + b : ""}">Replay</a></div>
     </header>
 
+    ${lapStrip(options, LA, LB)}
+
     <section class="an2-findings">
       ${hasB ? `<div class="fgroup"><span class="flabel">Onde você perde tempo</span>
         ${worst.length ? worst.map(({ s, k }) => `<button class="fchip loss" data-seg="${k}">Curva ${s.n}<b class="num">+${s.delta.toFixed(2).replace(".", ",")} s</b></button>`).join("")
@@ -712,6 +714,8 @@ async function renderCompare(params) {
 
   $("#pickA").onclick = (e) => lapPicker(e.currentTarget, options, a, (id) => { if (id) location.hash = `#/compare?a=${id}${b ? "&b=" + b : ""}`; }, { title: "Sua volta" });
   $("#pickB").onclick = (e) => lapPicker(e.currentTarget, options, b, (id) => { location.hash = `#/compare?a=${a}${id ? "&b=" + id : ""}`; }, { allowNone: true, title: "Comparar com" });
+
+  bindLapStrip(options, LA, LB, a, b);
 
   AN = { r, LA, LB, hasB, n, segs, evs, seg: 0, focus: true, idx: 0, lastIdx: -1, phaseColors: true, show: shown };
   AN.phA = phases(r.a); AN.runsA = phaseRuns(AN.phA);
@@ -3180,3 +3184,102 @@ async function renderCommunity() {
   }
   teamCommunity();
 }
+
+// ---------------------------------------------------------------- barra de voltas (trocar rápido na Análise)
+const lapStripState = { target: "a", session: null };
+function stripSessions(options, car) {
+  const own = options.filter((l) => (!l.kind || l.kind === "own") && l.car === car);
+  const by = {};
+  for (const l of own) (by[l.session_id] = by[l.session_id] || { id: l.session_id, started_at: l.started_at, type: l.session_type, laps: [] }).laps.push(l);
+  return Object.values(by).sort((x, y) => String(y.started_at).localeCompare(String(x.started_at)));
+}
+function lapStrip(options, LA, LB) {
+  const car = LA.car;
+  const sessions = stripSessions(options, car);
+  if (!sessions.length) return "";
+  const own = LA.kind !== "ideal" && LA.kind !== "team";
+  let sid = lapStripState.session;
+  if (!sessions.some((x) => x.id === sid)) sid = own && sessions.some((x) => x.id === LA.session_id) ? LA.session_id : sessions[0].id;
+  lapStripState.session = sid;
+  const S = sessions.find((x) => x.id === sid);
+  const laps = S.laps.slice().sort((x, y) => x.lap_number - y.lap_number);
+  const clean = (l) => l.valid && !l.out_lap && !l.in_lap;
+  const best = Math.min(...laps.filter(clean).map((l) => l.lap_time_ms), Infinity);
+  const pb = Math.min(...options.filter((l) => (!l.kind || l.kind === "own") && l.car === car && clean(l)).map((l) => l.lap_time_ms), Infinity);
+  const sBest = (x) => Math.min(...x.laps.filter(clean).map((l) => l.lap_time_ms), Infinity);
+  const chip = (l) => {
+    const d = clean(l) && isFinite(best) ? l.lap_time_ms - best : null;
+    const cls = [l.id === LA.id ? "isa" : "", LB && l.id === LB.id ? "isb" : "", clean(l) ? "" : "bad",
+      clean(l) && l.lap_time_ms === pb ? "pb" : clean(l) && l.lap_time_ms === best ? "best" : ""].join(" ");
+    const why = l.out_lap ? "saída dos boxes" : l.in_lap ? "entrada nos boxes" : !l.valid ? "inválida" : "";
+    return `<button class="lsc ${cls}" data-lap="${l.id}" title="Volta ${l.lap_number}${why ? " · " + why : ""}">
+      <small>V${l.lap_number}${l.id === LA.id ? " · sua" : ""}${LB && l.id === LB.id ? " · ref" : ""}</small>
+      <b class="num">${fmtLap(l.lap_time_ms)}</b>
+      <em class="num">${why ? (l.out_lap ? "box ↗" : l.in_lap ? "box ↘" : "⚠ inválida") : d === 0 ? (l.lap_time_ms === pb ? "recorde" : "melhor") : "+" + (d / 1000).toFixed(3)}</em></button>`;
+  };
+  const ideal = options.find((l) => l.kind === "ideal" && l.car === car);
+  const pbLap = options.find((l) => (!l.kind || l.kind === "own") && l.car === car && clean(l) && l.lap_time_ms === pb);
+  const sbLap = laps.find((l) => clean(l) && l.lap_time_ms === best);
+  return `<section class="lapstrip">
+    <div class="ls-top">
+      <select id="lsSess" title="Sessão">${sessions.map((x) => `<option value="${x.id}" ${x.id === sid ? "selected" : ""}>${esc(fmtDate(x.started_at))} · ${esc(TYPES[x.type] || x.type || "Sessão")} · ${x.laps.length} voltas${isFinite(sBest(x)) ? " · " + fmtLap(sBest(x)) : ""}</option>`).join("")}</select>
+      <div class="seg-switch ls-tgt" title="O que o clique numa volta troca">
+        <span class="sub">Clique troca:</span>
+        <button class="btn xs ${lapStripState.target === "a" ? "on" : ""}" data-tgt="a"><i class="dot a"></i>Sua volta</button>
+        <button class="btn xs ${lapStripState.target === "b" ? "on" : ""}" data-tgt="b"><i class="dot b"></i>Referência</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="sub">Referência rápida:</span>
+      ${sbLap ? `<button class="btn xs" data-ref="${sbLap.id}">Melhor da sessão</button>` : ""}
+      ${pbLap ? `<button class="btn xs" data-ref="${pbLap.id}">Meu recorde</button>` : ""}
+      ${ideal ? `<button class="btn xs" data-ref="${ideal.id}">Volta ideal</button>` : ""}
+      ${LB ? `<button class="btn xs ghost" data-ref="">Sem referência</button>` : ""}
+    </div>
+    <div class="ls-row">
+      <button class="btn sm ls-nav" id="lsPrev" title="Volta anterior ( [ )">◀</button>
+      <div class="ls-laps" id="lsLaps">${laps.map(chip).join("")}</div>
+      <button class="btn sm ls-nav" id="lsNext" title="Próxima volta ( ] )">▶</button>
+    </div></section>`;
+}
+function bindLapStrip(options, LA, LB, a, b) {
+  const box = $(".lapstrip");
+  if (!box) return;
+  const go = (na, nb) => { location.hash = `#/compare?a=${na}${nb ? "&b=" + nb : ""}`; };
+  const pick = (id) => {
+    if (lapStripState.target === "b") { if (id !== a) go(a, id); }
+    else if (id === b) go(id, a);        // trocou pela referência: inverte
+    else go(id, b);
+  };
+  box.querySelectorAll("[data-lap]").forEach((c) => c.onclick = () => pick(+c.dataset.lap));
+  box.querySelectorAll("[data-tgt]").forEach((c) => c.onclick = () => {
+    lapStripState.target = c.dataset.tgt;
+    box.querySelectorAll("[data-tgt]").forEach((x) => x.classList.toggle("on", x === c));
+  });
+  box.querySelectorAll("[data-ref]").forEach((c) => c.onclick = () => go(a, c.dataset.ref ? +c.dataset.ref : null));
+  $("#lsSess").onchange = (e) => {
+    lapStripState.session = +e.target.value;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = lapStrip(options, LA, LB);
+    box.replaceWith(tmp.firstElementChild);
+    bindLapStrip(options, LA, LB, a, b);
+  };
+  const ids = [...box.querySelectorAll("[data-lap]")].map((c) => +c.dataset.lap);
+  const step = (dir) => {
+    const cur = lapStripState.target === "b" ? b : a;
+    let i = ids.indexOf(cur);
+    i = i < 0 ? (dir > 0 ? 0 : ids.length - 1) : i + dir;
+    if (i >= 0 && i < ids.length) pick(ids[i]);
+  };
+  $("#lsPrev").onclick = () => step(-1);
+  $("#lsNext").onclick = () => step(1);
+  const act = box.querySelector(".lsc.isa") || box.querySelector(".lsc.isb");
+  if (act) act.scrollIntoView({ block: "nearest", inline: "center" });
+  if (lapStripKey) document.removeEventListener("keydown", lapStripKey);
+  lapStripKey = (e) => {
+    if (current.name !== "compare" || /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || "")) return;
+    if (e.key === "[" || e.key === "PageUp") { e.preventDefault(); step(-1); }
+    if (e.key === "]" || e.key === "PageDown") { e.preventDefault(); step(1); }
+  };
+  document.addEventListener("keydown", lapStripKey);
+}
+let lapStripKey = null;
