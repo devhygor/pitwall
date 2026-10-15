@@ -270,7 +270,10 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
 
     @app.get("/api/progress")
     def progress():
-        return {"overall": analysis.evolution(db.all_own_laps_brief()),
+        combos = db.car_track_stats()
+        for c in combos:
+            c["rating"] = analysis.ratings(db.own_laps(c["car"], c["track"], clean_only=False))["current"]
+        return {"overall": analysis.evolution(db.all_own_laps_brief()), "combos_rated": combos,
                 "combos": db.car_track_stats(),
                 "records": sorted(db.personal_bests().values(), key=lambda r: (r["track"], r["car"]))}
 
@@ -278,10 +281,15 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None) -> F
     def progress_combo(car: str, track: str):
         pb = db.pb_for(car, track)
         clean = db.own_laps(car, track)
-        res = {"pb": pb, "pb_history": analysis.pb_history(clean), "sessions": analysis.session_trend(clean),
+        res = {"car": car, "track": track, "pb": pb, "pb_history": analysis.pb_history(clean),
+               "sessions": analysis.session_trend(clean),
+               "rating": analysis.ratings(db.own_laps(car, track, clean_only=False)),
                "ideal": next((e for e in db.externals("ideal") if e["car"] == car and e["track"] == track), None)}
         if pb:
-            res["consistency"] = analysis.consistency(_combo_laps(car, track), db.lap(pb["lap_id"]))
+            cons = analysis.consistency(_combo_laps(car, track), db.lap(pb["lap_id"]))
+            res["consistency"] = cons
+            used = {s["best_lap_id"] for s in cons.get("segments", [])}
+            res["ideal_from"] = {"laps": len(used), "sessions": len({l["session_id"] for l in cons.get("laps", []) if l["lap_id"] in used})}
         return res
 
     @app.post("/api/progress/ideal")

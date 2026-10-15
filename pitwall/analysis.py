@@ -469,3 +469,45 @@ def session_trend(clean_laps: list[dict]) -> list[dict]:
     starts = {l["session_id"]: l["started_at"] for l in clean_laps}
     return [{"session_id": sid, "started_at": starts[sid], "best_ms": min(v), "avg_ms": round(mean(v)),
              "laps": len(v)} for sid, v in sorted(by.items(), key=lambda kv: starts[kv[0]])]
+
+
+def ratings(all_laps: list[dict]) -> dict:
+    """Rating Pitwall (0–100) por sessão de um carro numa pista.
+
+    ritmo        quão perto a melhor volta da sessão ficou do seu recorde (1% mais lento = 75)
+    consistência quanto as voltas limpas variam (desvio de 0,5% = 80)
+    limpeza      % de voltas válidas (sem contar entrada/saída do box)
+    rating       50% ritmo + 30% consistência + 20% limpeza
+    """
+    by: dict = {}
+    for l in all_laps:
+        by.setdefault(l["session_id"], []).append(l)
+    clean_all = [l["lap_time_ms"] for l in all_laps if l["valid"] and not l["out_lap"] and not l["in_lap"]]
+    if not clean_all:
+        return {"current": None, "sessions": []}
+    pb = min(clean_all)
+    out = []
+    for sid, ls in by.items():
+        racing = [l for l in ls if not l["out_lap"] and not l["in_lap"]]
+        clean = [l["lap_time_ms"] for l in racing if l["valid"]]
+        if not clean:
+            continue
+        best = min(clean)
+        med = median(clean)
+        steady = [t for t in clean if t < med * 1.03]
+        sd = float(np.std(steady)) if len(steady) >= 2 else 0.0
+        mean_ = float(np.mean(steady)) if steady else best
+        pace = max(0.0, min(100.0, 100 - (best / pb - 1) * 100 * 25))
+        cons = max(0.0, min(100.0, 100 - (sd / mean_) * 100 * 40)) if len(steady) >= 2 else None
+        cleanp = 100.0 * len(clean) / len(racing) if racing else 100.0
+        rating = 0.5 * pace + 0.3 * (cons if cons is not None else pace) + 0.2 * cleanp
+        out.append({"session_id": sid, "started_at": ls[0]["started_at"], "laps": len(racing), "best_ms": best,
+                    "pace": round(pace), "consistency": None if cons is None else round(cons),
+                    "clean": round(cleanp), "rating": round(rating)})
+    out.sort(key=lambda r: r["started_at"])
+    last = out[-3:]
+    current = round(sum(r["rating"] for r in last) / len(last)) if last else None
+    return {"current": current, "sessions": out,
+            "pace": last[-1]["pace"] if last else None,
+            "consistency": last[-1]["consistency"] if last else None,
+            "clean": round(sum(r["clean"] for r in last) / len(last)) if last else None}

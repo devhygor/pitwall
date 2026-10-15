@@ -66,13 +66,14 @@ function route() {
   if (player) { player.destroy(); player = null; }
   if (RP) { RP.destroy(); RP = null; }
   view.classList.remove("wide");
+  closeLapPicker();
   if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
   document.body.classList.remove("overlay");
   const h = location.hash || "#/";
   for (const [re, fn] of routes) {
     const m = h.match(re);
     if (m) {
-      const sec = h.startsWith("#/compare") || h.startsWith("#/replay") ? "compare" : h.startsWith("#/strategy") ? "strategy"
+      const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
         : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
@@ -83,6 +84,42 @@ function route() {
   location.hash = "#/";
 }
 window.addEventListener("hashchange", route);
+
+// ---------------------------------------------------------------- contexto (carro + pista em análise)
+const CTX = (() => { try { return JSON.parse(localStorage.getItem("pitwall.ctx") || "{}"); } catch (e) { return {}; } })();
+function setCtx(car, track) {
+  CTX.car = car || ""; CTX.track = track || "";
+  try { localStorage.setItem("pitwall.ctx", JSON.stringify(CTX)); } catch (e) { /* ok */ }
+  renderCtx();
+}
+let ctxCombos = [];
+async function renderCtx(reload) {
+  const el = $("#ctx");
+  if (!el) return;
+  if (reload || !ctxCombos.length) {
+    try { ctxCombos = await api("/api/records"); } catch (e) { ctxCombos = []; }
+  }
+  if (!ctxCombos.length) { el.innerHTML = `<b>Analisando</b><div class="sub">Grave uma volta para começar.</div>`; return; }
+  if (!ctxCombos.some((c) => c.track === CTX.track && c.car === CTX.car)) {
+    const recent = [...ctxCombos].sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
+    CTX.car = recent.car; CTX.track = recent.track;
+  }
+  const tracks = [...new Set(ctxCombos.map((c) => c.track))].sort();
+  const cars = ctxCombos.filter((c) => c.track === CTX.track).map((c) => c.car);
+  const q = `car=${encodeURIComponent(CTX.car)}&track=${encodeURIComponent(CTX.track)}`;
+  el.innerHTML = `<b>Analisando</b>
+    <select id="ctxTrack" aria-label="Pista">${tracks.map((t) => `<option value="${esc(t)}" ${t === CTX.track ? "selected" : ""}>${esc(pretty(t))}</option>`).join("")}</select>
+    <select id="ctxCar" aria-label="Carro">${cars.map((c) => `<option value="${esc(c)}" ${c === CTX.car ? "selected" : ""}>${esc(pretty(c))}</option>`).join("")}</select>
+    <div class="go"><a href="#/compare?${q}">Análise</a><a href="#/replay?${q}">Replay</a><a href="#/progress?${q}">Progresso</a></div>`;
+  const changed = () => {
+    if (current.name === "progress") location.hash = `#/progress?car=${encodeURIComponent(CTX.car)}&track=${encodeURIComponent(CTX.track)}`;
+  };
+  $("#ctxTrack").onchange = (e) => {
+    const t = e.target.value, c = (ctxCombos.find((x) => x.track === t && x.car === CTX.car) || ctxCombos.find((x) => x.track === t)).car;
+    setCtx(c, t); changed();
+  };
+  $("#ctxCar").onchange = (e) => { setCtx(e.target.value, CTX.track); changed(); };
+}
 
 // ---------------------------------------------------------------- status ao vivo
 let lastLive = {};
@@ -428,13 +465,13 @@ function bindFuel() {
 // ---------------------------------------------------------------- análise (comparação)
 // A = sua volta (laranja), B = referência (azul). delta > 0 = você está atrás.
 const TRACES = [
-  { key: "delta", label: "Diferença para a referência", h: 130 },
-  { key: "phase", label: "Pedais", h: 70 },
+  { key: "delta", label: "Diferença para a referência", short: "Diferença", h: 120 },
+  { key: "phase", label: "Pedais (verde acelera, amarelo solto, vermelho freia)", short: "Pedais", h: 56 },
   { key: "speed", label: "Velocidade", h: 170, unit: "km/h" },
-  { key: "gas", label: "Acelerador", h: 90, pct: true },
   { key: "brake", label: "Freio", h: 90, pct: true },
+  { key: "gas", label: "Acelerador", h: 90, pct: true },
   { key: "steer", label: "Volante", h: 100 },
-  { key: "gear", label: "Marcha", h: 140, gear: true },
+  { key: "gear", label: "Marcha", h: 120, gear: true },
 ];
 const gearTxt = (g) => { if (g == null) return "—"; g = Math.round(g); return g === 0 ? "R" : g === 1 ? "N" : String(g - 1); };
 let player = null;   // controle de vídeo da tela de análise
@@ -482,109 +519,230 @@ function fmtOffset(o) { return (o >= 0 ? "+" : "−") + Math.abs(o || 0).toFixed
 const fmtM = (m) => (m == null ? "—" : `${Math.round(m)} m`);
 const sgn = (v, nd = 3, unit = "") => (v == null ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(nd) + unit);
 
+// ---------------------------------------------------------------- escolher volta (popover)
+// Abre uma lista agrupada (recordes, volta ideal, equipe, sessões) ancorada num elemento.
+function lapPicker(anchor, options, currentId, onPick, { allowNone = false, title = "Escolher volta" } = {}) {
+  closeLapPicker();
+  const pbIds = pbLapIds(options);
+  const own = options.filter((l) => !l.kind || l.kind === "own");
+  const groups = [
+    ["Seus recordes", own.filter((l) => pbIds.has(l.id))],
+    ["Volta ideal", options.filter((l) => l.kind === "ideal")],
+    ["Equipe", options.filter((l) => l.kind === "team")],
+    ["Todas as suas voltas", own.filter((l) => !pbIds.has(l.id)).sort((x, y) => String(y.started_at).localeCompare(String(x.started_at)) || x.lap_time_ms - y.lap_time_ms)],
+  ].filter(([, ls]) => ls.length);
+  const item = (l) => {
+    const name = l.kind === "ideal" ? "Volta ideal" : l.kind === "team" ? (l.player || "Equipe") : `Volta ${l.lap_number}`;
+    const meta = l.kind === "ideal" ? pretty(l.car) : `${pretty(l.car)} · ${fmtDate(l.started_at)}${l.valid && !l.out_lap && !l.in_lap ? "" : " · fora do ritmo"}`;
+    return `<button class="lp-item ${l.id === currentId ? "on" : ""}" data-id="${l.id}"><span><b>${esc(name)}</b><small>${esc(meta)}</small></span><b class="num">${fmtLap(l.lap_time_ms)}</b></button>`;
+  };
+  const pop = document.createElement("div");
+  pop.className = "lap-pop";
+  pop.innerHTML = `<div class="lp-head"><b>${esc(title)}</b><input type="search" placeholder="Filtrar (carro, data, volta)" id="lpQ"></div>
+    <div class="lp-list">${allowNone ? `<button class="lp-item" data-id=""><span><b>Sem referência</b><small>Analisar só a sua volta</small></span></button>` : ""}
+    ${groups.map(([g, ls]) => `<div class="lp-group">${esc(g)}</div>${ls.map(item).join("")}`).join("")}</div>`;
+  document.body.appendChild(pop);
+  const rc = anchor.getBoundingClientRect();
+  pop.style.left = Math.min(window.innerWidth - pop.offsetWidth - 12, Math.max(12, rc.left)) + "px";
+  pop.style.top = Math.min(window.innerHeight - pop.offsetHeight - 12, rc.bottom + 6) + "px";
+  pop.querySelectorAll(".lp-item").forEach((b) => b.onclick = () => { closeLapPicker(); onPick(b.dataset.id ? +b.dataset.id : null); });
+  const q = $("#lpQ", pop);
+  q.oninput = () => {
+    const v = q.value.toLowerCase();
+    pop.querySelectorAll(".lp-item").forEach((b) => { b.style.display = !v || b.textContent.toLowerCase().includes(v) ? "" : "none"; });
+  };
+  setTimeout(() => {
+    lapPickerClose = (e) => { if (!pop.contains(e.target)) closeLapPicker(); };
+    document.addEventListener("pointerdown", lapPickerClose);
+  }, 0);
+}
+let lapPickerClose = null;
+function closeLapPicker() {
+  document.querySelectorAll(".lap-pop").forEach((p) => p.remove());
+  if (lapPickerClose) { document.removeEventListener("pointerdown", lapPickerClose); lapPickerClose = null; }
+}
+
+// sua volta mais recente (limpa) + seu recorde, para abrir direto um carro/pista
+async function defaultPair(car, track) {
+  const laps = await api(`/api/tracks/${encodeURIComponent(track)}/laps`);
+  const own = laps.filter((l) => (!l.kind || l.kind === "own") && (!car || l.car === car));
+  const clean = own.filter((l) => l.valid && !l.out_lap && !l.in_lap);
+  const list = clean.length ? clean : own;
+  if (!list.length) return null;
+  const ref = list[0];
+  const recent = list.filter((l) => l.id !== ref.id).sort((x, y) => y.started_at.localeCompare(x.started_at) || y.lap_number - x.lap_number)[0];
+  return recent ? { a: recent.id, b: ref.id } : { a: ref.id, b: null };
+}
+
+// ---------------------------------------------------------------- análise
+const TRACE_DEFAULT = ["delta", "phase", "speed", "brake", "gas"];
+function shownTraces() {
+  try { const v = JSON.parse(localStorage.getItem("pitwall.traces")); if (Array.isArray(v) && v.length) return new Set(v); } catch (e) { /* ok */ }
+  return new Set(TRACE_DEFAULT);
+}
+const EVENT_TXT = {
+  lock: ["Travou a roda", "a roda travou na freada: alivie um pouco o pedal ou freie em linha reta antes de virar"],
+  loss: ["Perdeu o carro", "o carro escapou (rodada ou saída de traseira): entrada rápida demais ou acelerador cedo demais"],
+  invalid: ["Volta invalidada", "passou dos limites da pista aqui"],
+};
+
 async function renderCompare(params) {
   current = { name: "compare" };
   if (player) player.destroy();
   player = null;
-  const a = +params.get("a") || null, b = +params.get("b") || null;
-  if (!a) return renderComparePicker();
-  view.innerHTML = `<div class="sub">Carregando telemetria…</div>`;
+  let a = +params.get("a") || null, b = +params.get("b") || null;
+  if (!a) {
+    const car = params.get("car") || CTX.car, track = params.get("track") || CTX.track;
+    if (track) {
+      const p = await defaultPair(car, track);
+      if (p) { location.replace(`#/compare?a=${p.a}${p.b ? "&b=" + p.b : ""}`); return; }
+    }
+    return renderComparePicker();
+  }
+  view.classList.add("wide");
+  view.innerHTML = `<div class="sub" style="padding:24px">Carregando telemetria…</div>`;
   const r = await api(`/api/compare?a=${a}${b ? "&b=" + b : ""}`);
-  const track = r.lap_a.track;
-  const options = await api(`/api/tracks/${encodeURIComponent(track)}/laps`);
-  const pbIds = pbLapIds(options);
-  const opt = (sel) => options.map((l) => `<option value="${l.id}" ${l.id === sel ? "selected" : ""}>${lapLabel(l, pbIds)}</option>`).join("");
   const LA = r.lap_a, LB = r.lap_b, hasB = !!LB;
+  const track = LA.track;
+  if (LA.kind !== "ideal" && LA.kind !== "team") setCtx(LA.car, track);
+  const options = await api(`/api/tracks/${encodeURIComponent(track)}/laps`);
   const diff = hasB ? LA.lap_time_ms - LB.lap_time_ms : null;
+  const segs = r.segments || [];
+  const n = r.distance.length;
+  // problemas da sua volta, já com a curva
+  const evs = (LA.events || []).map((e) => {
+    const i = Math.max(0, Math.min(n - 1, Math.round(e.d * (n - 1))));
+    const k = segs.findIndex((s) => i >= s.start && i <= s.end);
+    return { ...e, i, seg: k };
+  });
+  const lapName = (L) => !L ? "" : L.kind === "ideal" ? "Volta ideal" : L.kind === "team" ? (L.player || "Equipe") : `Volta ${L.lap_number} · ${fmtDate(L.started_at)}`;
+  const chip = (L, tag, who) => `
+    <button class="lapchip ${tag}" id="pick${tag.toUpperCase()}" title="Trocar">
+      <i></i><span><small>${who}</small><b class="num">${L ? fmtLap(L.lap_time_ms) : "Escolher"}</b><em>${esc(L ? lapName(L) : "nenhuma referência")}</em></span>
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>`;
   const secs = ["s1_ms", "s2_ms", "s3_ms"].map((k, i) => {
     const d = hasB && LA[k] && LB[k] ? LA[k] - LB[k] : null;
     return `<span>S${i + 1} <b class="num ${d > 0 ? "neg" : d < 0 ? "posg" : ""}">${hasB ? fmtDelta(d) : fmtSec(LA[k])}</b></span>`;
   }).join("");
+  const worst = hasB ? segs.map((s, k) => ({ s, k })).filter((x) => x.s.delta > 0.02).sort((x, y) => y.s.delta - x.s.delta).slice(0, 6) : [];
   const hasVid = LA.video || (LB && LB.video);
-  const vidBox = (L, tag, label) => `
-      <div class="vid ${tag}"><span class="vtag">${label}</span>
-        ${L && L.video ? `<video id="vid-${tag}" src="${L.video.url}" preload="auto" muted playsinline></video>
-        <div class="sync"><span class="sub">Sincronia</span>
-          <button class="btn sm" data-off="${tag}" data-d="-0.1">−0,1 s</button>
-          <button class="btn sm" data-off="${tag}" data-d="0.1">+0,1 s</button>
-          <span class="num sub" id="off-${tag}">${fmtOffset(L.video.offset)}</span></div>`
-        : `<div class="novid">${L ? "Sem vídeo desta volta" : "Escolha uma referência"}</div>`}
-      </div>`;
+  const vid = (L, tag, label) => `
+    <div class="vid2 ${tag}">
+      ${L && L.video ? `<video id="vid-${tag}" src="${L.video.url}" preload="auto" muted playsinline></video>
+        <div class="vbar"><span class="vtag2">${label}</span><span class="spacer"></span>
+          <span class="sync2" title="Ajuste fino da sincronia do vídeo"><button class="btn xs" data-off="${tag}" data-d="-0.1">−0,1</button>
+          <span class="num" id="off-${tag}">${fmtOffset(L.video.offset)}</span><button class="btn xs" data-off="${tag}" data-d="0.1">+0,1</button></span>
+          <button class="btn xs" data-fs="${tag}" title="Tela cheia">⛶</button></div>`
+        : `<div class="novid2"><span class="vtag2">${label}</span><span>${L ? "Sem vídeo desta volta" : "Escolha uma referência"}</span></div>`}
+    </div>`;
+  const layout = localStorage.getItem("pitwall.anLayout") || "std";
+  const shown = shownTraces();
 
   view.innerHTML = `
-    <div class="an-head">
-      <div class="lapcard a"><div class="row"><span class="who">Sua volta</span><span class="spacer"></span>
-          <b class="num big">${fmtLap(LA.lap_time_ms)}</b></div>
-        <select id="pa">${opt(a)}</select></div>
-      <div class="lapcard b"><div class="row"><span class="who">Referência</span><span class="spacer"></span>
-          <b class="num big">${hasB ? fmtLap(LB.lap_time_ms) : "—"}</b></div>
-        <select id="pb"><option value="">— sem referência —</option>${opt(b)}</select></div>
-      <div class="lapsum"><span class="sub">${esc(pretty(track))} · ${(r.track_length / 1000).toFixed(2)} km</span>
-        <div class="num total ${diff > 0 ? "neg" : diff < 0 ? "posg" : ""}">${hasB ? fmtDelta(diff) : "—"}</div>
-        <div class="secs">${secs}</div>
-        <div class="seg-switch" style="margin-top:8px"><span class="btn sm on">Análise</span><a class="btn sm" href="#/replay?a=${a}${b ? "&b=" + b : ""}">▶ Replay</a></div></div>
-    </div>
-    <div class="an">
-      <div class="an-left">
-        <div class="panel pad0">
-          <div class="mapbar"><span class="sub" id="zinfo">Traçado</span><span class="spacer"></span>
-            <button class="btn sm" id="zout" title="Afastar">−</button>
-            <button class="btn sm" id="zin" title="Aproximar">+</button>
-            <button class="btn sm on" id="zrot" title="Girar o mapa com o carro">Girar</button></div>
-          <div id="zmap"></div>
+  <div class="an2 mode-${layout}" id="an2">
+    <header class="an2-top">
+      ${chip(LA, "a", "Sua volta")}<span class="vs">vs</span>${chip(LB, "b", "Referência")}
+      <div class="an2-total"><small>${esc(pretty(track))} · ${esc(pretty(LA.car))}</small>
+        <b class="num ${diff > 0 ? "neg" : diff < 0 ? "posg" : ""}">${hasB ? fmtDelta(diff) : fmtLap(LA.lap_time_ms)}</b>
+        <div class="secs">${secs}</div></div>
+      <span class="spacer"></span>
+      <div class="seg-switch"><span class="btn sm on">Análise</span><a class="btn sm" href="#/replay?a=${a}${b ? "&b=" + b : ""}">Replay</a></div>
+    </header>
+
+    <section class="an2-findings">
+      ${hasB ? `<div class="fgroup"><span class="flabel">Onde você perde tempo</span>
+        ${worst.length ? worst.map(({ s, k }) => `<button class="fchip loss" data-seg="${k}">Curva ${s.n}<b class="num">+${s.delta.toFixed(2).replace(".", ",")} s</b></button>`).join("")
+          : `<span class="fnone">Nenhum trecho com perda relevante. Boa volta!</span>`}</div>` : `<div class="fgroup"><span class="fnone">Escolha uma referência para ver onde você perde tempo.</span></div>`}
+      <div class="fgroup"><span class="flabel">Problemas na volta</span>
+        ${evs.length ? evs.map((e, j) => `<button class="fchip ev-${e.type}" data-ev="${j}" title="${esc((EVENT_TXT[e.type] || [e.type, ""])[1])}">${(EV[e.type] || {}).icon || "•"} ${esc((EVENT_TXT[e.type] || [e.type])[0])}${e.seg >= 0 ? ` <small>curva ${segs[e.seg].n}</small>` : ""}</button>`).join("")
+          : `<span class="fnone ok">Nenhuma travada, rodada ou saída de pista.</span>`}</div>
+    </section>
+
+    <div class="an2-grid">
+      <section class="an2-media panel pad0" id="media">
+        <div class="vids3 ${localStorage.getItem("pitwall.anSolo") === "b" ? "solo-b" : "solo-a"}" id="vids">${vid(LA, "a", "Sua volta")}${vid(LB, "b", "Referência")}</div>
+        <div class="pctl2">
+          <button class="btn sm primary" id="play" ${hasVid ? "" : "disabled"} title="Espaço">▶</button>
+          <div class="rates">${[0.25, 0.5, 1].map((x) => `<button class="btn xs ${x === 1 ? "on" : ""}" data-rate="${x}">${String(x).replace(".", ",")}×</button>`).join("")}</div>
+          <div id="prog" class="prog"><div class="segband"></div><div class="fill"></div><div class="knob"></div><div class="hover"></div></div>
+          <span class="num sub" id="progTxt"></span>
+          <div class="seg-switch lay" title="Tamanho dos vídeos">
+            <button class="btn xs ${layout === "std" ? "on" : ""}" data-lay="std">Padrão</button>
+            <button class="btn xs ${layout === "one" ? "on" : ""}" data-lay="one">1 vídeo grande</button>
+            <button class="btn xs ${layout === "two" ? "on" : ""}" data-lay="two">2 lado a lado</button>
+          </div>
+          <div class="seg-switch solo" title="Qual vídeo mostrar"><button class="btn xs" data-solo="a">Sua</button><button class="btn xs" data-solo="b">Ref.</button></div>
         </div>
+        ${hasVid ? "" : `<div class="note" style="padding:0 14px 12px">Sem vídeo para estas voltas. Ligue a gravação em <a href="#/settings" style="color:var(--accent)">Configurações</a>.</div>`}
+        <div class="vresize" id="vresize" title="Arraste para aumentar ou diminuir os vídeos"></div>
+      </section>
+
+      <aside class="an2-side">
         <div class="panel" id="segInfo"></div>
         <div class="panel pad0">
+          <div class="mapbar"><span class="sub" id="zinfo">Traçado</span><span class="spacer"></span>
+            <button class="btn xs" id="zout" title="Afastar">−</button><button class="btn xs" id="zin" title="Aproximar">+</button>
+            <button class="btn xs on" id="zrot" title="Girar o mapa com o carro">Girar</button></div>
+          <div id="zmap"></div>
+        </div>
+        <div class="panel pad0">
           <div id="fmap"></div>
-          <div class="segnav">
-            <button class="btn sm" id="segPrev" title="Segmento anterior">◀</button>
-            <div id="segTitle" class="num"></div>
-            <button class="btn sm" id="segNext" title="Próximo segmento">▶</button>
-          </div>
+          <div class="segnav"><button class="btn xs" id="segPrev" title="Curva anterior (←)">◀</button>
+            <div id="segTitle" class="num"></div><button class="btn xs" id="segNext" title="Próxima curva (→)">▶</button></div>
         </div>
-      </div>
-      <div class="an-right">
-        <div class="panel">
-          <div class="vids2">${vidBox(LA, "a", "SUA VOLTA")}${vidBox(LB, "b", "REFERÊNCIA")}</div>
-          <div class="pctl">
-            <button class="btn sm primary" id="play" ${hasVid ? "" : "disabled"} title="Espaço">▶</button>
-            <div class="rates">${[0.25, 0.5, 1].map((x) => `<button class="btn sm ${x === 1 ? "on" : ""}" data-rate="${x}">${String(x).replace(".", ",")}×</button>`).join("")}</div>
-            <div id="prog" class="prog"><div class="segband"></div><div class="fill"></div><div class="knob"></div><div class="hover"></div></div>
-            <span class="num sub" id="progTxt"></span>
-          </div>
-          ${hasVid ? "" : `<div class="note">Sem vídeo para estas voltas. Com a gravação ligada em
-             <a href="#/settings" style="color:var(--accent)">Configurações</a>, as próximas sessões já vêm com vídeo.</div>`}
-        </div>
-        <div class="panel" id="traces">
-          <div class="row" style="margin-bottom:6px">
-            <div class="plegend">${PHASE_NAMES.map((nm, i) => `<span><i style="background:${PHASE_COLORS[i]}"></i>${nm}</span>`).join("")}</div>
-            <span class="spacer"></span>
-            <button class="btn sm on" id="phaseBtn" title="Pinta a sua linha conforme o pedal">Cores por pedal</button>
-            <button class="btn sm on" id="focusBtn">Focar no segmento</button></div>
-          ${TRACES.filter((t) => t.key !== "delta" || hasB).map((t) => `
-          <div class="trace"><div class="lbl"><span>${t.label}</span><span class="v" id="v-${t.key}"></span></div>
-          <div id="p-${t.key}"></div></div>`).join("")}
-          <div class="note">Passe o mouse nos gráficos ou no mapa · arraste para dar zoom · duplo clique para voltar.</div>
-        </div>
-      </div>
-    </div>`;
-  $("#pa").onchange = (e) => (location.hash = `#/compare?a=${e.target.value}${b ? "&b=" + b : ""}`);
-  $("#pb").onchange = (e) => (location.hash = `#/compare?a=${a}${e.target.value ? "&b=" + e.target.value : ""}`);
+      </aside>
 
-  const segs = r.segments || [];
-  AN = { r, LA, LB, hasB, n: r.distance.length, segs, seg: 0, focus: true, idx: 0, lastIdx: -1, phaseColors: true };
+      <section class="an2-charts panel" id="traces">
+        <div class="tbar">
+          <div class="ttoggles">${TRACES.filter((t) => t.key !== "delta" || hasB).map((t) => `<button class="tchip ${shown.has(t.key) ? "on" : ""}" data-tr="${t.key}">${esc(t.short || t.label)}</button>`).join("")}</div>
+          <span class="spacer"></span>
+          <div class="plegend">${PHASE_NAMES.map((nm, i) => `<span><i style="background:${PHASE_COLORS[i]}"></i>${nm}</span>`).join("")}</div>
+          <button class="btn xs on" id="phaseBtn" title="Pinta a sua linha conforme o pedal">Cores</button>
+          <button class="btn xs on" id="focusBtn">Só a curva</button>
+        </div>
+        <div id="traceBox"></div>
+        <div class="note">Passe o mouse nos gráficos ou no mapa · arraste para dar zoom · duplo clique volta · ← → troca de curva.</div>
+      </section>
+    </div>
+  </div>`;
+
+  $("#pickA").onclick = (e) => lapPicker(e.currentTarget, options, a, (id) => { if (id) location.hash = `#/compare?a=${id}${b ? "&b=" + b : ""}`; }, { title: "Sua volta" });
+  $("#pickB").onclick = (e) => lapPicker(e.currentTarget, options, b, (id) => { location.hash = `#/compare?a=${a}${id ? "&b=" + id : ""}`; }, { allowNone: true, title: "Comparar com" });
+
+  AN = { r, LA, LB, hasB, n, segs, evs, seg: 0, focus: true, idx: 0, lastIdx: -1, phaseColors: true, show: shown };
   AN.phA = phases(r.a); AN.runsA = phaseRuns(AN.phA);
   if (hasB) { AN.phB = phases(r.b); AN.runsB = phaseRuns(AN.phB); }
   AN.zmap = drawZoomMap(r, hasB);
   AN.fmap = drawFullMap(r, hasB, segs);
   incidentMarkers($("#fSvg"), LA.events, r.a.x, r.a.z, segs);
   player = makePlayer(r, LA, LB);
+  applyMediaHeight();
   drawTraces(r, hasB);
   bindAnalysis();
-  // começa no segmento onde você mais perdeu tempo
-  let worst = 0;
-  segs.forEach((s, i) => { if ((s.delta ?? -1e9) > (segs[worst].delta ?? -1e9)) worst = i; });
-  selectSegment(hasB ? worst : 0);
+  view.querySelectorAll(".fchip[data-seg]").forEach((c) => c.onclick = () => selectSegment(+c.dataset.seg));
+  view.querySelectorAll(".fchip[data-ev]").forEach((c) => c.onclick = () => {
+    const e = evs[+c.dataset.ev];
+    if (e.seg >= 0) selectSegment(e.seg, { keepCursor: true });
+    gotoIndex(e.i);
+  });
+  const want = +params.get("seg");
+  const k0 = want ? segs.findIndex((s) => s.n === want) : -1;
+  selectSegment(k0 >= 0 ? k0 : worst.length ? worst[0].k : 0);
+}
+
+function applyMediaHeight() {
+  const el = $("#an2"), lay = el.className.match(/mode-(\w+)/)[1];
+  const def = lay === "std" ? 210 : Math.round(window.innerHeight * 0.55);
+  let h = def;
+  try { h = +localStorage.getItem("pitwall.vh." + lay) || def; } catch (e) { /* ok */ }
+  $("#vids").style.height = Math.max(120, Math.min(window.innerHeight * 0.85, h)) + "px";
+}
+
+function rebuildTraces() {
+  plots.forEach((p) => p.destroy()); plots = [];
+  drawTraces(AN.r, AN.hasB);
+  if (AN.focus) selectSegment(AN.seg, { keepCursor: true });
+  AN.lastIdx = -1; updateAt(AN.idx);
 }
 
 function segFor(i) {
@@ -602,7 +760,6 @@ function gotoIndex(i, { fromPlot = false } = {}) {
   else if (!AN.focus && k !== AN.seg) { AN.seg = k; renderSegInfo(); AN.fmap.highlight(k); }
   updateAt(i);
   if (!fromPlot) {
-    // a troca de escala do gráfico só é aplicada no próximo quadro
     const u = plots[0];
     if (u) requestAnimationFrame(() => u.setCursor({ left: u.valToPos(AN.r.distance[i], "x"), top: 5 }));
   }
@@ -617,16 +774,15 @@ function updateAt(i) {
     if (!el) continue;
     if (t.key === "phase") {
       const nm = (p) => p == null ? "—" : `<b style="color:${PHASE_COLORS[p]}">${PHASE_NAMES[p]}</b>`;
-      el.innerHTML = `Você: ${nm(AN.phA[i])}${hasB ? ` · Referência: ${nm(AN.phB[i])}` : ""}`;
+      el.innerHTML = `Você: ${nm(AN.phA[i])}${hasB ? ` · Ref.: ${nm(AN.phB[i])}` : ""}`;
       continue;
     }
     if (t.key === "delta") {
-      el.innerHTML = `Distância: <b>${Math.round(r.distance[i])} m</b> · Diferença: <b class="${r.delta[i] > 0 ? "neg" : "posg"}">${
-        r.delta[i] == null ? "—" : sgn(r.delta[i], 3, " s")}</b>`;
+      el.innerHTML = `${Math.round(r.distance[i])} m · <b class="${r.delta[i] > 0 ? "neg" : "posg"}">${r.delta[i] == null ? "—" : sgn(r.delta[i], 3, " s")}</b>`;
       continue;
     }
     const f = (v) => v == null ? "—" : t.gear ? gearTxt(v) : t.pct ? Math.round(v * 100) + "%" : t.key === "steer" ? v.toFixed(2) : Math.round(v) + (t.unit ? " " + t.unit : "");
-    el.innerHTML = `<span class="va">Você: ${f(r.a[t.key][i])}</span>${hasB ? ` · <span class="vb">Referência: ${f(r.b[t.key][i])}</span>` : ""}`;
+    el.innerHTML = `<span class="va">${f(r.a[t.key][i])}</span>${hasB ? ` <span class="vb">${f(r.b[t.key][i])}</span>` : ""}`;
   }
   AN.zmap.move(i);
   AN.fmap.move(i);
@@ -646,6 +802,7 @@ function selectSegment(k, { keepCursor = false } = {}) {
   const s = segs[k];
   renderSegInfo();
   AN.fmap.highlight(k);
+  view.querySelectorAll(".fchip[data-seg]").forEach((c) => c.classList.toggle("on", +c.dataset.seg === k));
   const band = $("#prog .segband");
   band.style.left = (s.start / (AN.n - 1) * 100) + "%";
   band.style.width = ((s.end - s.start) / (AN.n - 1) * 100) + "%";
@@ -659,34 +816,30 @@ function selectSegment(k, { keepCursor = false } = {}) {
   if (!keepCursor) gotoIndex(s.apex);
 }
 
+// Cartão da curva: uma frase do que aconteceu, até 3 dicas e 4 números lado a lado.
 function renderSegInfo() {
   const s = AN.segs[AN.seg];
   const el = $("#segInfo");
   if (!s) { el.innerHTML = ""; return; }
   const A = s.a || {}, B = s.b || {};
-  const row = (label, va, vb, dv) => `<tr><td>${label}</td><td class="num va">${va}</td>${AN.hasB ? `<td class="num vb">${vb}</td><td class="num">${dv}</td>` : ""}</tr>`;
-  const dnum = (x, y, nd = 0, unit = "") => (x == null || y == null ? "—" : sgn(x - y, nd, unit));
+  const here = AN.evs.filter((e) => e.seg === AN.seg);
+  const stat = (label, va, vb, good) => `<div class="stat2"><small>${label}</small><b class="num va">${va}</b>${AN.hasB ? `<b class="num vb">${vb}</b>` : ""}${good != null ? `<i class="${good ? "posg" : "neg"}">${good ? "melhor" : "pior"}</i>` : ""}</div>`;
+  const m = (v) => v == null ? "—" : `${Math.round(v)} m`, kmh = (v) => v == null ? "—" : `${Math.round(v)}`;
+  const better = (x, y, lowerIsBetter) => (x == null || y == null || !AN.hasB || Math.abs(x - y) < 1) ? null : lowerIsBetter ? x < y : x > y;
   el.innerHTML = `
-    <div class="row"><h2 style="margin:0">Segmento ${s.n} <span class="sub">· curva ${s.n}</span></h2><span class="spacer"></span>
-      ${AN.hasB ? `<b class="num segdelta ${s.delta > 0 ? "neg" : "posg"}">${sgn(s.delta, 3, " s")}</b>` : ""}</div>
-    <div class="sub" style="margin:2px 0 10px">${fmtM(s.start_m)} → ${fmtM(s.end_m)} · ápice em ${fmtM(s.apex_m)}</div>
-    ${AN.hasB ? `
-      <div class="killer ${s.delta > 0.03 ? "" : "ok"}">⏱ ${esc(s.summary || "")}</div>
-      ${(s.tips || []).length ? `<ul class="tips">${s.tips.map((t) => `<li><b>${esc(t.title)}</b><span>${esc(t.detail)}</span></li>`).join("")}</ul>`
-        : `<div class="sub" style="margin:8px 0">Nada fora do normal neste trecho.</div>`}
-      <div class="lossbar"><span>Entrada <b class="num ${s.entry_loss > 0 ? "neg" : "posg"}">${sgn(s.entry_loss, 3, " s")}</b></span>
-        <span>Saída <b class="num ${s.exit_loss > 0 ? "neg" : "posg"}">${sgn(s.exit_loss, 3, " s")}</b></span></div>`
-      : `<div class="sub" style="margin-bottom:8px">Escolha uma volta de referência para ver as dicas deste trecho.</div>`}
-    <table class="segtab"><thead><tr><th></th><th>Você</th>${AN.hasB ? "<th>Ref.</th><th>Dif.</th>" : ""}</tr></thead><tbody>
-      ${row("Tempo no trecho", A.time != null ? A.time.toFixed(3) : "—", B.time != null ? B.time.toFixed(3) : "—", dnum(A.time, B.time, 3))}
-      ${row("Início da frenagem", fmtM(A.brake_m), fmtM(B.brake_m), dnum(A.brake_m, B.brake_m, 0, " m"))}
-      ${row("Velocidade mínima", A.min_speed != null ? Math.round(A.min_speed) : "—", B.min_speed != null ? Math.round(B.min_speed) : "—", dnum(A.min_speed, B.min_speed, 0))}
-      ${row("Acelerador a fundo", fmtM(A.throttle_m), fmtM(B.throttle_m), dnum(A.throttle_m, B.throttle_m, 0, " m"))}
-      ${row("Velocidade na saída", A.exit_speed != null ? Math.round(A.exit_speed) : "—", B.exit_speed != null ? Math.round(B.exit_speed) : "—", dnum(A.exit_speed, B.exit_speed, 0))}
-      ${row("Tempo sem pedal", A.coast != null ? A.coast.toFixed(2) + " s" : "—", B.coast != null ? B.coast.toFixed(2) + " s" : "—", dnum(A.coast, B.coast, 2, " s"))}
-    </tbody></table>`;
+    <div class="seghead"><h2>Curva ${s.n}</h2>${AN.hasB ? `<b class="num segdelta ${s.delta > 0 ? "neg" : "posg"}">${sgn(s.delta, 3, " s")}</b>` : ""}</div>
+    ${AN.hasB ? `<p class="segsum ${s.delta > 0.03 ? "bad" : "ok"}">${esc(s.summary || "")}</p>` : `<p class="segsum">Escolha uma referência para ver o que mudar aqui.</p>`}
+    ${here.map((e) => `<div class="segev ev-${e.type}">${(EV[e.type] || {}).icon || "•"} <b>${esc((EVENT_TXT[e.type] || [e.type])[0])}</b>: ${esc((EVENT_TXT[e.type] || ["", ""])[1])}</div>`).join("")}
+    ${AN.hasB && (s.tips || []).length ? `<ul class="tips2">${s.tips.slice(0, 3).map((t) => `<li><b>${esc(t.title)}</b><span>${esc(t.detail)}</span></li>`).join("")}</ul>` : ""}
+    <div class="stats2">
+      ${stat("Começa a frear", m(A.brake_m), m(B.brake_m), null)}
+      ${stat("Vel. mínima", kmh(A.min_speed), kmh(B.min_speed), better(A.min_speed, B.min_speed, false))}
+      ${stat("Acelera a fundo", m(A.throttle_m), m(B.throttle_m), better(A.throttle_m, B.throttle_m, true))}
+      ${stat("Vel. na saída", kmh(A.exit_speed), kmh(B.exit_speed), better(A.exit_speed, B.exit_speed, false))}
+    </div>
+    ${AN.hasB ? `<div class="legend2"><span class="va">● você</span><span class="vb">● referência</span></div>` : ""}`;
   const tt = $("#segTitle");
-  tt.innerHTML = `Segmento ${s.n} de ${AN.segs.length}${AN.hasB ? `: <span class="${s.delta > 0 ? "neg" : "posg"}">${sgn(s.delta, 3)}</span>` : ""}`;
+  tt.innerHTML = `Curva ${s.n} de ${AN.segs.length}`;
 }
 
 function bindAnalysis() {
@@ -695,7 +848,7 @@ function bindAnalysis() {
   $("#focusBtn").onclick = () => {
     AN.focus = !AN.focus;
     $("#focusBtn").classList.toggle("on", AN.focus);
-    $("#focusBtn").textContent = AN.focus ? "Focar no segmento" : "Volta inteira";
+    $("#focusBtn").textContent = AN.focus ? "Só a curva" : "Volta inteira";
     if (AN.focus) selectSegment(AN.seg, { keepCursor: true });
     else { AN.syncing = true; plots.forEach((p) => p.setScale("x", { min: AN.r.distance[0], max: AN.r.distance[AN.n - 1] })); AN.syncing = false; }
   };
@@ -705,6 +858,44 @@ function bindAnalysis() {
     $("#zLineA").innerHTML = phaseMapPaths(AN.r.a.x, AN.r.a.z, AN.runsA, css("--a"));
     plots.forEach((p) => p.redraw(false));
   };
+  // liga/desliga gráficos
+  view.querySelectorAll("[data-tr]").forEach((c) => c.onclick = () => {
+    const k = c.dataset.tr;
+    if (AN.show.has(k)) { if (AN.show.size > 1) AN.show.delete(k); } else AN.show.add(k);
+    c.classList.toggle("on", AN.show.has(k));
+    try { localStorage.setItem("pitwall.traces", JSON.stringify([...AN.show])); } catch (e) { /* ok */ }
+    rebuildTraces();
+  });
+  // tamanho dos vídeos
+  const root = $("#an2");
+  view.querySelectorAll("[data-lay]").forEach((btn) => btn.onclick = () => {
+    root.className = root.className.replace(/mode-\w+/, "mode-" + btn.dataset.lay);
+    view.querySelectorAll("[data-lay]").forEach((x) => x.classList.toggle("on", x === btn));
+    try { localStorage.setItem("pitwall.anLayout", btn.dataset.lay); } catch (e) { /* ok */ }
+    applyMediaHeight();
+    requestAnimationFrame(rebuildTraces);
+  });
+  view.querySelectorAll("[data-solo]").forEach((btn) => btn.onclick = () => {
+    const v = $("#vids");
+    v.classList.toggle("solo-a", btn.dataset.solo === "a"); v.classList.toggle("solo-b", btn.dataset.solo === "b");
+    try { localStorage.setItem("pitwall.anSolo", btn.dataset.solo); } catch (e) { /* ok */ }
+  });
+  view.querySelectorAll("[data-fs]").forEach((btn) => btn.onclick = () => {
+    const v = $(`#vid-${btn.dataset.fs}`); if (v && v.requestFullscreen) v.requestFullscreen();
+  });
+  // alça para redimensionar os vídeos
+  const handle = $("#vresize"), vids = $("#vids");
+  handle.addEventListener("pointerdown", (e) => {
+    handle.setPointerCapture(e.pointerId);
+    const y0 = e.clientY, h0 = vids.getBoundingClientRect().height;
+    const mv = (ev) => { vids.style.height = Math.max(120, Math.min(window.innerHeight * 0.85, h0 + ev.clientY - y0)) + "px"; };
+    const up = () => {
+      handle.removeEventListener("pointermove", mv); handle.removeEventListener("pointerup", up);
+      const lay = root.className.match(/mode-(\w+)/)[1];
+      try { localStorage.setItem("pitwall.vh." + lay, Math.round(vids.getBoundingClientRect().height)); } catch (err) { /* ok */ }
+    };
+    handle.addEventListener("pointermove", mv); handle.addEventListener("pointerup", up);
+  });
   // barra de progresso: clicar, arrastar ou só passar o mouse (com o vídeo parado)
   const prog = $("#prog");
   let dragging = false;
@@ -732,7 +923,26 @@ function bindAnalysis() {
 function drawTraces(r, hasB) {
   const x = r.distance;
   const A = css("--a"), B = css("--b");
-  const width = $("#traces").clientWidth - 36;
+  const box = $("#traceBox");
+  box.innerHTML = TRACES.filter((t) => (t.key !== "delta" || hasB) && AN.show.has(t.key)).map((t) => `
+    <div class="trace"><div class="lbl"><span>${t.label}</span><span class="v" id="v-${t.key}"></span></div>
+    <div id="p-${t.key}"></div></div>`).join("");
+  const width = box.clientWidth - 4;
+  const visible = TRACES.filter((t) => (t.key !== "delta" || hasB) && AN.show.has(t.key));
+  // marcas verticais onde houve travada, rodada ou saída de pista
+  const evMarks = (u) => {
+    if (!AN || !AN.evs.length) return;
+    const { top, height } = u.bbox, ctx = u.ctx;
+    ctx.save();
+    for (const e of AN.evs) {
+      const px = u.valToPos(x[e.i], "x", true);
+      if (px < u.bbox.left || px > u.bbox.left + u.bbox.width) continue;
+      ctx.strokeStyle = e.type === "lock" ? "#ff9b5d" : e.type === "loss" ? "#ff5d5d" : "#ffd23f";
+      ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, top + height); ctx.stroke();
+    }
+    ctx.restore();
+  };
   let raf = 0, pending = null;
   const onCursor = (u) => {
     const i = u.cursor.idx;
@@ -755,8 +965,7 @@ function drawTraces(r, hasB) {
     u.ctx.moveTo(x1, top); u.ctx.lineTo(x1, top + height); u.ctx.stroke();
     u.ctx.restore();
   };
-  for (const t of TRACES) {
-    if (t.key === "delta" && !hasB) continue;
+  for (const t of visible) {
     const el = $(`#p-${t.key}`);
     let data, series;
     if (t.key === "phase") {
@@ -779,7 +988,7 @@ function drawTraces(r, hasB) {
       width, height: t.h, legend: { show: false },
       scales: { x: { time: false }, y: t.pct ? { range: [-5, 105] } : t.key === "steer" ? { range: [-1.05, 1.05] }
         : t.gear ? { range: [1, 8] } : t.key === "phase" ? { range: [0, 2] } : {} },
-      axes: [axis({ show: t === TRACES[TRACES.length - 1], values: (u, v) => v.map((m) => `${Math.round(m)} m`) }),
+      axes: [axis({ show: t === visible[visible.length - 1], values: (u, v) => v.map((m) => `${Math.round(m)} m`) }),
              axis({ size: 52, ...(t.gear ? { values: (u, v) => v.map(gearTxt), splits: () => [2, 4, 6, 8] }
                : t.key === "phase" ? { splits: () => (hasB ? [1.5, 0.5] : [1]), values: () => (hasB ? ["Você", "Ref."] : ["Você"]),
                    grid: { show: false }, ticks: { show: false } } : {}) })],
@@ -787,7 +996,7 @@ function drawTraces(r, hasB) {
       cursor: { sync: { key: "cmp" }, drag: { x: true, y: false }, y: false },
       hooks: {
         drawClear: [focusBand],
-        draw: t.key === "phase" ? [(u) => drawPhaseBands(u, x, hasB)] : [],
+        draw: t.key === "phase" ? [(u) => drawPhaseBands(u, x, hasB), evMarks] : [evMarks],
         setCursor: [onCursor],
         setScale: [(u, key) => {
           if (key !== "x" || (AN && AN.syncing)) return;
@@ -1303,77 +1512,115 @@ let RP = null;
 
 async function renderReplay(params) {
   current = { name: "replay" };
-  view.classList.add("wide");
+  view.classList.add("wide", "bleed");
   if (RP) RP.destroy();
   RP = null;
-  const a = +params.get("a") || null, b = +params.get("b") || null;
-  if (!a) return renderComparePicker("replay");
-  view.innerHTML = `<div class="sub">Carregando replay…</div>`;
+  let a = +params.get("a") || null, b = +params.get("b") || null;
+  if (!a) {
+    const car = params.get("car") || CTX.car, track = params.get("track") || CTX.track;
+    if (track) {
+      const p = await defaultPair(car, track);
+      if (p) { location.replace(`#/replay?a=${p.a}${p.b ? "&b=" + p.b : ""}`); return; }
+    }
+    return renderComparePicker("replay");
+  }
+  view.innerHTML = `<div class="sub" style="padding:24px">Carregando replay…</div>`;
   const r = await api(`/api/compare?a=${a}${b ? "&b=" + b : ""}`);
   const options = await api(`/api/tracks/${encodeURIComponent(r.lap_a.track)}/laps`);
   const LA = r.lap_a, LB = r.lap_b, hasB = !!LB;
-  const pbIds = pbLapIds(options);
-  const opt = (sel) => options.map((l) => `<option value="${l.id}" ${l.id === sel ? "selected" : ""}>${lapLabel(l, pbIds)}</option>`).join("");
+  if (LA.kind !== "ideal" && LA.kind !== "team") setCtx(LA.car, LA.track);
+  const lapName = (L) => !L ? "" : L.kind === "ideal" ? "Volta ideal" : L.kind === "team" ? (L.player || "Equipe") : `Volta ${L.lap_number}`;
   const card = (L, tag, who) => `
-    <div class="dcard ${tag}">
-      <div class="row"><span class="who">${who}</span><span class="sub num">${L ? `volta ${L.lap_number}` : ""}</span><span class="spacer"></span>
-        <b class="num">${L ? fmtLap(L.lap_time_ms) : "—"}</b></div>
+    <button class="dcard ${tag}" id="rpPick${tag.toUpperCase()}" title="Clique para trocar">
+      <div class="row"><span class="who">${who}</span><span class="sub">${esc(lapName(L))}</span><span class="spacer"></span>
+        <b class="num">${L ? fmtLap(L.lap_time_ms) : ""}</b><span class="swap">trocar ▾</span></div>
       ${L ? `<div class="gauges">
         <div class="pedal"><span>Acel.</span><div class="bar"><i id="g-${tag}-gas"></i></div><b class="num" id="t-${tag}-gas">0%</b></div>
         <div class="pedal brk"><span>Freio</span><div class="bar"><i id="g-${tag}-brake"></i></div><b class="num" id="t-${tag}-brake">0%</b></div>
         <div class="nums"><b class="num big" id="t-${tag}-speed">0</b><span class="sub">km/h</span>
           <b class="num" id="t-${tag}-gear">N</b><span class="sub">marcha</span>
           <b class="num" id="t-${tag}-rpm">0</b><span class="sub">rpm</span></div>
-      </div>` : `<div class="sub">Escolha uma referência</div>`}
-    </div>`;
+      </div>` : `<div class="sub" style="margin-top:6px">Clique para escolher uma volta de referência</div>`}
+    </button>`;
+  const rvid = (L, tag, label) => `<div class="vid2 ${tag}">${L && L.video
+    ? `<video id="rvid-${tag}" src="${L.video.url}" preload="auto" muted playsinline></video>
+       <div class="vbar"><span class="vtag2">${label}</span><span class="spacer"></span><button class="btn xs" data-rfs="${tag}" title="Tela cheia">⛶</button></div>`
+    : `<div class="novid2"><span class="vtag2">${label}</span><span>${L ? "Sem vídeo desta volta" : "Sem referência"}</span></div>`}</div>`;
+  const hasVid = !!(LA.video || (LB && LB.video));
+  const showVids = hasVid && localStorage.getItem("pitwall.rpVids") !== "0";
   view.innerHTML = `
-    <div class="rp">
-      <canvas id="rpCanvas"></canvas>
-      <div class="rp-tl">
-        <div class="rp-title"><h1>${esc(pretty(LA.track))}</h1>
-          <div class="sub">${esc(pretty(LA.car))} · ${fmtDate(LA.started_at)}${LA.air_temp ? ` · ar ${Math.round(LA.air_temp)}°C · pista ${Math.round(LA.road_temp)}°C` : ""}${LA.grip ? " · " + esc(LA.grip) : ""}</div>
-          <div class="seg-switch"><a class="btn sm" href="#/compare?a=${a}${b ? "&b=" + b : ""}">Análise</a><span class="btn sm on">Replay</span></div>
+    <div class="rp2">
+      <div class="rp-stage">
+        <canvas id="rpCanvas"></canvas>
+        <div class="rp-tl">
+          <div class="rp-title"><h1>${esc(pretty(LA.track))}</h1>
+            <div class="sub">${esc(pretty(LA.car))} · ${fmtDate(LA.started_at)}${LA.air_temp ? ` · ar ${Math.round(LA.air_temp)}°C · pista ${Math.round(LA.road_temp)}°C` : ""}</div>
+            <div class="seg-switch"><a class="btn sm" href="#/compare?a=${a}${b ? "&b=" + b : ""}">Análise</a><span class="btn sm on">Replay</span></div>
+          </div>
         </div>
-        <div class="panel rp-pick">
-          <label><span class="who a">Sua volta</span><select id="rpa">${opt(a)}</select></label>
-          <label><span class="who b">Referência</span><select id="rpb"><option value="">— nenhuma —</option>${opt(b)}</select></label>
+        <div class="rp-tr">
+          ${card(LA, "a", "Sua volta")}${card(LB, "b", "Referência")}
+          <div class="panel rp-mini"><div id="rpMini"></div>
+            <div class="row"><b id="rpSegName">—</b><span class="spacer"></span><b class="num" id="rpSegDelta"></b></div></div>
+        </div>
+        <div class="rp-bl panel">
+          <table class="rp-sec"><thead><tr><th></th><th class="va">Você</th>${hasB ? `<th class="vb">Ref.</th><th>Dif.</th>` : ""}</tr></thead><tbody>
+            ${["s1_ms", "s2_ms", "s3_ms"].map((k, i) => {
+              const d = hasB && LA[k] && LB[k] ? LA[k] - LB[k] : null;
+              return `<tr id="rpS${i}"><td>S${i + 1}</td><td class="num">${fmtSec(LA[k])}</td>${hasB ? `<td class="num">${fmtSec(LB[k])}</td>
+                <td class="num ${d > 0 ? "neg" : d < 0 ? "posg" : ""}">${fmtDelta(d)}</td>` : ""}</tr>`;
+            }).join("")}</tbody></table>
+        </div>
+        <div class="rp-zoom panel">
+          <button class="btn sm" id="rpZo" title="Afastar (roda do mouse para baixo)">−</button>
+          <input type="range" id="rpZoom" min="0" max="100" value="55" aria-label="Zoom">
+          <button class="btn sm" id="rpZi" title="Aproximar (roda do mouse para cima)">+</button>
+          <button class="btn sm" id="rpFit" title="Mostrar a pista inteira">Pista inteira</button>
+          <button class="btn sm on" id="rpRot" title="Gira a pista com o carro">Girar</button>
+          <button class="btn sm on" id="rpPh" title="Linha colorida por pedal">Cores</button>
         </div>
       </div>
-      <div class="rp-tr">
-        ${card(LA, "a", "Sua volta")}${card(LB, "b", "Referência")}
-        <div class="panel rp-mini"><div id="rpMini"></div>
-          <div class="row"><b id="rpSegName">—</b><span class="spacer"></span><b class="num" id="rpSegDelta"></b></div></div>
-      </div>
-      <div class="rp-bl panel">
-        <div class="row" style="margin-bottom:6px"><b>Setores</b></div>
-        <table class="rp-sec"><thead><tr><th></th><th class="va">Você</th>${hasB ? `<th class="vb">Ref.</th><th>Dif.</th>` : ""}</tr></thead><tbody>
-          ${["s1_ms", "s2_ms", "s3_ms"].map((k, i) => {
-            const d = hasB && LA[k] && LB[k] ? LA[k] - LB[k] : null;
-            return `<tr id="rpS${i}"><td>S${i + 1}</td><td class="num">${fmtSec(LA[k])}</td>${hasB ? `<td class="num">${fmtSec(LB[k])}</td>
-              <td class="num ${d > 0 ? "neg" : d < 0 ? "posg" : ""}">${fmtDelta(d)}</td>` : ""}</tr>`;
-          }).join("")}</tbody></table>
-      </div>
-      <div class="rp-zoom panel">
-        <button class="btn sm" id="rpZo">−</button><input type="range" id="rpZoom" min="0" max="100" value="45"><button class="btn sm" id="rpZi">+</button>
-        <button class="btn sm on" id="rpRot" title="Gira a pista com o carro">Girar</button>
-        <button class="btn sm on" id="rpPh" title="Linha colorida por pedal">Cores</button>
-      </div>
-      <div class="rp-bar panel">
-        <button class="btn primary" id="rpPlay" title="Espaço">▶</button>
-        <b class="num rp-clock" id="rpClock">0:00.000</b>
-        <div class="rates">${[0.25, 0.5, 1, 2].map((x) => `<button class="btn sm ${x === 1 ? "on" : ""}" data-rprate="${x}">${String(x).replace(".", ",")}×</button>`).join("")}</div>
-        <div class="prog" id="rpProg"><div class="fill"></div><div class="knob"></div><div class="hover"></div></div>
-        ${hasB ? `<span class="rp-d">Delta <b class="num" id="rpDelta">—</b></span>
-        <span class="rp-d">↔ <b class="num" id="rpGap">—</b></span>
-        <div class="seg-switch"><button class="btn sm on" data-mode="time">Tempo</button><button class="btn sm" data-mode="dist">Distância</button></div>` : ""}
+      <div class="rp-dock ${showVids ? "" : "novids"}">
+        <div class="vresize" id="rpResize" title="Arraste para aumentar ou diminuir os vídeos"></div>
+        <div class="rp-vids" id="rpVids">${rvid(LA, "a", "Sua volta")}${rvid(LB, "b", "Referência")}</div>
+        <div class="rp-bar">
+          <button class="btn primary" id="rpPlay" title="Espaço">▶</button>
+          <b class="num rp-clock" id="rpClock">0:00.000</b>
+          <div class="rates">${[0.25, 0.5, 1, 2].map((x) => `<button class="btn sm ${x === 1 ? "on" : ""}" data-rprate="${x}">${String(x).replace(".", ",")}×</button>`).join("")}</div>
+          <div class="prog" id="rpProg"><div class="fill"></div><div class="knob"></div><div class="hover"></div></div>
+          ${hasB ? `<span class="rp-d">Delta <b class="num" id="rpDelta">—</b></span>
+          <span class="rp-d">↔ <b class="num" id="rpGap">—</b></span>
+          <div class="seg-switch"><button class="btn sm on" data-mode="time">Tempo</button><button class="btn sm" data-mode="dist">Distância</button></div>` : ""}
+          <button class="btn sm ${showVids ? "on" : ""}" id="rpVidBtn" ${hasVid ? "" : "disabled title=\"Sem vídeo nestas voltas\""}>Vídeos</button>
+        </div>
       </div>
     </div>`;
-  $("#rpa").onchange = (e) => (location.hash = `#/replay?a=${e.target.value}${b ? "&b=" + b : ""}`);
-  $("#rpb").onchange = (e) => (location.hash = `#/replay?a=${a}${e.target.value ? "&b=" + e.target.value : ""}`);
+  $("#rpPickA").onclick = (e) => lapPicker(e.currentTarget, options, a, (id) => { if (id) location.hash = `#/replay?a=${id}${b ? "&b=" + b : ""}`; }, { title: "Sua volta" });
+  $("#rpPickB").onclick = (e) => lapPicker(e.currentTarget, options, b, (id) => { location.hash = `#/replay?a=${a}${id ? "&b=" + id : ""}`; }, { allowNone: true, title: "Comparar com" });
+  // vídeos: mostrar/esconder e redimensionar
+  const dock = view.querySelector(".rp-dock"), vids = $("#rpVids");
+  try { const h = +localStorage.getItem("pitwall.rpVh"); if (h) vids.style.height = h + "px"; } catch (e) { /* ok */ }
+  $("#rpVidBtn").onclick = () => {
+    const on = dock.classList.toggle("novids");
+    $("#rpVidBtn").classList.toggle("on", !on);
+    try { localStorage.setItem("pitwall.rpVids", on ? "0" : "1"); } catch (e) { /* ok */ }
+    window.dispatchEvent(new Event("resize"));
+  };
+  const handle = $("#rpResize");
+  handle.addEventListener("pointerdown", (e) => {
+    handle.setPointerCapture(e.pointerId);
+    const y0 = e.clientY, h0 = vids.getBoundingClientRect().height;
+    const mv = (ev) => { vids.style.height = Math.max(100, Math.min(window.innerHeight * 0.7, h0 - (ev.clientY - y0))) + "px"; window.dispatchEvent(new Event("resize")); };
+    const up = () => {
+      handle.removeEventListener("pointermove", mv); handle.removeEventListener("pointerup", up);
+      try { localStorage.setItem("pitwall.rpVh", Math.round(vids.getBoundingClientRect().height)); } catch (err) { /* ok */ }
+    };
+    handle.addEventListener("pointermove", mv); handle.addEventListener("pointerup", up);
+  });
+  view.querySelectorAll("[data-rfs]").forEach((btn) => btn.onclick = () => { const v = $(`#rvid-${btn.dataset.rfs}`); if (v && v.requestFullscreen) v.requestFullscreen(); });
   RP = makeReplay(r, LA, LB);
 }
 
-// ids das voltas que são recorde (melhor volta limpa de cada carro na pista)
 function lapLabel(l, pbIds) {
   if (l.kind === "ideal") return `✨ Volta ideal · ${fmtLap(l.lap_time_ms)} · ${esc(pretty(l.car))}`;
   if (l.kind === "team") return `👥 ${esc(l.player || "Equipe")} · ${fmtLap(l.lap_time_ms)} · ${esc(pretty(l.car))}`;
@@ -1439,7 +1686,7 @@ function makeReplay(r, LA, LB) {
   }
 
   // ---- estado
-  const S = { T: 0, playing: false, rate: 1, mode: "time", zoom: 45, rotate: true, phaseColors: true,
+  const S = { T: 0, playing: false, rate: 1, mode: "time", zoom: 55, rotate: true, phaseColors: true,
               camX: null, camZ: null, camRot: 0, last: 0, raf: 0, dragging: false };
   const cv = $("#rpCanvas"), ctx = cv.getContext("2d");
   const resize = () => {
@@ -1448,7 +1695,21 @@ function makeReplay(r, LA, LB) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     draw();
   };
-  const viewWidth = () => 40 * Math.pow(25, S.zoom / 100);   // 40 m … 1000 m de largura visível
+  // zoom = proximidade: 100 = colado no carro (~35 m de largura), 0 = pista inteira na tela
+  let bbox = null;
+  for (const [x, z] of center) {
+    if (!bbox) bbox = [x, z, x, z];
+    bbox[0] = Math.min(bbox[0], x); bbox[1] = Math.min(bbox[1], z); bbox[2] = Math.max(bbox[2], x); bbox[3] = Math.max(bbox[3], z);
+  }
+  bbox = bbox || [0, 0, 1000, 1000];
+  const trackC = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+  const sidePx = () => ((cv.clientWidth || 0) > 900 ? 400 : 0);       // espaço dos cartões à direita
+  const fitWidth = () => {
+    const W = cv.clientWidth || 1, H = cv.clientHeight || 1, effW = Math.max(200, W - sidePx());
+    return Math.max((bbox[2] - bbox[0]) * W / effW, (bbox[3] - bbox[1]) * W / H) * 1.12;
+  };
+  const viewWidth = () => { const maxW = Math.max(200, fitWidth()), minW = 35; return maxW * Math.pow(minW / maxW, S.zoom / 100); };
+  const overview = () => Math.max(0, Math.min(1, 1 - S.zoom / 22));   // 1 = visão da pista inteira
 
   const mini = drawReplayMini(r, hasB);
 
@@ -1493,10 +1754,12 @@ function makeReplay(r, LA, LB) {
     const { fiA, fiB } = frameState();
     const [ax, az] = pos(A, fiA);
     // câmera suave no seu carro
-    if (S.camX == null) { S.camX = ax; S.camZ = az; }
-    S.camX += (ax - S.camX) * 0.25; S.camZ += (az - S.camZ) * 0.25;
+    const ov = overview();
+    const tx = ax + (trackC[0] - ax) * ov, tz = az + (trackC[1] - az) * ov;
+    if (S.camX == null) { S.camX = tx; S.camZ = tz; }
+    S.camX += (tx - S.camX) * 0.25; S.camZ += (tz - S.camZ) * 0.25;
     const h = heading(A, fiA);
-    let target = S.rotate && h != null ? -Math.PI / 2 - h : 0;
+    let target = S.rotate && h != null && ov < 1 ? (-Math.PI / 2 - h) * (1 - ov) : 0;
     while (target - S.camRot > Math.PI) target -= 2 * Math.PI;
     while (target - S.camRot < -Math.PI) target += 2 * Math.PI;
     S.camRot += (target - S.camRot) * 0.15;
@@ -1504,7 +1767,7 @@ function makeReplay(r, LA, LB) {
 
     ctx.save();
     ctx.fillStyle = "#07080a"; ctx.fillRect(0, 0, W, H);
-    ctx.translate(W / 2, H * 0.58);
+    ctx.translate(W / 2 - sidePx() / 2 * overview(), H * (0.58 - 0.08 * overview()));
     ctx.rotate(S.camRot);
     ctx.scale(scale, scale);
     ctx.translate(-S.camX, -S.camZ);
@@ -1569,7 +1832,7 @@ function makeReplay(r, LA, LB) {
       g.textContent = S.mode === "time" ? `${gap >= 0 ? "+" : "−"}${Math.abs(gap).toFixed(0)} m` : "mesmo ponto";
       g.className = "num " + (gap < -0.5 ? "neg" : gap > 0.5 ? "posg" : "");
     }
-    $("#rpClock").textContent = fmtLap(Math.max(0, Math.round(S.T))).replace(/^0:/, "0:");
+    $("#rpClock").textContent = S.T <= 0 ? "0:00.000" : fmtLap(Math.round(S.T));
     const frac = Math.min(1, S.T / tEnd);
     $("#rpProg .fill").style.width = (frac * 100) + "%";
     $("#rpProg .knob").style.left = (frac * 100) + "%";
@@ -1580,6 +1843,30 @@ function makeReplay(r, LA, LB) {
     mini.move(iA, fiB != null ? Math.round(fiB) : null);
   }
 
+  // vídeos embaixo: seguem o relógio do replay (a referência pelo mesmo tempo ou pelo mesmo ponto)
+  const rvA = $("#rvid-a"), rvB = $("#rvid-b");
+  const vStartA = LA.video ? LA.video.start : 0, vStartB = LB && LB.video ? LB.video.start : 0;
+  function syncVid(v, target) {
+    if (!v || target == null || v.readyState < 1) return;
+    if (S.playing) {
+      if (v.playbackRate !== S.rate) v.playbackRate = S.rate;
+      if (Math.abs(v.currentTime - target) > 0.3) v.currentTime = Math.max(0, target);
+      if (v.paused) v.play().catch(() => {});
+    } else {
+      if (!v.paused) v.pause();
+      if (Math.abs(v.currentTime - target) > 0.04) v.currentTime = Math.max(0, target);
+    }
+  }
+  function syncVideos() {
+    if (!rvA && !rvB) return;
+    const { fiA, fiB } = frameState();
+    syncVid(rvA, vStartA + S.T / 1000);
+    if (rvB && fiB != null) {
+      const tb = S.mode === "time" ? Math.min(S.T, LB.lap_time_ms) : lerp(B.t, fiB);
+      syncVid(rvB, tb == null ? null : vStartB + tb / 1000);
+    }
+    void fiA;
+  }
   function loop(ts) {
     if (S.playing) {
       const dt = S.last ? ts - S.last : 0;
@@ -1588,6 +1875,7 @@ function makeReplay(r, LA, LB) {
     }
     S.last = ts;
     draw();
+    syncVideos();
     S.raf = requestAnimationFrame(loop);
   }
   const playBtn = $("#rpPlay");
@@ -1603,10 +1891,12 @@ function makeReplay(r, LA, LB) {
     view.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === btn));
   });
   const zoom = $("#rpZoom");
-  zoom.oninput = () => { S.zoom = +zoom.value; };
-  $("#rpZi").onclick = () => { S.zoom = Math.max(0, S.zoom - 8); zoom.value = S.zoom; };
-  $("#rpZo").onclick = () => { S.zoom = Math.min(100, S.zoom + 8); zoom.value = S.zoom; };
-  cv.addEventListener("wheel", (e) => { e.preventDefault(); S.zoom = Math.min(100, Math.max(0, S.zoom + (e.deltaY > 0 ? 4 : -4))); zoom.value = S.zoom; }, { passive: false });
+  const setZoom = (z) => { S.zoom = Math.min(100, Math.max(0, z)); zoom.value = S.zoom; };
+  zoom.oninput = () => setZoom(+zoom.value);
+  $("#rpZi").onclick = () => setZoom(S.zoom + 10);      // + aproxima
+  $("#rpZo").onclick = () => setZoom(S.zoom - 10);      // − afasta
+  $("#rpFit").onclick = () => setZoom(0);
+  cv.addEventListener("wheel", (e) => { e.preventDefault(); setZoom(S.zoom + (e.deltaY < 0 ? 5 : -5)); }, { passive: false });
   $("#rpRot").onclick = () => { S.rotate = !S.rotate; $("#rpRot").classList.toggle("on", S.rotate); };
   $("#rpPh").onclick = () => { S.phaseColors = !S.phaseColors; $("#rpPh").classList.toggle("on", S.phaseColors); };
   // barra: clicar, arrastar ou passar o mouse (parado)
@@ -1960,35 +2250,178 @@ async function renderProgress(params) {
       <div class="panel empty"><b>Ainda sem voltas</b>Grave algumas sessões e volte aqui.</div>`;
     return;
   }
-  const recs = P.records;
-  let car = params.get("car"), track = params.get("track");
-  if (!car || !track) {
-    const top = [...P.combos].sort((a, b) => b.laps - a.laps)[0] || recs[0];
+  const tab = params.get("tab") === "geral" ? "geral" : "combo";
+  let car = params.get("car") || CTX.car, track = params.get("track") || CTX.track;
+  const combos = P.combos_rated || P.combos;
+  if (!combos.some((c) => c.car === car && c.track === track)) {
+    const top = [...combos].sort((a, b) => b.laps - a.laps)[0];
     if (top) { car = top.car; track = top.track; }
   }
+  if (car && track) setCtx(car, track);
+  const q = (extra = "") => `#/progress?car=${encodeURIComponent(car)}&track=${encodeURIComponent(track)}${extra}`;
+  const tracks = [...new Set(combos.map((c) => c.track))].sort();
+  const cars = combos.filter((c) => c.track === track).map((c) => c.car);
   view.innerHTML = `
-    <div class="head"><div><h1>Progresso</h1><div class="sub">Sua evolução, onde você é inconstante e quanto ainda dá para ganhar</div></div></div>
+    <div class="pg-head">
+      <div><span class="sub">Progresso de</span>
+        <div class="pg-pick">
+          <select id="pgTrack" aria-label="Pista">${tracks.map((t) => `<option value="${esc(t)}" ${t === track ? "selected" : ""}>${esc(pretty(t))}</option>`).join("")}</select>
+          <span class="sub">com</span>
+          <select id="pgCar" aria-label="Carro">${cars.map((c) => `<option value="${esc(c)}" ${c === car ? "selected" : ""}>${esc(pretty(c))}</option>`).join("")}</select>
+        </div></div>
+      <span class="spacer"></span>
+      <div class="seg-switch"><a class="btn sm ${tab === "combo" ? "on" : ""}" href="${q()}">Este carro e pista</a>
+        <a class="btn sm ${tab === "geral" ? "on" : ""}" href="${q("&tab=geral")}">Geral</a></div>
+    </div>
+    <div id="pgBody"><div class="sub">Calculando…</div></div>`;
+  $("#pgTrack").onchange = (e) => {
+    const t = e.target.value, c = (combos.find((x) => x.track === t && x.car === car) || combos.find((x) => x.track === t)).car;
+    location.hash = `#/progress?car=${encodeURIComponent(c)}&track=${encodeURIComponent(t)}${tab === "geral" ? "&tab=geral" : ""}`;
+  };
+  $("#pgCar").onchange = (e) => { location.hash = `#/progress?car=${encodeURIComponent(e.target.value)}&track=${encodeURIComponent(track)}${tab === "geral" ? "&tab=geral" : ""}`; };
+  if (tab === "geral") return progressGeneral(P);
+  comboProgress(car, track);
+}
+
+function ratingRing(v, size = 112) {
+  const r = size / 2 - 8, c = 2 * Math.PI * r, f = v == null ? 0 : Math.max(0, Math.min(100, v)) / 100;
+  const col = v == null ? "#3a414d" : v >= 85 ? "var(--good)" : v >= 70 ? "var(--accent)" : "var(--bad)";
+  return `<svg class="ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="Rating ${v ?? "—"}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#262b34" stroke-width="9"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round"
+      stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+    <text x="50%" y="50%" text-anchor="middle" dy=".35em" fill="var(--text)" font-size="${size * 0.3}" font-weight="700">${v ?? "—"}</text></svg>`;
+}
+
+async function comboProgress(car, track) {
+  const box = $("#pgBody");
+  const C = await api(`/api/progress/combo?car=${encodeURIComponent(car)}&track=${encodeURIComponent(track)}`);
+  if (current.name !== "progress") return;
+  const cons = C.consistency || { segments: [], laps: [], plan: [] };
+  const pb = C.pb, R = C.rating || {};
+  const idealMs = cons.ideal_s != null ? Math.round(cons.ideal_s * 1000) : null;
+  const pot = pb && idealMs ? pb.lap_time_ms - idealMs : null;
+  const pbGain = C.pb_history.length > 1 ? C.pb_history[0].lap_time_ms - C.pb_history[C.pb_history.length - 1].lap_time_ms : null;
+  const bar = (label, v, hint) => `<div class="rbar"><div class="row"><span>${label}</span><span class="spacer"></span><b class="num">${v ?? "—"}</b></div>
+    <div class="rtrack"><i style="width:${v ?? 0}%"></i></div><small>${hint}</small></div>`;
+  const target = C.ideal ? C.ideal.lap_id : null;
+  const planCards = cons.plan.map((p, i) => {
+    const s = cons.segments.find((x) => x.n === p.n);
+    const link = pb ? `#/compare?a=${pb.lap_id}${target ? "&b=" + target : ""}&seg=${s.n}` : "";
+    return `<div class="todo"><div class="todo-n">${i + 1}</div>
+      <div><b>Curva ${s.n}</b> <span class="posg num">até −${s.potential.toFixed(2).replace(".", ",")} s por volta</span>
+        <p>Você varia ±${s.std.toFixed(2).replace(".", ",")} s aqui. Seu melhor nesse trecho foi ${s.best.toFixed(2).replace(".", ",")} s
+          (volta ${s.best_lap_number}${s.best_started_at ? ", " + fmtDate(s.best_started_at) : ""}). Repita isso com frequência.</p></div>
+      ${link ? `<a class="btn sm" href="${link}">Ver na análise</a>` : ""}</div>`;
+  }).join("");
+  box.innerHTML = `
+    <div class="pg-top">
+      <div class="panel rating-card">
+        ${ratingRing(R.current)}
+        <div class="rbars"><h2>Rating Pitwall</h2>
+          ${bar("Ritmo", R.pace, "quão perto do seu recorde você anda")}
+          ${bar("Consistência", R.consistency, "quanto suas voltas variam entre si")}
+          ${bar("Limpeza", R.clean, "voltas sem sair da pista")}
+        </div>
+      </div>
+      <div class="kgrid">
+        <div class="kpi best"><span>Seu recorde</span><b class="num">${fmtLap(pb && pb.lap_time_ms)}</b>
+          ${pb ? `<small>${fmtDate(pb.started_at)}</small>` : ""}</div>
+        <div class="kpi"><span>Volta ideal</span><b class="num">${fmtLap(idealMs)}</b>
+          ${C.ideal_from ? `<small>seus melhores trechos de ${C.ideal_from.laps} voltas</small>` : ""}</div>
+        <div class="kpi"><span>Dá para ganhar</span><b class="num posg">${pot != null ? "−" + (pot / 1000).toFixed(3) + " s" : "—"}</b><small>juntando seus melhores trechos</small></div>
+        <div class="kpi"><span>Evolução do recorde</span><b class="num ${pbGain > 0 ? "posg" : ""}">${pbGain != null ? "−" + (pbGain / 1000).toFixed(3) + " s" : "—"}</b>
+          <small>${C.sessions.length} sessões</small></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px">
+      <div class="row" style="margin-bottom:10px"><h2 style="margin:0">O que treinar agora</h2><span class="spacer"></span>
+        <span class="sub">os 3 trechos onde você mais deixa tempo</span></div>
+      ${planCards || `<div class="sub">Precisa de pelo menos 2 voltas limpas com esse carro nessa pista.</div>`}
+    </div>
+
+    <div class="strat two" style="margin-top:14px">
+      <div class="panel"><h2>Evolução por sessão</h2><div id="pgTrend" class="chart"></div>
+        <div class="note">Linha cheia: melhor volta · tracejada: média das voltas limpas.</div></div>
+      <div class="panel"><h2>Rating por sessão</h2><div id="pgRate" class="chart"></div>
+        <div class="note">Sobe quando você anda perto do recorde, varia pouco e não sai da pista.</div></div>
+    </div>
+
+    <div class="strat two" style="margin-top:14px">
+      <div class="panel"><h2>Onde você varia mais</h2><div id="pgMap" class="cmap"></div>
+        <div class="legend-row"><span><i style="background:#3fd68b"></i>consistente</span><span><i style="background:#ffd23f"></i>médio</span><span><i style="background:#ff5d5d"></i>varia muito</span></div></div>
+      <div class="panel"><h2>Volta ideal (fantasma)</h2>
+        <p class="sub" style="margin:0 0 12px">${esc(pretty(car))} em ${esc(pretty(track))}: o seu melhor tempo em cada curva, de voltas diferentes,
+          numa volta só. Use como referência na Análise, no Replay e no delta ao vivo.</p>
+        <div id="pgIdeal">${C.ideal ? idealCard(C.ideal, pb) : ""}</div>
+        <button class="btn primary" id="pgGen" ${pb ? "" : "disabled"}>${C.ideal ? "Atualizar volta ideal" : "Gerar volta ideal"}</button>
+        <span class="sub" id="pgGenOut"></span>
+        <details style="margin-top:14px"><summary class="sub">Tempo de cada curva</summary>
+          <table style="margin-top:8px"><thead><tr><th>Curva</th><th>Melhor</th><th>Média</th><th>Variação</th><th>Ganho</th></tr></thead><tbody>
+          ${cons.segments.map((s) => `<tr><td>${s.n}</td><td class="num">${s.best.toFixed(2)}</td><td class="num">${s.mean.toFixed(2)}</td>
+            <td class="num">±${s.std.toFixed(2)}</td><td class="num posg">${s.potential.toFixed(2)}</td></tr>`).join("")}</tbody></table></details>
+      </div>
+    </div>`;
+  const S = C.sessions;
+  const dlabel = (arr) => (u, v) => v.map((i) => (Number.isInteger(i) && arr[i] ? new Date(arr[i].started_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : ""));
+  const el = $("#pgTrend");
+  if (S.length > 1) {
+    plots.push(new uPlot({
+      width: el.clientWidth, height: 220, scales: { x: { time: false } },
+      axes: [axis({ values: dlabel(S) }), axis({ values: (u, v) => v.map((x) => fmtLap(x * 1000).slice(0, -2)), size: 70 })],
+      series: [{}, { label: "Melhor", stroke: css("--accent"), width: 2, points: { size: 6, fill: css("--accent") } },
+               { label: "Média", stroke: "#8a93a3", width: 1.5, dash: [5, 4], points: { size: 4 } }],
+      cursor: { drag: { x: false, y: false } },
+    }, [S.map((_, i) => i), S.map((s) => s.best_ms / 1000), S.map((s) => s.avg_ms / 1000)], el));
+  } else el.innerHTML = `<div class="sub">Precisa de 2 sessões ou mais.</div>`;
+  const RS = R.sessions || [], el2 = $("#pgRate");
+  if (RS.length > 1) {
+    plots.push(new uPlot({
+      width: el2.clientWidth, height: 220, scales: { x: { time: false }, y: { range: [0, 100] } },
+      axes: [axis({ values: dlabel(RS) }), axis({ size: 40 })],
+      series: [{}, { label: "Rating", stroke: css("--good"), width: 2.4, points: { size: 6, fill: css("--good") } },
+               { label: "Ritmo", stroke: "#8a93a3", width: 1, dash: [4, 4], points: { show: false } },
+               { label: "Consistência", stroke: "#b98cff", width: 1, dash: [4, 4], points: { show: false } }],
+      cursor: { drag: { x: false, y: false } },
+    }, [RS.map((_, i) => i), RS.map((s) => s.rating), RS.map((s) => s.pace), RS.map((s) => s.consistency)], el2));
+  } else el2.innerHTML = `<div class="sub">Precisa de 2 sessões ou mais.</div>`;
+  consistencyMap($("#pgMap"), cons);
+  $("#pgGen").onclick = async () => {
+    $("#pgGen").disabled = true; $("#pgGenOut").textContent = "Montando…";
+    try {
+      const r = await api("/api/progress/ideal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ car, track }) });
+      $("#pgIdeal").innerHTML = idealCard({ lap_id: r.lap_id, lap_time_ms: r.lap_time_ms }, pb);
+      $("#pgGenOut").textContent = `Pronto: ${pretty(car)} em ${pretty(track)}.`;
+    } catch (e) { $("#pgGenOut").textContent = e.message; }
+    $("#pgGen").disabled = false;
+  };
+}
+
+function progressGeneral(P) {
+  const o = P.overall, box = $("#pgBody");
+  const combos = [...(P.combos_rated || [])].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+  const recBy = {}; for (const r of P.records) recBy[r.car + "|" + r.track] = r;
+  box.innerHTML = `
     <div class="kpis">
       <div class="kpi"><span>Horas na pista</span><b class="num">${o.hours.toFixed(1).replace(".", ",")} h</b></div>
       <div class="kpi"><span>Voltas</span><b class="num">${o.laps}</b></div>
       <div class="kpi"><span>Voltas limpas</span><b class="num">${o.clean_laps}</b></div>
-      <div class="kpi"><span>Sessões · carro+pista</span><b class="num">${o.sessions} · ${o.combos}</b></div>
+      <div class="kpi"><span>Sessões</span><b class="num">${o.sessions}</b></div>
     </div>
     <div class="strat two">
       <div class="panel"><h2>Voltas por semana</h2><div id="pgWeeks" class="chart"></div></div>
-      <div class="panel"><h2>Seus recordes</h2>
-        <table><thead><tr><th>Pista</th><th>Carro</th><th>Recorde</th><th></th></tr></thead><tbody>
-        ${recs.map((r) => `<tr class="${r.car === car && r.track === track ? "sel" : ""}"><td>${esc(pretty(r.track))}</td><td>${esc(pretty(r.car))}</td>
-          <td class="num best">${fmtLap(r.lap_time_ms)}</td>
-          <td class="acts"><a class="btn sm" href="#/progress?car=${encodeURIComponent(r.car)}&track=${encodeURIComponent(r.track)}">Ver evolução</a></td></tr>`).join("")}
+      <div class="panel"><h2>Seus carros e pistas</h2>
+        <table><thead><tr><th>Pista</th><th>Carro</th><th>Recorde</th><th>Rating</th><th></th></tr></thead><tbody>
+        ${combos.map((c) => { const r = recBy[c.car + "|" + c.track]; return `<tr><td>${esc(pretty(c.track))}</td><td>${esc(pretty(c.car))}</td>
+          <td class="num best">${fmtLap(r && r.lap_time_ms)}</td><td class="num"><span class="rpill" style="--v:${c.rating ?? 0}">${c.rating ?? "—"}</span></td>
+          <td class="acts"><a class="btn sm" href="#/progress?car=${encodeURIComponent(c.car)}&track=${encodeURIComponent(c.track)}">Abrir</a></td></tr>`; }).join("")}
         </tbody></table></div>
-    </div>
-    <div id="pgCombo" style="margin-top:14px"></div>`;
-  // gráfico semanal (barras)
+    </div>`;
   const el = $("#pgWeeks"), W = o.weeks;
   if (W.length) {
     plots.push(new uPlot({
-      width: el.clientWidth, height: 200, legend: { show: false }, scales: { x: { time: false, range: [-0.6, W.length - 0.4] } },
+      width: el.clientWidth, height: 220, legend: { show: false }, scales: { x: { time: false, range: [-0.6, W.length - 0.4] } },
       axes: [axis({ values: (u, v) => v.map((i) => (Number.isInteger(i) && W[i] ? new Date(W[i].week + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "")) }),
              axis({ size: 44 })],
       series: [{}, { label: "Voltas", fill: "rgba(255,176,32,.55)", stroke: css("--accent"), width: 1,
@@ -1996,77 +2429,8 @@ async function renderProgress(params) {
       cursor: { drag: { x: false, y: false } },
     }, [W.map((_, i) => i), W.map((w) => w.laps)], el));
   }
-  if (car && track) comboProgress(car, track);
 }
 
-async function comboProgress(car, track) {
-  const box = $("#pgCombo");
-  box.innerHTML = `<div class="sub">Calculando ${esc(pretty(car))} em ${esc(pretty(track))}…</div>`;
-  const C = await api(`/api/progress/combo?car=${encodeURIComponent(car)}&track=${encodeURIComponent(track)}`);
-  const cons = C.consistency || { segments: [], laps: [], plan: [] };
-  const pb = C.pb;
-  const idealMs = cons.ideal_s != null ? Math.round(cons.ideal_s * 1000) : null;
-  const segName = (n) => `Trecho ${n}`;
-  const planTxt = cons.plan.map((p, i) => {
-    const s = cons.segments.find((x) => x.n === p.n);
-    return `<li><b>${i + 1}. ${segName(p.n)}</b> — você varia ±${s.std.toFixed(2).replace(".", ",")} s aqui.
-      Repetindo o seu melhor (${s.best.toFixed(2).replace(".", ",")} s, volta ${s.best_lap_number}${s.best_started_at ? " de " + fmtDate(s.best_started_at) : ""})
-      você ganha em média <b class="posg">${s.potential.toFixed(2).replace(".", ",")} s</b> por volta.
-      ${pb ? `<a href="#/compare?a=${pb.lap_id}" data-seg="${s.n}" class="lnk">ver no recorde</a>` : ""}</li>`;
-  }).join("");
-  box.innerHTML = `
-    <div class="head" style="margin-top:6px"><div><h1 style="font-size:20px">${esc(pretty(track))} · ${esc(pretty(car))}</h1>
-      <div class="sub">${C.sessions.length} sessões · ${cons.laps.length} voltas limpas recentes analisadas</div></div></div>
-    <div class="kpis">
-      <div class="kpi best"><span>Seu recorde</span><b class="num">${fmtLap(pb && pb.lap_time_ms)}</b></div>
-      <div class="kpi"><span>Volta ideal (melhores trechos)</span><b class="num">${fmtLap(idealMs)}</b></div>
-      <div class="kpi"><span>Potencial</span><b class="num posg">${pb && idealMs ? fmtDelta(idealMs - pb.lap_time_ms) : "—"}</b></div>
-      <div class="kpi"><span>Recorde melhorou</span><b class="num">${C.pb_history.length > 1 ? fmtDelta(C.pb_history[C.pb_history.length - 1].lap_time_ms - C.pb_history[0].lap_time_ms) : "—"}</b></div>
-    </div>
-    <div class="strat two">
-      <div class="panel"><h2>Evolução por sessão</h2><div id="pgTrend" class="chart"></div>
-        <div class="note">Linha cheia: melhor volta da sessão · tracejada: média das voltas limpas. Média caindo = mais consistente.</div></div>
-      <div class="panel"><h2>Volta ideal (fantasma)</h2>
-        <div class="sub" style="margin-bottom:10px">Junta o seu melhor tempo em cada trecho, de voltas diferentes, numa volta só.
-          Use como referência na Análise e no Replay, ou no delta ao vivo.</div>
-        <div id="pgIdeal">${C.ideal ? idealCard(C.ideal, pb) : ""}</div>
-        <button class="btn primary" id="pgGen" ${pb ? "" : "disabled"}>${C.ideal ? "Atualizar volta ideal" : "Gerar volta ideal"}</button>
-        <span class="sub" id="pgGenOut"></span>
-      </div>
-    </div>
-    <div class="strat two" style="margin-top:14px">
-      <div class="panel"><h2>Mapa de consistência</h2><div id="pgMap" class="cmap"></div>
-        <div class="legend-row"><span><i style="background:#3fd68b"></i>consistente</span><span><i style="background:#ffd23f"></i>médio</span><span><i style="background:#ff5d5d"></i>varia muito</span></div></div>
-      <div class="panel"><h2>Plano de treino</h2>
-        ${planTxt ? `<ol class="plan">${planTxt}</ol>` : `<div class="sub">Precisa de pelo menos 2 voltas limpas.</div>`}
-        <table style="margin-top:12px"><thead><tr><th>Trecho</th><th>Melhor</th><th>Média</th><th>Variação</th><th>Ganho</th></tr></thead><tbody>
-        ${cons.segments.map((s) => `<tr><td>${s.n}</td><td class="num">${s.best.toFixed(2)}</td><td class="num">${s.mean.toFixed(2)}</td>
-          <td class="num">±${s.std.toFixed(2)}</td><td class="num posg">${s.potential.toFixed(2)}</td></tr>`).join("")}</tbody></table>
-      </div>
-    </div>`;
-  // tendência por sessão
-  const el = $("#pgTrend"), S = C.sessions;
-  if (S.length > 1) {
-    plots.push(new uPlot({
-      width: el.clientWidth, height: 220, scales: { x: { time: false } },
-      axes: [axis({ values: (u, v) => v.map((i) => (Number.isInteger(i) && S[i] ? new Date(S[i].started_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "")) }),
-             axis({ values: (u, v) => v.map((x) => fmtLap(x * 1000).slice(0, -2)), size: 70 })],
-      series: [{}, { label: "Melhor", stroke: css("--accent"), width: 2, points: { size: 6, fill: css("--accent") } },
-               { label: "Média", stroke: "#8a93a3", width: 1.5, dash: [5, 4], points: { size: 4 } }],
-      cursor: { drag: { x: false, y: false } },
-    }, [S.map((_, i) => i), S.map((s) => s.best_ms / 1000), S.map((s) => s.avg_ms / 1000)], el));
-  } else el.innerHTML = `<div class="sub">Precisa de 2 sessões ou mais.</div>`;
-  consistencyMap($("#pgMap"), cons);
-  $("#pgGen").onclick = async () => {
-    $("#pgGen").disabled = true; $("#pgGenOut").textContent = "Montando…";
-    try {
-      const r = await api("/api/progress/ideal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ car, track }) });
-      $("#pgIdeal").innerHTML = idealCard({ lap_id: r.lap_id, lap_time_ms: r.lap_time_ms }, pb);
-      $("#pgGenOut").textContent = "";
-    } catch (e) { $("#pgGenOut").textContent = e.message; }
-    $("#pgGen").disabled = false;
-  };
-}
 function idealCard(ideal, pb) {
   return `<div class="ideal"><b class="num">${fmtLap(ideal.lap_time_ms)}</b>
     ${pb ? `<span class="num posg">${fmtDelta(ideal.lap_time_ms - pb.lap_time_ms)} vs recorde</span>` : ""}
@@ -2364,4 +2728,4 @@ async function backupList() {
 }
 
 route();
-if (!location.hash.startsWith("#/overlay")) pollLive();
+if (!location.hash.startsWith("#/overlay")) { pollLive(); renderCtx(); }
