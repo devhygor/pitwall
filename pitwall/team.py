@@ -32,7 +32,7 @@ SUPABASE_URL = "https://iddijempjbyguqfhotij.supabase.co"
 SUPABASE_KEY = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlkZGlqZW1wamJ5Z3VxZmhvdGlq"
                 "Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwMDA3MTQsImV4cCI6MjEwNzU3NjcxNH0."
                 "X_S_Mi4s8xzaFsDOkFsH2OJS7Sx8mTAnly_aaNHY4xA")
-SITE_URL = "https://devhygor.github.io/pitwall/"
+SITE_URL = "https://pitwall.hygor.com.br/"
 
 KEEP = ("d", "t", "speed", "gas", "brake", "steer", "gear", "rpm", "x", "z")
 

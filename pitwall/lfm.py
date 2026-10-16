@@ -19,7 +19,7 @@ from pathlib import Path
 
 API = "https://api3.lowfuelmotorsport.com/api/"
 SITE = "https://lowfuelmotorsport.com"
-UA = "Pitwall/0.1 (+https://devhygor.github.io/pitwall/)"
+UA = "Pitwall/0.1 (+https://pitwall.hygor.com.br/)"
 
 TTL_PROFILE = 10 * 60
 TTL_SEASON = 15 * 60
