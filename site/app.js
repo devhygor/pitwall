@@ -135,7 +135,7 @@ function renderLanding(invite) {
             <p>Crie a equipe e mande o link no grupo. Quem abre entra com a conta Google e já cai dentro da equipe,
               sem cadastro e sem senha.</p></div>
           <div class="shot link-demo">
-            <code>devhygor.github.io/pitwall/#/join/7F3A91C2</code>
+            <code>pitwall.hygor.com.br/#/join/7F3A91C2</code>
             <div class="steps"><span>Abre o link</span><span>Entra com Google</span><span>Já está na equipe</span></div>
           </div>
         </div>

@@ -2,6 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
+  <script>
+    // Endereço antigo (GitHub Pages) → domínio próprio. Mantém o hash e a query, então
+    // links de convite (#/join/…) e o retorno do login continuam funcionando.
+    if (location.hostname.endsWith("github.io")) location.replace("https://pitwall.hygor.com.br/" + location.search + location.hash);
+  </script>
+  <link rel="canonical" href="https://pitwall.hygor.com.br/" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Pitwall · Telemetria e equipe</title>
   <meta name="description" content="Pitwall grava suas voltas no ACC e no iRacing e compara com as dos seus companheiros de equipe." />

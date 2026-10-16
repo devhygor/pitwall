@@ -11,7 +11,7 @@ do ACC, a mesma interface pública que qualquer app de telemetria usa.
 
 Baixe o **Pitwall-Setup.exe** em
 [Releases](https://github.com/devhygor/pitwall/releases/latest) (ou no site
-https://devhygor.github.io/pitwall/), abra e siga o instalador. Não precisa de
+https://pitwall.hygor.com.br/), abra e siga o instalador. Não precisa de
 Python nem de administrador. Se o Windows avisar "O Windows protegeu o
 computador", clique em **Mais informações → Executar assim mesmo** (o app não é
 assinado digitalmente).
@@ -193,8 +193,9 @@ do topo mostra **REC**.
 
 ## Nuvem e site
 
-- Site da equipe: https://devhygor.github.io/pitwall/ (pasta `site/`, publicado
-  pelo GitHub Pages a cada push na `main`).
+- Site da equipe: https://pitwall.hygor.com.br/ (pasta `site/`, servido pela VPS,
+  que puxa a `main` a cada 5 min). O endereço antigo `devhygor.github.io/pitwall/`
+  continua publicado pelo GitHub Pages só para redirecionar convites e links antigos.
 - Banco e login: Supabase (projeto "pitwall"). O esquema e as regras de acesso
   estão em `supabase/schema.sql`. Só quem está numa equipe com você vê suas voltas.
 - Login no app: o Pitwall abre o navegador no login do Google e volta para
