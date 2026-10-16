@@ -1,3 +1,5 @@
+# O site oficial é https://pitwall.hygor.com.br (servido pela VPS). O GitHub Pages
+# continua publicado só para redirecionar devhygor.github.io/pitwall (convites e links antigos).
 name: Publicar o site (GitHub Pages)
 
 on:
