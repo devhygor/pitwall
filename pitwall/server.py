@@ -452,7 +452,8 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def open_external(body: dict = Body(...)):
         """Abre no navegador do sistema (só endereços conhecidos)."""
         url = str(body.get("url") or "")
-        allowed = ("https://lowfuelmotorsport.com/", "https://devhygor.github.io/pitwall")
+        allowed = ("https://lowfuelmotorsport.com/", "https://pitwall.hygor.com.br",
+                   "https://devhygor.github.io/pitwall")
         if not url.startswith(allowed):
             raise HTTPException(400, "endereço não permitido")
         import webbrowser
