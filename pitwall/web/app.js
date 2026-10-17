@@ -2613,18 +2613,18 @@ async function renderTeam(tab) {
 const fmtGap = (ms) => (ms > 0 ? "+" + (ms / 1000).toFixed(3) : "—");
 function towerRows(rows, recs, mode) {
   const lead = rows[0].lap_time_ms;
-  const mine = recs.find((x) => x.car === rows[0].car && x.track === rows[0].track);
-  return rows.map((r, i) => `
+  const mineOf = (r) => recs.find((x) => x.car === r.car && x.track === r.track);
+  return rows.map((r, i) => { const mine = mineOf(r); return `
     <div class="trow ${i === 0 ? "first" : ""} ${r.me ? "mine" : ""}">
       <span class="p">${i + 1}</span>
-      <span class="tw">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span><b>${esc(r.driver)}${r.me ? " <em>você</em>" : ""}</b><small>${fmtDate(r.recorded_at)}</small></span></span>
+      <span class="tw">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span><b>${esc(r.driver)}${r.me ? " <em>você</em>" : ""}</b><small>${mode === "track" ? `${esc(pretty(r.car))} · ` : ""}${fmtDate(r.recorded_at)}</small></span></span>
       <b class="num t">${fmtLap(r.lap_time_ms)}</b>
       <span class="num gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
       <span class="secs3 num">${[r.s1_ms, r.s2_ms, r.s3_ms].map(fmtSec).join(" · ")}</span>
       <span class="tags">${r.setup_name ? `<button class="tag2" data-setup="${r.id}" title="${esc(r.setup_name)}">⚙ setup</button>` : ""}${r.clip_url ? `<span class="tag2" title="Tem vídeo da volta">▶ vídeo</span>` : ""}</span>
       <span class="acts">${r.me ? "" : `<button class="btn xs" data-imp="${r.id}" data-mode="compare" data-a="${mine ? mine.lap_id : ""}">Analisar</button>
         <button class="btn xs" data-imp="${r.id}" data-mode="replay" data-a="${mine ? mine.lap_id : ""}">Replay</button>`}</span>
-    </div>`).join("");
+    </div>`; }).join("");
 }
 function bindTower(box) {
   box.querySelectorAll("[data-imp]").forEach((b) => b.onclick = async () => {
@@ -2679,22 +2679,41 @@ async function teamCommunity() {
   try { [rows, recs] = await Promise.all([api("/api/team/community"), api("/api/records")]); }
   catch (e) { box.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
   if ($("#thMembers")) $("#thMembers").innerHTML = "";
-  if (!rows.length) { box.innerHTML = `<div class="panel empty"><b>Ninguém no ranking ainda</b>Seja o primeiro: envie seus recordes na tela Equipe.</div>`; return; }
-  const combos = comboGroups(rows);
-  const f = teamState.cfilter || (CTX.track ? { track: CTX.track, car: CTX.car } : {});
-  const pick = combos.find((g) => g[0].track === f.track && g[0].car === f.car) || combos.find((g) => g.some((r) => r.me)) || combos[0];
-  const myPos = pick.findIndex((r) => r.me);
-  const pilots = {};
-  for (const r of rows) (pilots[r.user_id] = pilots[r.user_id] || { name: r.driver, avatar_url: r.avatar_url, me: r.me, n: 0 }).n++;
-  const roster = Object.values(pilots).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  if (!rows.length) { box.innerHTML = `<div class="panel empty"><b>Ninguém no ranking ainda</b>Seus recordes sobem sozinhos quando você grava no app.</div>`; return; }
+  // pistas (cada pista de cada jogo) com quantos pilotos têm tempo nelas
+  const byTrack = {};
+  for (const r of rows) {
+    const k = r.track + "|" + r.game;
+    (byTrack[k] = byTrack[k] || { key: k, track: r.track, game: r.game, rows: [], users: new Set() }).rows.push(r);
+    byTrack[k].users.add(r.user_id);
+  }
+  const tracks = Object.values(byTrack).sort((a, b) => b.users.size - a.users.size || pretty(a.track).localeCompare(pretty(b.track)));
+  const f = teamState.cfilter || {};
+  const T = tracks.find((t) => t.key === f.key)
+    || tracks.find((t) => CTX.track && t.track === CTX.track)
+    || tracks.find((t) => t.rows.some((r) => r.me)) || tracks[0];
+  const cars = {};
+  for (const r of T.rows) (cars[r.car] = cars[r.car] || new Set()).add(r.user_id);
+  const carKey = f.key === T.key && f.car && cars[f.car] ? f.car : "";
+  // melhor volta de cada piloto na pista (com o carro em que ela foi feita), ou só no carro escolhido
+  const best = {};
+  for (const r of T.rows) {
+    if (carKey && r.car !== carKey) continue;
+    if (!best[r.user_id] || r.lap_time_ms < best[r.user_id].lap_time_ms) best[r.user_id] = r;
+  }
+  const list = Object.values(best).sort((a, b) => a.lap_time_ms - b.lap_time_ms);
+  const myPos = list.findIndex((r) => r.me);
+  const pilots = new Set(rows.map((r) => r.user_id));
   box.innerHTML = `
-    <div class="panel roster"><div class="row"><b>${roster.length} ${roster.length === 1 ? "piloto" : "pilotos"}</b><span class="sub">· ${rows.length} recordes em ${combos.length} combinações de pista e carro</span></div>
-      <div class="rchips">${roster.map((p) => `<span class="rchip ${p.me ? "me" : ""}" title="${p.n} recorde(s)">${avatar(p)}${esc(p.name)}<em>${p.n}</em></span>`).join("")}</div></div>
-    <div class="tfilter"><select id="cfCombo">${combos.map((g, i) => `<option value="${i}" ${g === pick ? "selected" : ""}>${esc(pretty(g[0].track))} · ${esc(pretty(g[0].car))} (${g.length})</option>`).join("")}</select>
-      ${myPos >= 0 ? `<span class="mypos">Você está em <b>${myPos + 1}º</b> de ${pick.length}</span>` : `<span class="sub">Você ainda não tem tempo nessa combinação.</span>`}</div>
-    <section class="combo2"><header><h2>${esc(pretty(pick[0].track))}</h2><span class="sub">${esc(pretty(pick[0].car))} · ranking de todos os pilotos do Pitwall</span></header>
-      <div class="tower2">${towerRows(pick.slice(0, 100), recs)}</div></section>`;
-  $("#cfCombo").onchange = (e) => { const g = combos[+e.target.value]; teamState.cfilter = { track: g[0].track, car: g[0].car }; teamCommunity(); };
+    <div class="comm-sum"><b>${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"}</b> · ${tracks.length} ${tracks.length === 1 ? "pista" : "pistas"} · ${rows.length} recordes</div>
+    <div class="tfilter">
+      <label class="stack2"><span class="sub">Pista</span><select id="cfTrack">${tracks.map((t) => `<option value="${esc(t.key)}" ${t === T ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.users.size} ${t.users.size === 1 ? "piloto" : "pilotos"})</option>`).join("")}</select></label>
+      <label class="stack2"><span class="sub">Carro</span><select id="cfCar"><option value="">Melhor volta de cada piloto, com o carro dele</option>${Object.entries(cars).sort((a, b) => b[1].size - a[1].size).map(([c, u]) => `<option value="${esc(c)}" ${c === carKey ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join("")}</select></label>
+      ${myPos >= 0 ? `<span class="mypos">Você está em <b>${myPos + 1}º</b> de ${list.length}</span>` : `<span class="sub">Você ainda não tem tempo nesta pista.</span>`}</div>
+    <section class="combo2"><header><h2>${esc(pretty(T.track))}</h2><span class="sub">${carKey ? esc(pretty(carKey)) + " · " : ""}${list.length} ${list.length === 1 ? "piloto" : "pilotos"}${carKey ? "" : " · cada um com o carro da sua melhor volta"}</span></header>
+      <div class="tower2">${towerRows(list.slice(0, 100), recs, "track")}</div></section>`;
+  $("#cfTrack").onchange = (e) => { teamState.cfilter = { key: e.target.value, car: "" }; teamCommunity(); };
+  $("#cfCar").onchange = (e) => { teamState.cfilter = { key: T.key, car: e.target.value }; teamCommunity(); };
   bindTower(box);
 }
 

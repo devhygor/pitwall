@@ -859,3 +859,7 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
 .rchip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; }
 .rchip.me { border-color: var(--accent); }
 .rchip .av, .rchip img { width: 22px; height: 22px; }
+.comm-sum { margin-bottom: 12px; color: var(--muted); }
+.comm-sum b { color: var(--text); }
+.stack2 { display: grid; gap: 4px; }
+.stack2 select { min-width: 280px; }

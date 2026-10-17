@@ -477,11 +477,11 @@ async function myRecords() {
   myRecs = data || [];
   return myRecs;
 }
-function rowsHtml(g, me) {
+function rowsHtml(g, me, showCar) {
   const lead = g[0].lap_time_ms;
   return g.map((r, i) => `<div class="row ${i === 0 ? "first" : ""} ${r.user_id === me ? "mine" : ""}">
     <span class="p">${i + 1}</span>
-    <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${esc(r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${fmtDate(r.recorded_at)}</em></span></span>
+    <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${esc(r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${showCar ? esc(pretty(r.car)) + " · " : ""}${fmtDate(r.recorded_at)}</em></span></span>
     <span class="time">${fmtLap(r.lap_time_ms)}</span>
     <span class="gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
     <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span>
@@ -523,31 +523,44 @@ async function renderCommunity() {
   const { data, error } = await allLaps();
   if (error) { view.innerHTML = `<div class="wrap page"><div class="panel">${esc(error.message)}</div></div>`; return; }
   const rows = (data || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?", avatar_url: (r.profiles || {}).avatar_url }));
-  const groups = {};
-  for (const r of rows) (groups[[r.track, r.car, r.game].join("|")] = groups[[r.track, r.car, r.game].join("|")] || []).push(r);
-  const keys = Object.keys(groups);
   const me = session.user.id;
-  const pilots = {};
-  for (const r of rows) (pilots[r.user_id] = pilots[r.user_id] || { name: r.driver, avatar_url: r.avatar_url, me: r.user_id === me, n: 0 }).n++;
-  const roster = Object.values(pilots).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
-  let sel = store.get("pitwall.comm");
-  if (!groups[sel]) sel = keys.find((k) => groups[k].some((r) => r.user_id === me)) || keys[0];
-  const g = groups[sel] || [];
+  const byTrack = {};
+  for (const r of rows) {
+    const k = r.track + "|" + r.game;
+    (byTrack[k] = byTrack[k] || { key: k, track: r.track, game: r.game, rows: [], users: new Set() }).rows.push(r);
+    byTrack[k].users.add(r.user_id);
+  }
+  const tracks = Object.values(byTrack).sort((a, b) => b.users.size - a.users.size || pretty(a.track).localeCompare(pretty(b.track)));
+  const pilots = new Set(rows.map((r) => r.user_id));
+  if (!tracks.length) {
+    view.innerHTML = `<div class="wrap page"><div class="page-head"><div><h1>Comunidade</h1></div></div>
+      <div class="panel empty"><b>Ninguém no ranking ainda</b><p>Os recordes sobem sozinhos pelo app do PC.</p></div></div>`;
+    return;
+  }
+  const saved = store.get("pitwall.comm");
+  const T = tracks.find((t) => t.key === saved) || tracks.find((t) => t.rows.some((r) => r.user_id === me)) || tracks[0];
+  const cars = {};
+  for (const r of T.rows) (cars[r.car] = cars[r.car] || new Set()).add(r.user_id);
+  const savedCar = store.get("pitwall.commCar");
+  const carKey = savedCar && cars[savedCar] ? savedCar : "";
+  const best = {};
+  for (const r of T.rows) {
+    if (carKey && r.car !== carKey) continue;
+    if (!best[r.user_id] || r.lap_time_ms < best[r.user_id].lap_time_ms) best[r.user_id] = r;
+  }
+  const g = Object.values(best).sort((a, b) => a.lap_time_ms - b.lap_time_ms);
   const pos = g.findIndex((r) => r.user_id === me);
   view.innerHTML = `<div class="wrap page">
-    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">O recorde de cada piloto do Pitwall, por pista e carro.</div></div></div>
-    ${roster.length ? `<div class="panel" style="margin-bottom:16px"><b>${roster.length} ${roster.length === 1 ? "piloto" : "pilotos"}</b>
-      <span class="help" style="display:inline">· ${rows.length} recordes em ${keys.length} combinações de pista e carro</span>
-      <div class="rchips">${roster.map((p) => `<span class="rchip ${p.me ? "me" : ""}" title="${p.n} recorde(s)">${avatar(p)}${esc(p.name)}<em>${p.n}</em></span>`).join("")}</div></div>` : ""}
-    ${keys.length ? `<div class="inline" style="align-items:center;margin-bottom:16px;flex-wrap:wrap">
-      <select class="field" id="combo" style="max-width:420px">${keys.map((k) => { const [t, c] = k.split("|"); return `<option value="${esc(k)}" ${k === sel ? "selected" : ""}>${esc(pretty(t))} · ${esc(pretty(c))} (${groups[k].length})</option>`; }).join("")}</select>
+    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"} · ${tracks.length} ${tracks.length === 1 ? "pista" : "pistas"} · ${rows.length} recordes. Escolha a pista para ver a melhor volta de cada um.</div></div></div>
+    <div class="inline" style="align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      <label class="help" style="margin:0">Pista<br><select class="field" id="trackSel" style="min-width:300px">${tracks.map((t) => `<option value="${esc(t.key)}" ${t === T ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.users.size} ${t.users.size === 1 ? "piloto" : "pilotos"})</option>`).join("")}</select></label>
+      <label class="help" style="margin:0">Carro<br><select class="field" id="carSel" style="min-width:300px"><option value="">Melhor volta de cada piloto, com o carro dele</option>${Object.entries(cars).sort((a, b) => b[1].size - a[1].size).map(([c, u]) => `<option value="${esc(c)}" ${c === carKey ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join("")}</select></label>
       ${pos >= 0 ? `<span class="mypos">Você está em <b>${pos + 1}º</b> de ${g.length}</span>` : ""}</div>
-    <section class="combo"><div class="combo-head"><h3>${esc(pretty(g[0].track))}</h3><small>${esc(pretty(g[0].car))}</small></div>
+    <section class="combo"><div class="combo-head"><h3>${esc(pretty(T.track))}</h3><small>${carKey ? esc(pretty(carKey)) : "cada piloto com o carro da sua melhor volta"}</small></div>
       <div class="rows"><div class="row head"><span class="p">Pos</span><span>Piloto</span><span style="text-align:right">Tempo</span><span style="text-align:right">Diferença</span>
-        <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span><span></span></div>${rowsHtml(g.slice(0, 200), me)}</div></section>`
-      : `<div class="panel empty"><b>Ninguém no ranking ainda</b><p>Os recordes sobem sozinhos pelo app do PC.</p></div>`}</div>`;
-  const c = $("#combo");
-  if (c) c.onchange = () => { store.set("pitwall.comm", c.value); renderCommunity(); };
+        <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span><span></span></div>${rowsHtml(g.slice(0, 200), me, !carKey)}</div></section></div>`;
+  $("#trackSel").onchange = (e) => { store.set("pitwall.comm", e.target.value); store.set("pitwall.commCar", ""); renderCommunity(); };
+  $("#carSel").onchange = (e) => { store.set("pitwall.commCar", e.target.value); renderCommunity(); };
   bindRows(view);
 }
 
