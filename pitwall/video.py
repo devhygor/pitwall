@@ -72,6 +72,7 @@ class VideoRecorder:
         self._path: Optional[Path] = None
         self._start_est: Optional[float] = None
         self._err_tail: list[str] = []
+        self._retries = 0
         self._waiting_session: Optional[int] = None   # sessão que começou antes do teste terminar
         self._lock = threading.Lock()
 
@@ -135,18 +136,48 @@ class VideoRecorder:
                     self._waiting_session = session_id
                 return
             self._session_id = session_id
-            self._path = self.dir / f"session_{session_id}.mkv"
-            self._start_est = None
-            self._err_tail = []
-            cmd = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-nostats",
-                   *_input_and_codec(kind, self.settings.get("video_monitor"),
-                                     self.settings.get("video_fps"),
-                                     self.settings.get("video_bitrate_mbps")),
-                   "-an", "-progress", "pipe:1", "-stats_period", "0.25", "-y", str(self._path)]
-            self._proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE, creationflags=NO_WINDOW)
-            threading.Thread(target=self._read_progress, args=(self._proc, session_id), daemon=True).start()
-            threading.Thread(target=self._read_errors, args=(self._proc,), daemon=True).start()
+            self._retries = 0
+            self._spawn(kind, self.dir / f"session_{session_id}.mkv")
+
+    def _spawn(self, kind: str, path: Path):
+        self._path = path
+        self._start_est = None
+        self._err_tail = []
+        cmd = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-nostats",
+               *_input_and_codec(kind, self.settings.get("video_monitor"),
+                                 self.settings.get("video_fps"),
+                                 self.settings.get("video_bitrate_mbps")),
+               "-an", "-progress", "pipe:1", "-stats_period", "0.25", "-y", str(path)]
+        self._proc = proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                             stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+        sid = self._session_id
+        threading.Thread(target=self._read_progress, args=(proc, sid), daemon=True).start()
+        threading.Thread(target=self._read_errors, args=(proc,), daemon=True).start()
+        threading.Thread(target=self._watch, args=(proc, sid, kind), daemon=True).start()
+
+    def _watch(self, proc: subprocess.Popen, session_id: int, kind: str):
+        """Se o ffmpeg morrer sozinho no meio da sessão (ex.: jogo trocou de modo de tela),
+        registra o motivo e tenta de novo. As voltas seguintes sincronizam com o novo arquivo."""
+        code = proc.wait()
+        time.sleep(0.5)   # deixa a leitura do stderr terminar
+        with self._lock:
+            if self._proc is not proc:       # parada normal (stop) ou já substituído
+                return
+            err = " | ".join(self._err_tail) or "sem mensagem"
+            msg = f"ffmpeg encerrou sozinho (código {code}): {err}"
+            self.status["last_error"] = msg
+            _log(self.dir, f"sessão {session_id} [{kind}] {msg}")
+            if self._retries >= 3:
+                return
+            self._retries += 1
+            old = self._path
+            try:
+                self._spawn(kind, self.dir / f"session_{session_id}_{self._retries}.mkv")
+            except Exception as e:  # noqa: BLE001
+                _log(self.dir, f"falha ao reiniciar: {e}")
+                return
+        if old and old.exists() and old.stat().st_size < 100_000:
+            _rm(old)
 
     def _read_progress(self, proc: subprocess.Popen, session_id: int):
         readings = 0
@@ -189,6 +220,9 @@ class VideoRecorder:
             proc.kill()
         if self._err_tail:
             self.status["last_error"] = " | ".join(self._err_tail)
+            _log(self.dir, f"sessão {sid} ao parar: {self.status['last_error']}")
+        if start is None:
+            _log(self.dir, f"sessão {sid}: nenhum quadro gravado, vídeo descartado")
         threading.Thread(target=self._finalize, args=(sid, path, start), daemon=True).start()
 
     def _finalize(self, session_id: int, mkv: Path, start: Optional[float]):
@@ -229,6 +263,15 @@ class VideoRecorder:
         if video_path:
             _rm(Path(video_path))
             _rm(Path(video_path).with_suffix(".mkv"))
+
+
+def _log(folder: Path, text: str):
+    """Registro simples para diagnóstico (videos/video.log)."""
+    try:
+        with open(folder / "video.log", "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text}\n")
+    except OSError:
+        pass
 
 
 def _rm(p: Optional[Path]):
