@@ -651,7 +651,7 @@ button.dcard:hover { border-color: #4a5260; }
 .combo2 header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
 .combo2 h2 { margin: 0; font-size: 20px; }
 .tower2 { display: grid; gap: 5px; }
-.trow { display: grid; grid-template-columns: 46px minmax(160px, 1fr) 110px 82px 200px 150px auto; align-items: center; gap: 10px;
+.trow { display: grid; grid-template-columns: 46px minmax(160px, 1fr) 110px 82px 200px 150px 168px; align-items: center; gap: 10px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; padding-right: 10px; }
 .trow .p { align-self: stretch; display: grid; place-items: center; background: var(--panel-2); font-weight: 800; color: var(--muted); font-size: 17px; }
 .trow.first .p, .trow.first .t { color: var(--best); }
@@ -674,7 +674,7 @@ button.tag2:hover { border-color: var(--accent); }
 .invcode { display: block; word-break: break-all; background: #0b0d10; border: 1px dashed #3a414d; border-radius: 10px; padding: 10px; margin-bottom: 10px; color: var(--accent); font-size: 13px; }
 .inp { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
 .carart { display: block; width: 260px; margin: 0 auto 10px; }
-@media (max-width: 1200px) { .trow { grid-template-columns: 40px minmax(140px, 1fr) 100px 76px auto; } .trow .secs3, .trow .tags { display: none; } }
+@media (max-width: 1200px) { .trow { grid-template-columns: 40px minmax(140px, 1fr) 100px 76px 168px; } .trow .secs3, .trow .tags { display: none; } }
 
 /* ---------------------------------------------------------------- LFM */
 .lfm-hero { position: relative; display: grid; grid-template-columns: minmax(260px, 1.1fr) 2fr auto; gap: 22px; align-items: center;

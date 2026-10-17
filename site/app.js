@@ -479,14 +479,14 @@ async function myRecords() {
 }
 function rowsHtml(g, me, showCar) {
   const lead = g[0].lap_time_ms;
-  return g.map((r, i) => `<div class="row ${i === 0 ? "first" : ""} ${r.user_id === me ? "mine" : ""}">
-    <span class="p">${i + 1}</span>
+  return g.map((r, i) => { const pos = r._pos || i + 1; return `<div class="row ${pos === 1 ? "first" : ""} ${r.user_id === me ? "mine" : ""}">
+    <span class="p">${pos}</span>
     <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${esc(r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${showCar ? esc(pretty(r.car)) + " · " : ""}${fmtDate(r.recorded_at)}</em></span></span>
     <span class="time">${fmtLap(r.lap_time_ms)}</span>
-    <span class="gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
+    <span class="gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
     <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span>
     <span class="racts">${r.clip_path ? `<span class="pill" title="Tem vídeo da volta">▶</span>` : ""}${r.setup_name ? `<button class="pill" data-setup="${r.id}" title="Baixar o setup: ${esc(r.setup_name)}">⚙</button>` : ""}
-      <button class="btn small" data-cmp="${r.id}" data-combo="${esc(r.track + "|" + r.car + "|" + r.game)}" data-me="${r.user_id === me ? 1 : ""}" title="Abrir a análise completa: curvas, dicas, gráficos, mapa e vídeo">📈 ${r.user_id === me ? "Analisar" : "Comparar"}</button></span></div>`).join("");
+      <button class="btn small" data-cmp="${r.id}" data-combo="${esc(r.track + "|" + r.car + "|" + r.game)}" data-me="${r.user_id === me ? 1 : ""}" title="Abrir a análise completa: curvas, dicas, gráficos, mapa e vídeo">📈 ${r.user_id === me ? "Analisar" : "Comparar"}</button></span></div>`; }).join("");
 }
 function bindRows(root) {
   root.querySelectorAll("[data-cmp]").forEach((b) => b.onclick = async () => {
@@ -518,49 +518,73 @@ async function allLaps() {
   }
   return { data: out };
 }
+const commF = () => { try { return Object.assign({ track: "", car: "", user: "", more: false }, JSON.parse(store.get("pitwall.commF") || "{}")); } catch (e) { return { track: "", car: "", user: "", more: false }; } };
 async function renderCommunity() {
   view.innerHTML = `<div class="loading">Carregando o ranking…</div>`;
   const { data, error } = await allLaps();
   if (error) { view.innerHTML = `<div class="wrap page"><div class="panel">${esc(error.message)}</div></div>`; return; }
   const rows = (data || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?", avatar_url: (r.profiles || {}).avatar_url }));
   const me = session.user.id;
-  const byTrack = {};
-  for (const r of rows) {
-    const k = r.track + "|" + r.game;
-    (byTrack[k] = byTrack[k] || { key: k, track: r.track, game: r.game, rows: [], users: new Set() }).rows.push(r);
-    byTrack[k].users.add(r.user_id);
-  }
-  const tracks = Object.values(byTrack).sort((a, b) => b.users.size - a.users.size || pretty(a.track).localeCompare(pretty(b.track)));
-  const pilots = new Set(rows.map((r) => r.user_id));
-  if (!tracks.length) {
+  if (!rows.length) {
     view.innerHTML = `<div class="wrap page"><div class="page-head"><div><h1>Comunidade</h1></div></div>
       <div class="panel empty"><b>Ninguém no ranking ainda</b><p>Os recordes sobem sozinhos pelo app do PC.</p></div></div>`;
     return;
   }
-  const saved = store.get("pitwall.comm");
-  const T = tracks.find((t) => t.key === saved) || tracks.find((t) => t.rows.some((r) => r.user_id === me)) || tracks[0];
-  const cars = {};
-  for (const r of T.rows) (cars[r.car] = cars[r.car] || new Set()).add(r.user_id);
-  const savedCar = store.get("pitwall.commCar");
-  const carKey = savedCar && cars[savedCar] ? savedCar : "";
-  const best = {};
-  for (const r of T.rows) {
-    if (carKey && r.car !== carKey) continue;
-    if (!best[r.user_id] || r.lap_time_ms < best[r.user_id].lap_time_ms) best[r.user_id] = r;
+  const F = commF();
+  const trackOf = (r) => r.track + "|" + r.game;
+  const opts = { tracks: {}, cars: {}, users: {} };
+  for (const r of rows) {
+    (opts.tracks[trackOf(r)] = opts.tracks[trackOf(r)] || { track: r.track, game: r.game, u: new Set() }).u.add(r.user_id);
+    (opts.cars[r.car] = opts.cars[r.car] || new Set()).add(r.user_id);
+    (opts.users[r.user_id] = opts.users[r.user_id] || { name: r.driver, n: 0 }).n++;
   }
-  const g = Object.values(best).sort((a, b) => a.lap_time_ms - b.lap_time_ms);
-  const pos = g.findIndex((r) => r.user_id === me);
-  view.innerHTML = `<div class="wrap page">
-    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"} · ${tracks.length} ${tracks.length === 1 ? "pista" : "pistas"} · ${rows.length} recordes. Escolha a pista para ver a melhor volta de cada um.</div></div></div>
-    <div class="inline" style="align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-      <label class="help" style="margin:0">Pista<br><select class="field" id="trackSel" style="min-width:300px">${tracks.map((t) => `<option value="${esc(t.key)}" ${t === T ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.users.size} ${t.users.size === 1 ? "piloto" : "pilotos"})</option>`).join("")}</select></label>
-      <label class="help" style="margin:0">Carro<br><select class="field" id="carSel" style="min-width:300px"><option value="">Melhor volta de cada piloto, com o carro dele</option>${Object.entries(cars).sort((a, b) => b[1].size - a[1].size).map(([c, u]) => `<option value="${esc(c)}" ${c === carKey ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join("")}</select></label>
-      ${pos >= 0 ? `<span class="mypos">Você está em <b>${pos + 1}º</b> de ${g.length}</span>` : ""}</div>
-    <section class="combo"><div class="combo-head"><h3>${esc(pretty(T.track))}</h3><small>${carKey ? esc(pretty(carKey)) : "cada piloto com o carro da sua melhor volta"}</small></div>
+  if (F.track && !opts.tracks[F.track]) F.track = "";
+  if (F.car && !opts.cars[F.car]) F.car = "";
+  if (F.user && !opts.users[F.user]) F.user = "";
+  const byTrack = {};
+  for (const r of rows) {
+    if (F.car && r.car !== F.car) continue;
+    const k = trackOf(r);
+    if (F.track && k !== F.track) continue;
+    const g = (byTrack[k] = byTrack[k] || {});
+    if (!g[r.user_id] || r.lap_time_ms < g[r.user_id].lap_time_ms) g[r.user_id] = r;
+  }
+  let sections = Object.entries(byTrack).map(([k, g]) => ({ k, t: opts.tracks[k], list: Object.values(g).sort((a, b) => a.lap_time_ms - b.lap_time_ms) }))
+    .filter((x) => x.list.length).sort((a, b) => b.list.length - a.list.length || pretty(a.t.track).localeCompare(pretty(b.t.track)));
+  if (F.user) sections = sections.filter((x) => x.list.some((r) => r.user_id === F.user));
+  const single = !!F.track, total = sections.length;
+  const shown = single || F.more ? sections : sections.slice(0, 12);
+  const pilots = new Set(rows.map((r) => r.user_id));
+  const sectionHtml = (x) => {
+    const lead = x.list[0].lap_time_ms, cap = single ? 100 : 10;
+    const withPos = x.list.map((r, i) => ({ ...r, _pos: i + 1, _lead: lead }));
+    let v = F.user ? withPos.filter((r) => r.user_id === F.user) : withPos.slice(0, cap);
+    const mine = withPos.find((r) => r.user_id === me);
+    if (!F.user && mine && mine._pos > cap) v = [...v, mine];
+    return `<section class="combo"><div class="combo-head"><h3>${esc(pretty(x.t.track))}${x.t.game !== "acc" ? " · " + esc(x.t.game) : ""}</h3>
+        <small>${x.list.length} ${x.list.length === 1 ? "piloto" : "pilotos"} · ${F.car ? esc(pretty(F.car)) : "cada um com o carro da sua melhor volta"}${mine ? ` · você em ${mine._pos}º` : ""}</small>
+        ${single ? "" : `<button class="btn small quiet" data-only="${esc(x.k)}" style="margin-left:auto">Ver só esta pista</button>`}</div>
       <div class="rows"><div class="row head"><span class="p">Pos</span><span>Piloto</span><span style="text-align:right">Tempo</span><span style="text-align:right">Diferença</span>
-        <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span><span></span></div>${rowsHtml(g.slice(0, 200), me, !carKey)}</div></section></div>`;
-  $("#trackSel").onchange = (e) => { store.set("pitwall.comm", e.target.value); store.set("pitwall.commCar", ""); renderCommunity(); };
-  $("#carSel").onchange = (e) => { store.set("pitwall.commCar", e.target.value); renderCommunity(); };
+        <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span><span></span></div>${rowsHtml(v, me, !F.car)}</div>
+      ${!single && !F.user && x.list.length > cap ? `<div class="help" style="padding:8px 14px">+ ${x.list.length - cap} pilotos · <a href="#" data-only="${esc(x.k)}">ver todos</a></div>` : ""}</section>`;
+  };
+  const sel = (id, label, h) => `<label class="help" style="margin:0">${label}<br><select class="field" id="${id}" style="min-width:230px">${h}</select></label>`;
+  view.innerHTML = `<div class="wrap page">
+    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"} · ${Object.keys(opts.tracks).length} pistas · ${Object.keys(opts.cars).length} carros · ${rows.length} recordes. A melhor volta de cada um; filtre por pista, carro ou piloto.</div></div></div>
+    <div class="inline" style="align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      ${sel("fTrack", "Pista", `<option value="">Todas as pistas</option>` + Object.entries(opts.tracks).sort((a, b) => b[1].u.size - a[1].u.size || pretty(a[1].track).localeCompare(pretty(b[1].track))).map(([k, t]) => `<option value="${esc(k)}" ${k === F.track ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.u.size})</option>`).join(""))}
+      ${sel("fCar", "Carro", `<option value="">Todos os carros</option>` + Object.entries(opts.cars).sort((a, b) => b[1].size - a[1].size || pretty(a[0]).localeCompare(pretty(b[0]))).map(([c, u]) => `<option value="${esc(c)}" ${c === F.car ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join(""))}
+      ${sel("fUser", "Piloto", `<option value="">Todos os pilotos</option>` + Object.entries(opts.users).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, u]) => `<option value="${esc(id)}" ${id === F.user ? "selected" : ""}>${esc(u.name)} (${u.n})</option>`).join(""))}
+      ${F.track || F.car || F.user ? `<button class="btn small" id="fClear">Limpar filtros</button>` : ""}</div>
+    ${shown.length ? shown.map(sectionHtml).join("") : `<div class="panel empty"><b>Nenhum tempo com esses filtros</b></div>`}
+    ${!single && !F.more && total > shown.length ? `<div style="text-align:center;margin-top:12px"><button class="btn" id="fMore">Mostrar as outras ${total - shown.length} pistas</button></div>` : ""}</div>`;
+  const set = (v) => { store.set("pitwall.commF", JSON.stringify(Object.assign({}, F, v))); renderCommunity(); };
+  $("#fTrack").onchange = (e) => set({ track: e.target.value, more: false });
+  $("#fCar").onchange = (e) => set({ car: e.target.value });
+  $("#fUser").onchange = (e) => set({ user: e.target.value });
+  if ($("#fClear")) $("#fClear").onclick = () => set({ track: "", car: "", user: "", more: false });
+  if ($("#fMore")) $("#fMore").onclick = () => set({ more: true });
+  view.querySelectorAll("[data-only]").forEach((b) => b.onclick = (e) => { e.preventDefault(); set({ track: b.dataset.only }); });
   bindRows(view);
 }
 

@@ -2614,12 +2614,12 @@ const fmtGap = (ms) => (ms > 0 ? "+" + (ms / 1000).toFixed(3) : "—");
 function towerRows(rows, recs, mode) {
   const lead = rows[0].lap_time_ms;
   const mineOf = (r) => recs.find((x) => x.car === r.car && x.track === r.track);
-  return rows.map((r, i) => { const mine = mineOf(r); return `
-    <div class="trow ${i === 0 ? "first" : ""} ${r.me ? "mine" : ""}">
-      <span class="p">${i + 1}</span>
+  return rows.map((r, i) => { const mine = mineOf(r); const pos = r._pos || i + 1; return `
+    <div class="trow ${pos === 1 ? "first" : ""} ${r.me ? "mine" : ""}">
+      <span class="p">${pos}</span>
       <span class="tw">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span><b>${esc(r.driver)}${r.me ? " <em>você</em>" : ""}</b><small>${mode === "track" ? `${esc(pretty(r.car))} · ` : ""}${fmtDate(r.recorded_at)}</small></span></span>
       <b class="num t">${fmtLap(r.lap_time_ms)}</b>
-      <span class="num gap">${i ? fmtGap(r.lap_time_ms - lead) : ""}</span>
+      <span class="num gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
       <span class="secs3 num">${[r.s1_ms, r.s2_ms, r.s3_ms].map(fmtSec).join(" · ")}</span>
       <span class="tags">${r.setup_name ? `<button class="tag2" data-setup="${r.id}" title="${esc(r.setup_name)}">⚙ setup</button>` : ""}${r.clip_url ? `<span class="tag2" title="Tem vídeo da volta">▶ vídeo</span>` : ""}</span>
       <span class="acts">${r.me ? "" : `<button class="btn xs" data-imp="${r.id}" data-mode="compare" data-a="${mine ? mine.lap_id : ""}">Analisar</button>
@@ -2680,40 +2680,64 @@ async function teamCommunity() {
   catch (e) { box.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
   if ($("#thMembers")) $("#thMembers").innerHTML = "";
   if (!rows.length) { box.innerHTML = `<div class="panel empty"><b>Ninguém no ranking ainda</b>Seus recordes sobem sozinhos quando você grava no app.</div>`; return; }
-  // pistas (cada pista de cada jogo) com quantos pilotos têm tempo nelas
+  const F = teamState.cfilter = Object.assign({ track: "", car: "", user: "", more: false }, teamState.cfilter && teamState.cfilter.key === undefined ? teamState.cfilter : {});
+  // filtros: pista, carro, piloto (todos combináveis)
+  const trackOf = (r) => r.track + "|" + r.game;
+  const opts = { tracks: {}, cars: {}, users: {} };
+  for (const r of rows) {
+    (opts.tracks[trackOf(r)] = opts.tracks[trackOf(r)] || { track: r.track, game: r.game, u: new Set() }).u.add(r.user_id);
+    (opts.cars[r.car] = opts.cars[r.car] || new Set()).add(r.user_id);
+    (opts.users[r.user_id] = opts.users[r.user_id] || { name: r.driver, n: 0 }).n++;
+  }
+  if (F.track && !opts.tracks[F.track]) F.track = "";
+  if (F.car && !opts.cars[F.car]) F.car = "";
+  if (F.user && !opts.users[F.user]) F.user = "";
+  // por pista: a melhor volta de cada piloto (no carro filtrado, ou no carro em que foi mais rápido)
   const byTrack = {};
   for (const r of rows) {
-    const k = r.track + "|" + r.game;
-    (byTrack[k] = byTrack[k] || { key: k, track: r.track, game: r.game, rows: [], users: new Set() }).rows.push(r);
-    byTrack[k].users.add(r.user_id);
+    if (F.car && r.car !== F.car) continue;
+    const k = trackOf(r);
+    if (F.track && k !== F.track) continue;
+    const g = (byTrack[k] = byTrack[k] || {});
+    if (!g[r.user_id] || r.lap_time_ms < g[r.user_id].lap_time_ms) g[r.user_id] = r;
   }
-  const tracks = Object.values(byTrack).sort((a, b) => b.users.size - a.users.size || pretty(a.track).localeCompare(pretty(b.track)));
-  const f = teamState.cfilter || {};
-  const T = tracks.find((t) => t.key === f.key)
-    || tracks.find((t) => CTX.track && t.track === CTX.track)
-    || tracks.find((t) => t.rows.some((r) => r.me)) || tracks[0];
-  const cars = {};
-  for (const r of T.rows) (cars[r.car] = cars[r.car] || new Set()).add(r.user_id);
-  const carKey = f.key === T.key && f.car && cars[f.car] ? f.car : "";
-  // melhor volta de cada piloto na pista (com o carro em que ela foi feita), ou só no carro escolhido
-  const best = {};
-  for (const r of T.rows) {
-    if (carKey && r.car !== carKey) continue;
-    if (!best[r.user_id] || r.lap_time_ms < best[r.user_id].lap_time_ms) best[r.user_id] = r;
-  }
-  const list = Object.values(best).sort((a, b) => a.lap_time_ms - b.lap_time_ms);
-  const myPos = list.findIndex((r) => r.me);
+  let sections = Object.entries(byTrack).map(([k, g]) => ({ k, t: opts.tracks[k], list: Object.values(g).sort((a, b) => a.lap_time_ms - b.lap_time_ms) }))
+    .filter((x) => x.list.length).sort((a, b) => b.list.length - a.list.length || pretty(a.t.track).localeCompare(pretty(b.t.track)));
+  if (F.user) sections = sections.filter((x) => x.list.some((r) => r.user_id === F.user));
+  const total = sections.length, single = !!F.track;
+  const shown = single || F.more ? sections : sections.slice(0, 12);
   const pilots = new Set(rows.map((r) => r.user_id));
+  const sectionHtml = (x) => {
+    const lead = x.list[0].lap_time_ms;
+    const withPos = x.list.map((r, i) => ({ ...r, _pos: i + 1, _lead: lead }));
+    const cap = single ? 100 : 10;
+    let view_ = F.user ? withPos.filter((r) => r.user_id === F.user) : withPos.slice(0, cap);
+    const mine = withPos.find((r) => r.me);
+    if (!F.user && mine && mine._pos > cap) view_ = [...view_, mine];
+    const myPos = mine ? mine._pos : 0;
+    return `<section class="combo2"><header><h2>${esc(pretty(x.t.track))}${x.t.game !== "acc" ? " · " + esc(x.t.game) : ""}</h2>
+      <span class="sub">${x.list.length} ${x.list.length === 1 ? "piloto" : "pilotos"}${F.car ? " · " + esc(pretty(F.car)) : " · cada um com o carro da sua melhor volta"}${myPos ? ` · você em ${myPos}º` : ""}</span>
+      ${single ? "" : `<button class="btn xs" data-only="${esc(x.k)}">Ver só esta pista</button>`}</header>
+      <div class="tower2">${towerRows(view_, recs, "track")}</div>
+      ${!single && !F.user && x.list.length > cap ? `<div class="sub" style="margin-top:6px">+ ${x.list.length - cap} pilotos · <a class="lnk" href="#" data-only="${esc(x.k)}">ver todos</a></div>` : ""}</section>`;
+  };
+  const sel = (id, label, optsHtml) => `<label class="stack2"><span class="sub">${label}</span><select id="${id}">${optsHtml}</select></label>`;
   box.innerHTML = `
-    <div class="comm-sum"><b>${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"}</b> · ${tracks.length} ${tracks.length === 1 ? "pista" : "pistas"} · ${rows.length} recordes</div>
+    <div class="comm-sum"><b>${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"}</b> · ${Object.keys(opts.tracks).length} pistas · ${Object.keys(opts.cars).length} carros · ${rows.length} recordes</div>
     <div class="tfilter">
-      <label class="stack2"><span class="sub">Pista</span><select id="cfTrack">${tracks.map((t) => `<option value="${esc(t.key)}" ${t === T ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.users.size} ${t.users.size === 1 ? "piloto" : "pilotos"})</option>`).join("")}</select></label>
-      <label class="stack2"><span class="sub">Carro</span><select id="cfCar"><option value="">Melhor volta de cada piloto, com o carro dele</option>${Object.entries(cars).sort((a, b) => b[1].size - a[1].size).map(([c, u]) => `<option value="${esc(c)}" ${c === carKey ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join("")}</select></label>
-      ${myPos >= 0 ? `<span class="mypos">Você está em <b>${myPos + 1}º</b> de ${list.length}</span>` : `<span class="sub">Você ainda não tem tempo nesta pista.</span>`}</div>
-    <section class="combo2"><header><h2>${esc(pretty(T.track))}</h2><span class="sub">${carKey ? esc(pretty(carKey)) + " · " : ""}${list.length} ${list.length === 1 ? "piloto" : "pilotos"}${carKey ? "" : " · cada um com o carro da sua melhor volta"}</span></header>
-      <div class="tower2">${towerRows(list.slice(0, 100), recs, "track")}</div></section>`;
-  $("#cfTrack").onchange = (e) => { teamState.cfilter = { key: e.target.value, car: "" }; teamCommunity(); };
-  $("#cfCar").onchange = (e) => { teamState.cfilter = { key: T.key, car: e.target.value }; teamCommunity(); };
+      ${sel("cfTrack", "Pista", `<option value="">Todas as pistas</option>` + Object.entries(opts.tracks).sort((a, b) => b[1].u.size - a[1].u.size || pretty(a[1].track).localeCompare(pretty(b[1].track))).map(([k, t]) => `<option value="${esc(k)}" ${k === F.track ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.u.size})</option>`).join(""))}
+      ${sel("cfCar", "Carro", `<option value="">Todos os carros</option>` + Object.entries(opts.cars).sort((a, b) => b[1].size - a[1].size || pretty(a[0]).localeCompare(pretty(b[0]))).map(([c, u]) => `<option value="${esc(c)}" ${c === F.car ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join(""))}
+      ${sel("cfUser", "Piloto", `<option value="">Todos os pilotos</option>` + Object.entries(opts.users).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, u]) => `<option value="${esc(id)}" ${id === F.user ? "selected" : ""}>${esc(u.name)} (${u.n})</option>`).join(""))}
+      ${F.track || F.car || F.user ? `<button class="btn sm" id="cfClear">Limpar filtros</button>` : ""}</div>
+    ${shown.length ? shown.map(sectionHtml).join("") : `<div class="panel empty"><b>Nenhum tempo com esses filtros</b></div>`}
+    ${!single && !F.more && total > shown.length ? `<div style="text-align:center;margin-top:12px"><button class="btn" id="cfMore">Mostrar as outras ${total - shown.length} pistas</button></div>` : ""}`;
+  const set = (v) => { teamState.cfilter = Object.assign({}, F, v); teamCommunity(); };
+  $("#cfTrack").onchange = (e) => set({ track: e.target.value, more: false });
+  $("#cfCar").onchange = (e) => set({ car: e.target.value });
+  $("#cfUser").onchange = (e) => set({ user: e.target.value });
+  if ($("#cfClear")) $("#cfClear").onclick = () => set({ track: "", car: "", user: "", more: false });
+  if ($("#cfMore")) $("#cfMore").onclick = () => set({ more: true });
+  box.querySelectorAll("[data-only]").forEach((b) => b.onclick = (e) => { e.preventDefault(); set({ track: b.dataset.only }); });
   bindTower(box);
 }
 
