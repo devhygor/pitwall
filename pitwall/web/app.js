@@ -3040,13 +3040,13 @@ async function drawUpdateCard(ver) {
       ${u.available && u.notes ? `<div class="note" style="white-space:pre-wrap">${esc(u.notes)}</div>` : ""}
       <div class="row" style="margin-top:14px">
         ${u.available && u.frozen ? `<button class="btn primary" id="updGo">${dl.state === "downloading" ? `Baixando ${dl.pct || 0}%` : dl.state === "installing" ? "Instalando…" : "Atualizar agora"}</button>` : ""}
-        ${u.available && !u.frozen ? `<a class="btn primary" href="${esc(u.page || "#")}" target="_blank" rel="noopener">Abrir página da versão</a><span class="sub">Rodando pelo código-fonte: atualize com git pull.</span>` : ""}
+        ${(u.available || u.current === "dev") && !u.frozen && u.page ? `<a class="btn primary" href="${esc(u.page || "#")}" target="_blank" rel="noopener">Abrir página da última versão</a><span class="sub">Rodando pelo código-fonte: atualize com git pull.</span>` : ""}
         <button class="btn" id="updChk">Verificar agora</button><span class="sub" id="updMsg">${esc(msg)}</span>
       </div>
       <div class="note">Atualizar mantém suas sessões, vídeos e configurações. O instalador fecha o Pitwall e abre de novo no fim.</div>`;
     $("#updChk").onclick = async () => {
       $("#updMsg").textContent = "Verificando…";
-      try { const n = await api("/api/update?force=true"); paint(n, n.available ? "" : "Nenhuma versão nova."); }
+      try { const n = await api("/api/update?force=true"); paint(n, n.available ? "" : n.current === "dev" ? "Você roda pelo código-fonte (sem número de versão): atualize com git pull." : "Nenhuma versão nova."); }
       catch (e) { $("#updMsg").textContent = e.message; }
     };
     const go = $("#updGo");
