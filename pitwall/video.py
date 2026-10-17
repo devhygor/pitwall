@@ -82,8 +82,9 @@ class VideoRecorder:
         if not IS_WIN:
             return []
         pref = self.settings.get("video_encoder")
-        return {"auto": ["nvenc", "amf"], "nvenc": ["nvenc"], "amf": ["amf"],
-                "cpu": ["cpu"]}.get(pref, ["nvenc", "amf"])
+        # "auto" termina na CPU: PCs sem NVIDIA/AMD (Intel, notebook híbrido) também gravam
+        return {"auto": ["nvenc", "amf", "cpu"], "nvenc": ["nvenc", "cpu"], "amf": ["amf", "cpu"],
+                "cpu": ["cpu"]}.get(pref, ["nvenc", "amf", "cpu"])
 
     def probe(self):
         """Testa cada opção por ~1,5 s e escolhe a primeira que funcionar."""
