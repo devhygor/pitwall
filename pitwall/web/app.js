@@ -3162,6 +3162,34 @@ function showAlertBanner(ev) {
 setInterval(pollAlerts, 10000);
 setTimeout(pollAlerts, 1500);
 
+// ---------------------------------------------------------------- aviso de nova versão
+async function checkUpdate() {
+  if ($(".update-bar")) return;
+  let u;
+  try { u = await api("/api/update"); } catch (e) { return; }
+  if (!u.available) return;
+  const b = document.createElement("div");
+  b.className = "update-bar";
+  b.innerHTML = `<span>Nova versão do Pitwall disponível: <b>${esc(u.latest)}</b> (você está na ${esc(u.current)})</span>
+    <button class="btn sm" data-up>Atualizar agora</button>
+    <button class="btn sm ghost" data-x>Depois</button>`;
+  document.body.appendChild(b);
+  b.querySelector("[data-x]").onclick = () => b.remove();
+  b.querySelector("[data-up]").onclick = async (ev) => {
+    ev.target.disabled = true;
+    try { await api("/api/update/install", { method: "POST" }); } catch (e) { toast(e.message); ev.target.disabled = false; return; }
+    const t = setInterval(async () => {
+      try {
+        const d = (await api("/api/update")).download || {};
+        if (d.state === "error") { clearInterval(t); toast(d.error || "Falha ao baixar."); ev.target.disabled = false; ev.target.textContent = "Tentar de novo"; }
+        else ev.target.textContent = d.state === "installing" ? "Instalando…" : `Baixando ${d.pct || 0}%`;
+      } catch (e) { clearInterval(t); }   // app fechou para atualizar
+    }, 800);
+  };
+}
+setTimeout(checkUpdate, 4000);
+setInterval(checkUpdate, 6 * 3600e3);
+
 // ---------------------------------------------------------------- ranking geral da comunidade
 async function renderCommunity() {
   current = { name: "community" };

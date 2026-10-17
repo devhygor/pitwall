@@ -11,7 +11,7 @@ AppName=Pitwall
 AppVersion={#AppVersion}
 AppVerName=Pitwall {#AppVersion}
 AppPublisher=Pitwall
-AppPublisherURL=https://pitwall.hygor.com.br/
+AppPublisherURL=https://devhygor.github.io/pitwall/
 AppSupportURL=https://github.com/devhygor/pitwall
 DefaultDirName={localappdata}\Programs\Pitwall
 DisableProgramGroupPage=yes
@@ -46,7 +46,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
   ValueData: """{app}\Pitwall.exe"" --background"; Tasks: autostart; Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\Pitwall.exe"; Description: "Abrir o Pitwall agora"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Pitwall.exe"; Description: "Abrir o Pitwall agora"; Flags: nowait postinstall
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM Pitwall.exe /F"; Flags: runhidden; RunOnceId: "StopPitwall"

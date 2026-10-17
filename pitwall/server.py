@@ -452,8 +452,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def open_external(body: dict = Body(...)):
         """Abre no navegador do sistema (só endereços conhecidos)."""
         url = str(body.get("url") or "")
-        allowed = ("https://lowfuelmotorsport.com/", "https://pitwall.hygor.com.br",
-                   "https://devhygor.github.io/pitwall")
+        allowed = ("https://lowfuelmotorsport.com/", "https://devhygor.github.io/pitwall")
         if not url.startswith(allowed):
             raise HTTPException(400, "endereço não permitido")
         import webbrowser
@@ -585,6 +584,18 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         if video and any(before.get(k) != new.get(k) for k in keys):
             video.probe_async()
         return {"settings": new, "video": video.status if video else {}}
+
+    @app.get("/api/update")
+    def get_update(force: bool = False):
+        from . import updater
+        return {**updater.check(force), "download": updater.progress()}
+
+    @app.post("/api/update/install")
+    def install_update():
+        from . import updater
+        if not getattr(__import__("sys"), "frozen", False):
+            raise HTTPException(400, "A atualização automática só funciona no app instalado.")
+        return updater.download_and_run()
 
     @app.post("/api/settings/video-test")
     def video_test():
