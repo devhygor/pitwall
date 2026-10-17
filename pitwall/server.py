@@ -413,6 +413,69 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         data = await request.body()
         return {"logo_url": _team_call(lambda: _team().set_logo(team_id, data, ctype))}
 
+    @app.get("/api/team/discover")
+    def team_discover():
+        return _team_call(lambda: _team().discover())
+
+    @app.post("/api/team/join-listed")
+    def team_join_listed(team_id: str = Body(..., embed=True)):
+        return _team_call(lambda: _team().join_listed(team_id))
+
+    @app.post("/api/team/cancel-request")
+    def team_cancel_request(team_id: str = Body(..., embed=True)):
+        _team_call(lambda: _team().cancel_request(team_id))
+        return {"ok": True}
+
+    @app.get("/api/team/manage/{team_id}")
+    def team_manage_data(team_id: str):
+        """Pedidos de entrada e convites enviados (só dono/líder enxerga)."""
+        t = _team()
+        return {"requests": _team_call(lambda: t.requests(team_id)),
+                "invites": _team_call(lambda: t.sent_invites(team_id))}
+
+    @app.post("/api/team/answer-request")
+    def team_answer_request(team_id: str = Body(...), user_id: str = Body(...), accept: bool = Body(...)):
+        _team_call(lambda: _team().answer_request(team_id, user_id, accept))
+        return {"ok": True}
+
+    @app.post("/api/team/invite-email")
+    def team_invite_email(team_id: str = Body(...), email: str = Body(...)):
+        return _team_call(lambda: _team().invite_email(team_id, email))
+
+    @app.post("/api/team/cancel-invite")
+    def team_cancel_invite(id: str = Body(..., embed=True)):
+        _team_call(lambda: _team().cancel_invite(id))
+        return {"ok": True}
+
+    @app.post("/api/team/answer-invite")
+    def team_answer_invite(id: str = Body(...), accept: bool = Body(...)):
+        return _team_call(lambda: _team().answer_invite(id, accept))
+
+    @app.post("/api/team/role")
+    def team_role(team_id: str = Body(...), user_id: str = Body(...), role: str = Body(...)):
+        _team_call(lambda: _team().set_role(team_id, user_id, role))
+        return {"ok": True}
+
+    @app.post("/api/team/remove-member")
+    def team_remove_member(team_id: str = Body(...), user_id: str = Body(...)):
+        _team_call(lambda: _team().remove_member(team_id, user_id))
+        return {"ok": True}
+
+    @app.post("/api/team/transfer")
+    def team_transfer(team_id: str = Body(...), user_id: str = Body(...)):
+        _team_call(lambda: _team().transfer_ownership(team_id, user_id))
+        return {"ok": True}
+
+    @app.post("/api/team/options")
+    def team_options(team_id: str = Body(...), values: dict = Body(...)):
+        _team_call(lambda: _team().set_options(team_id, values))
+        return {"ok": True}
+
+    @app.post("/api/team/sync")
+    def team_sync():
+        _team().sync_soon()
+        return {"ok": True}
+
     @app.post("/api/team/import")
     def team_import(id: str = Body(..., embed=True)):
         lap_id = _team_call(lambda: _team().import_lap(id))

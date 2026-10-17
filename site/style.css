@@ -350,3 +350,19 @@ canvas.chart { width: 100%; display: block; }
 .mapbar .sub { white-space: nowrap; font-size: 13px; }
 .hint-an { margin-top: 10px; font-size: 14px; color: var(--fog); background: rgba(242,169,59,.08); border: 1px solid rgba(242,169,59,.25); border-radius: 10px; padding: 7px 12px; display: inline-block; }
 .hint-an b { color: var(--sodium); }
+
+/* ---- equipe: cargos, convites, entrada aberta ---- */
+.invite-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; border-color: rgba(242,169,59,.5); background: rgba(242,169,59,.07); }
+.invite-row .spacer { flex: 1; }
+.team-tile .tlogo { width: 40px; height: 40px; border-radius: 10px; margin-bottom: 8px; font-size: 16px; }
+.member .role.owner { color: #1a1200; background: var(--sodium); padding: 2px 9px; border-radius: 99px; font-weight: 700; font-size: 12px; }
+.member .role.admin { color: var(--sodium); border: 1px solid rgba(242,169,59,.5); padding: 1px 9px; border-radius: 99px; font-size: 12px; }
+.member .macts { display: flex; gap: 4px; flex-wrap: wrap; }
+.member em { color: var(--fog); font-style: normal; font-size: 12px; }
+.modeopt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+.modeopt em { color: var(--fog); font-style: normal; font-size: 12px; }
+.rchips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; max-height: 140px; overflow: auto; }
+.rchip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; border-radius: 99px; background: var(--asphalt-2); border: 1px solid var(--line); font-size: 14px; }
+.rchip.me { border-color: var(--sodium); }
+.rchip em { color: var(--sodium); font-style: normal; font-size: 12px; }
+.rchip .av, .rchip img { width: 24px; height: 24px; }

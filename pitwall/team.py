@@ -63,6 +63,10 @@ class Team:
         self._verifier = None
         self._auth_path = data_dir() / "auth.json"
         self._auth = self._load()
+        self.old_schema = False
+        self.sync_info: dict = {"state": "idle", "at": None, "sent": 0, "total": 0}
+        self._sync_now = threading.Event()
+        self._sync_started = False
 
     # --- configuração ---------------------------------------------------------
     @property
@@ -145,6 +149,7 @@ class Team:
                        {"auth_code": code, "code_verifier": self._verifier})
         self._verifier = None
         self._set_session(r)
+        self.sync_soon()
 
     def _set_session(self, r: dict):
         self._auth = {"access_token": r["access_token"], "refresh_token": r["refresh_token"],
@@ -189,7 +194,13 @@ class Team:
             with urllib.request.urlopen(req, timeout=600) as r:
                 r.read()
         except urllib.error.HTTPError as e:
-            raise TeamError(f"Não deu para enviar o arquivo: {e.read().decode(errors='replace')[:200]}") from None
+            txt = e.read().decode(errors="replace")
+            if "row-level security" in txt or e.code in (401, 403):
+                raise TeamError("Sem permissão para enviar esse arquivo. Só o dono e os líderes da equipe trocam a logo "
+                                "(e o banco precisa estar com o supabase/equipe_v4.sql aplicado).") from None
+            if "mime" in txt.lower():
+                raise TeamError("Tipo de imagem não aceito. Use PNG, JPG, WEBP ou SVG.") from None
+            raise TeamError(f"Não deu para enviar o arquivo ({e.code}): {txt[:200]}") from None
         except urllib.error.URLError as e:
             raise TeamError(f"Sem conexão com a nuvem do Pitwall: {e.reason}") from None
         return self.public_url(bucket, path)
@@ -209,10 +220,15 @@ class Team:
     # --- equipes --------------------------------------------------------------
     def status(self) -> dict:
         out = {"logged_in": self.configured, "user": self.user, "site_url": SITE_URL,
-               "last_error": self.last_error, "teams": []}
+               "last_error": self.last_error, "teams": [], "invites": [], "sync": dict(self.sync_info),
+               "needs_migration": False}
         if self.configured:
             try:
                 out["teams"] = self.teams()
+                out["needs_migration"] = self.old_schema
+                if not self.old_schema:
+                    out["invites"] = self.my_invites()
+                    out["pending"] = self.my_requests()
             except TeamError as e:
                 out["error"] = str(e)
                 out["logged_in"] = self.configured
@@ -220,12 +236,22 @@ class Team:
 
     def teams(self) -> list[dict]:
         me = self.user["id"]
-        rows = self._rest("GET", "team_members", {"select": "role,teams(id,name,invite_code,owner,created_at,logo_url)",
-                                                  "user_id": f"eq.{me}"}) or []
+        cols = "id,name,invite_code,owner,created_at,logo_url"
+        try:
+            rows = self._rest("GET", "team_members", {"select": f"role,teams({cols},join_mode,description)",
+                                                      "user_id": f"eq.{me}"}) or []
+            self.old_schema = False
+        except TeamError as e:
+            if "join_mode" not in str(e) and "description" not in str(e):
+                raise
+            self.old_schema = True       # o SQL v4 ainda não foi rodado no Supabase
+            rows = self._rest("GET", "team_members", {"select": f"role,teams({cols})", "user_id": f"eq.{me}"}) or []
         out = []
         for r in rows:
             t = r.get("teams") or {}
             if t:
+                t.setdefault("join_mode", "invite")
+                t.setdefault("description", None)
                 out.append({**t, "role": r["role"], "invite_link": SITE_URL + "#/join/" + t["invite_code"]})
         return sorted(out, key=lambda t: t["created_at"])
 
@@ -233,16 +259,107 @@ class Team:
         name = (name or "").strip()
         if len(name) < 2:
             raise TeamError("Dê um nome para a equipe.")
-        return self._rest("POST", "rpc/create_team", body={"team_name": name})
+        t = self._rest("POST", "rpc/create_team", body={"team_name": name})
+        self.sync_soon()
+        return t
 
     def join_team(self, code: str) -> dict:
-        return self._rest("POST", "rpc/join_team", body={"code": invite_code(code)})
+        """Entra com o link/código do convite. Devolve {status, team}."""
+        try:
+            r = self._rest("POST", "rpc/join_with_code", body={"code": invite_code(code)})
+        except TeamError as e:
+            if "join_with_code" not in str(e):
+                raise
+            r = {"status": "joined", "team": self._rest("POST", "rpc/join_team", body={"code": invite_code(code)})}
+        self.sync_soon()
+        return r
 
     def leave_team(self, team_id: str):
-        self._rest("DELETE", "team_members", {"team_id": f"eq.{team_id}", "user_id": f"eq.{self.user['id']}"})
+        try:
+            self._rest("POST", "rpc/leave_team", body={"t": team_id})
+        except TeamError as e:
+            if "leave_team" not in str(e):
+                raise
+            self._rest("DELETE", "team_members", {"team_id": f"eq.{team_id}", "user_id": f"eq.{self.user['id']}"})
 
     def new_invite(self, team_id: str) -> str:
         return self._rest("POST", "rpc/new_invite_code", body={"t": team_id})
+
+    # --- cargos, pedidos e convites por e-mail ---------------------------------
+    def _rpc(self, name: str, body: dict):
+        try:
+            return self._rest("POST", f"rpc/{name}", body=body)
+        except TeamError as e:
+            if f"function public.{name}" in str(e) or "Could not find the function" in str(e):
+                raise TeamError("Falta atualizar o banco da nuvem: rode o arquivo supabase/equipe_v4.sql "
+                                "no SQL Editor do Supabase (uma vez).") from None
+            raise
+
+    def discover(self) -> list[dict]:
+        return self._rpc("discover_teams", {}) or []
+
+    def join_listed(self, team_id: str) -> dict:
+        r = self._rpc("join_listed", {"t": team_id})
+        if r.get("status") == "joined":
+            self.sync_soon()
+        return r
+
+    def my_requests(self) -> list[dict]:
+        rows = self._rest("GET", "team_requests", {"select": "team_id,teams(name)", "user_id": f"eq.{self.user['id']}"}) or []
+        return [{"team_id": r["team_id"], "team_name": (r.get("teams") or {}).get("name")} for r in rows]
+
+    def cancel_request(self, team_id: str):
+        self._rpc("cancel_request", {"t": team_id})
+
+    def requests(self, team_id: str) -> list[dict]:
+        rows = self._rest("GET", "team_requests", {"select": "user_id,created_at,profiles(name,avatar_url)",
+                                                   "team_id": f"eq.{team_id}", "order": "created_at.asc"}) or []
+        return [{"user_id": r["user_id"], "created_at": r["created_at"],
+                 "name": (r.get("profiles") or {}).get("name") or "?",
+                 "avatar_url": (r.get("profiles") or {}).get("avatar_url")} for r in rows]
+
+    def answer_request(self, team_id: str, user_id: str, accept: bool):
+        self._rpc("answer_request", {"t": team_id, "u": user_id, "accept": bool(accept)})
+
+    def invite_email(self, team_id: str, email: str) -> dict:
+        r = self._rpc("invite_by_email", {"t": team_id, "mail": email})
+        r["site_url"] = SITE_URL
+        return r
+
+    def sent_invites(self, team_id: str) -> list[dict]:
+        return self._rest("GET", "team_invites", {"select": "id,email,created_at", "team_id": f"eq.{team_id}",
+                                                  "order": "created_at.desc"}) or []
+
+    def cancel_invite(self, invite_id: str):
+        self._rpc("cancel_invite", {"i": invite_id})
+
+    def my_invites(self) -> list[dict]:
+        return self._rpc("my_invites", {}) or []
+
+    def answer_invite(self, invite_id: str, accept: bool) -> dict:
+        r = self._rpc("answer_invite", {"i": invite_id, "accept": bool(accept)})
+        if r.get("status") == "joined":
+            self.sync_soon()
+        return r
+
+    def set_role(self, team_id: str, user_id: str, role: str):
+        self._rpc("set_member_role", {"t": team_id, "u": user_id, "new_role": role})
+
+    def remove_member(self, team_id: str, user_id: str):
+        self._rpc("remove_member", {"t": team_id, "u": user_id})
+
+    def transfer_ownership(self, team_id: str, user_id: str):
+        self._rpc("transfer_ownership", {"t": team_id, "u": user_id})
+
+    def set_options(self, team_id: str, values: dict):
+        allowed = {k: values[k] for k in ("name", "description", "join_mode") if k in values}
+        if "join_mode" in allowed and allowed["join_mode"] not in ("invite", "request", "open"):
+            raise TeamError("Modo de entrada inválido.")
+        if "name" in allowed and len((allowed["name"] or "").strip()) < 2:
+            raise TeamError("Dê um nome para a equipe.")
+        if "description" in allowed:
+            allowed["description"] = (allowed["description"] or "").strip()[:200] or None
+        self._rest("PATCH", "teams", {"id": f"eq.{team_id}"}, allowed, prefer="return=minimal")
 
     def board(self, team_id: str) -> dict:
         members = self._rest("GET", "team_members", {"select": "role,joined_at,user_id,profiles(name,avatar_url)",
@@ -260,9 +377,15 @@ class Team:
 
     def community(self) -> list[dict]:
         """Ranking da comunidade: o recorde de cada piloto do Pitwall em cada carro/pista."""
-        rows = self._rest("GET", "laps", {
-            "select": "id,user_id,game,car,track,lap_time_ms,s1_ms,s2_ms,s3_ms,recorded_at,setup_name,clip_path,profiles(name,avatar_url)",
-            "order": "track.asc,car.asc,lap_time_ms.asc", "limit": "3000"}) or []
+        # o servidor devolve no máximo 1000 linhas por pedido: busca em páginas
+        rows: list = []
+        for page in range(0, 20):
+            part = self._rest("GET", "laps", {
+                "select": "id,user_id,game,car,track,lap_time_ms,s1_ms,s2_ms,s3_ms,recorded_at,setup_name,clip_path,profiles(name,avatar_url)",
+                "order": "track.asc,car.asc,lap_time_ms.asc,id.asc", "limit": "1000", "offset": str(page * 1000)}) or []
+            rows += part
+            if len(part) < 1000:
+                break
         me = self.user["id"]
         for r in rows:
             p = r.pop("profiles", None) or {}
@@ -288,16 +411,19 @@ class Team:
         return url
 
     # --- envio ----------------------------------------------------------------
-    def upload_lap(self, lap_id: int, force: bool = False) -> dict:
+    def upload_lap(self, lap_id: int, force: bool = False, known: dict | None = None) -> dict:
         lap = self.db.lap(lap_id)
         if not lap:
             raise TeamError("volta não encontrada")
         me = self.user["id"]
         sess = self.db.session(lap["session_id"]) or {}
         game = sess.get("game") or "acc"
-        q = {"select": "id,lap_time_ms", "user_id": f"eq.{me}", "game": f"eq.{game}",
-             "car": f"eq.{lap['car']}", "track": f"eq.{lap['track']}"}
-        cur = self._rest("GET", "laps", q) or []
+        if known is not None:       # sincronização em lote: já temos a lista da nuvem
+            cur = [{"lap_time_ms": known[(game, lap["car"], lap["track"])]}] if (game, lap["car"], lap["track"]) in known else []
+        else:
+            q = {"select": "id,lap_time_ms", "user_id": f"eq.{me}", "game": f"eq.{game}",
+                 "car": f"eq.{lap['car']}", "track": f"eq.{lap['track']}"}
+            cur = self._rest("GET", "laps", q) or []
         if cur and cur[0]["lap_time_ms"] <= lap["lap_time_ms"] and not force:
             return {"sent": False, "reason": "a volta na nuvem já é igual ou melhor"}
         tel = {k: lap["telemetry"][k] for k in KEEP if k in lap["telemetry"]}
@@ -363,19 +489,57 @@ class Team:
                 pass
 
     def upload_records(self) -> dict:
+        """Manda os recordes que a nuvem ainda não tem (ou que são melhores que os de lá)."""
         sent, skipped, errors = 0, 0, []
         demo = set(self.db.demo_session_ids())
-        for pb in self.db.personal_bests().values():
-            if pb["session_id"] in demo:      # voltas do simulador não vão para a equipe
-                continue
+        known = {(r["game"], r["car"], r["track"]): r["lap_time_ms"] for r in
+                 (self._rest("GET", "laps", {"select": "game,car,track,lap_time_ms", "user_id": f"eq.{self.user['id']}",
+                                             "limit": "1000"}) or [])}
+        pbs = [pb for pb in self.db.personal_bests().values() if pb["session_id"] not in demo]
+        self.sync_info.update(total=len(pbs), sent=0)
+        for pb in pbs:
             try:
-                r = self.upload_lap(pb["lap_id"])
+                r = self.upload_lap(pb["lap_id"], known=known)
                 sent += r["sent"]
                 skipped += not r["sent"]
+                self.sync_info["sent"] = sent
             except TeamError as e:
                 errors.append(str(e))
                 break
         return {"sent": sent, "skipped": skipped, "errors": errors}
+
+    # --- envio automático -------------------------------------------------------
+    def sync_soon(self):
+        """Pede uma sincronização agora (depois de entrar, criar ou entrar numa equipe)."""
+        self._sync_now.set()
+
+    def start_auto_sync(self, every_s: int = 600):
+        """Thread que mantém seus recordes na nuvem sem você clicar em nada:
+        ao abrir o app, ao entrar numa equipe e a cada 10 min (tenta de novo se estava sem internet)."""
+        if self._sync_started:
+            return
+        self._sync_started = True
+
+        def loop():
+            self._sync_now.wait(20)          # dá tempo do app abrir
+            while True:
+                self._sync_now.clear()
+                if self.configured and self.settings.get("team_auto_upload"):
+                    self.sync_info.update(state="syncing")
+                    try:
+                        r = self.upload_records()
+                        self.sync_info.update(state="error" if r["errors"] else "ok", sent=r["sent"],
+                                              total=r["sent"] + r["skipped"], error=(r["errors"] or [None])[0],
+                                              at=dt.datetime.now().isoformat(timespec="seconds"))
+                        self.last_error = r["errors"][0] if r["errors"] else None
+                    except TeamError as e:
+                        self.sync_info.update(state="error", error=str(e))
+                        self.last_error = str(e)
+                    except Exception as e:  # noqa: BLE001
+                        self.sync_info.update(state="error", error=str(e))
+                self._sync_now.wait(every_s)
+
+        threading.Thread(target=loop, daemon=True, name="pitwall-auto-sync").start()
 
     def sync_pb(self, car: str, track: str) -> dict:
         """Depois de mudar a validade de uma volta: deixa na nuvem o recorde atual (ou nenhum)."""

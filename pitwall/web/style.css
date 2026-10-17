@@ -828,3 +828,34 @@ input.tgl:checked::after { transform: translateX(18px); background: #1a1200; }
 @media (max-width: 720px) { .set-row { flex-direction: column; align-items: stretch; gap: 10px; } .set-ctl { justify-content: flex-start; } }
 .navfoot a[data-nav="settings"] { position: relative; }
 .nav-dot { position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--bg); }
+
+/* ---- equipe: cargos, convites, entrada ---- */
+.sync { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); padding: 5px 10px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); }
+.sync i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.sync.ok { color: var(--good); } .sync.ok i { background: var(--good); }
+.sync.run i { background: var(--accent); animation: pulse 1.2s infinite; }
+.sync.warn { color: var(--accent); border-color: rgba(255,176,32,.4); }
+.invite-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 16px; margin-bottom: 12px; border-radius: 14px;
+  background: rgba(255,176,32,.08); border: 1px solid rgba(255,176,32,.45); }
+.invite-card.wait { background: var(--panel); border-color: var(--line); }
+.mrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #1c2027; flex-wrap: wrap; }
+.mrow:last-child { border-bottom: 0; }
+.mname { display: flex; flex-direction: column; min-width: 0; }
+.mname small { color: var(--muted); font-size: 12px; }
+.mname em, .roster em { font-style: normal; color: var(--accent); font-size: 11px; margin-left: 4px; }
+.role { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.role.owner { color: #1a1200; background: var(--accent); border-color: var(--accent); }
+.role.admin { color: var(--accent); border-color: rgba(255,176,32,.5); }
+.mgrid .panel.wide { grid-column: 1 / -1; }
+.modes { display: grid; gap: 8px; margin-bottom: 12px; }
+.mode { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; background: var(--panel-2); }
+.mode.on { border-color: var(--accent); }
+.mode input { margin-top: 3px; }
+.mode b { display: block; } .mode small { color: var(--muted); font-size: 12px; }
+label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; margin: 8px 0; }
+.invlist { margin-top: 10px; }
+.roster { margin-bottom: 14px; }
+.rchips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; max-height: 128px; overflow: auto; }
+.rchip { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 5px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13px; }
+.rchip.me { border-color: var(--accent); }
+.rchip .av, .rchip img { width: 22px; height: 22px; }

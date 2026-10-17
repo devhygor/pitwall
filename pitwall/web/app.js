@@ -2510,12 +2510,34 @@ const teamLogo = (t, cls = "") => t && t.logo_url
   ? `<img class="tlogo ${cls}" src="${esc(t.logo_url)}" alt="Logo da equipe ${esc(t.name)}">`
   : `<span class="tlogo ${cls}">${esc((t && t.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase())}</span>`;
 
+const ROLE_NAME = { owner: "Dono", admin: "Líder", member: "Piloto" };
+const MODE_INFO = {
+  invite: ["Só por convite", "Entra quem receber o link, o código ou um convite por e-mail. A equipe não aparece na lista."],
+  request: ["Por aprovação", "Aparece na lista de equipes. Quem pedir para entrar fica aguardando um líder aceitar."],
+  open: ["Aberta", "Aparece na lista e qualquer piloto entra com um clique."],
+};
+function agoText(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return "agora há pouco";
+  if (s < 3600) return `há ${Math.round(s / 60)} min`;
+  if (s < 86400) return `há ${Math.round(s / 3600)} h`;
+  return `há ${Math.round(s / 86400)} d`;
+}
+function syncChip(st, s) {
+  const y = st.sync || {};
+  if (!s.team_auto_upload) return `<span class="sync warn" title="Ligue em Ajustes">Envio automático desligado</span>`;
+  if (y.state === "syncing") return `<span class="sync run"><i></i>Sincronizando seus recordes…</span>`;
+  if (y.state === "error") return `<span class="sync warn" title="${esc(y.error || "")}">Não consegui sincronizar agora · tento de novo sozinho</span>`;
+  if (y.at) return `<span class="sync ok" title="${y.sent ? y.sent + " recorde(s) novo(s) enviado(s)" : "tudo em dia"}"><i></i>Recordes em dia · ${agoText(y.at)}</span>`;
+  return `<span class="sync"><i></i>Seus recordes sobem sozinhos</span>`;
+}
+
 async function renderTeam(tab) {
   current = { name: "team" };
   if (teamState.polling) { clearTimeout(teamState.polling); teamState.polling = null; }
   tab = tab || teamState.tab || "ranking";
-  if (tab === "community") tab = "ranking";
-  teamState.tab = tab;
+  if (tab === "community" || tab === "manage") tab = "ranking";
   view.innerHTML = `<div class="sub">Carregando…</div>`;
   let st;
   try { st = await api("/api/team/status"); } catch (e) { view.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
@@ -2524,45 +2546,68 @@ async function renderTeam(tab) {
   const teams = st.teams || [];
   if (!teams.find((t) => t.id === teamState.sel)) teamState.sel = teams.length ? teams[0].id : null;
   const team = teams.find((t) => t.id === teamState.sel);
+  const manager = !!team && (team.role === "owner" || team.role === "admin");
+  const tabs = team ? [["ranking", "Ranking"], ["members", "Membros"], ...(manager ? [["access", "Convites e entrada"]] : []), ["discover", "Equipes"], ["settings", "Ajustes"]]
+    : [["discover", "Equipes"], ["settings", "Ajustes"]];
+  if (!tabs.some((t) => t[0] === tab)) tab = tabs[0][0];
+  teamState.tab = tab;
   const u = st.user || {};
+  const invites = st.invites || [], pending = st.pending || [];
   view.innerHTML = `
     <section class="team-hero">
       ${CAR_SVG("rgba(255,176,32,.16)", "bg")}
       <div class="th-main">${team ? teamLogo(team, "xl") : ""}
-        <div><span class="sub">${team ? "Sua equipe" : "Equipe"}</span>
+        <div><span class="sub">${team ? ROLE_NAME[team.role] + " · " + (MODE_INFO[team.join_mode] || MODE_INFO.invite)[0] : "Equipe"}</span>
           <h1>${esc(team ? team.name : "Sem equipe ainda")}</h1>
+          ${team && team.description ? `<div class="sub">${esc(team.description)}</div>` : ""}
           ${teams.length > 1 ? `<div class="tswitch">${teams.map((t) => `<button class="${t.id === teamState.sel ? "on" : ""}" data-team="${t.id}">${esc(t.name)}</button>`).join("")}</div>` : ""}
           <div id="thMembers" class="th-members"></div></div></div>
       <div class="th-side">
         <div class="me-chip">${avatar(u)}<span>${esc(u.name || "")}<small>${esc(u.email || "")}</small></span><button class="btn xs" id="tOutBtn">Sair</button></div>
-        <div class="row"><button class="btn primary" id="tUp">Enviar meus recordes</button>
-          <a class="btn" href="${esc(st.site_url)}" target="_blank" rel="noopener">Abrir o site</a></div>
+        <div class="row">${syncChip(st, s)}<button class="btn xs" id="tSync" title="Enviar agora os recordes que faltam">Sincronizar</button>
+          <a class="btn xs" href="${esc(st.site_url)}" target="_blank" rel="noopener">Site</a></div>
       </div>
     </section>
+    ${st.needs_migration ? `<div class="note warn">Cargos, convite por e-mail e entrada aberta precisam de uma atualização única no banco da nuvem:
+      rode o arquivo <code>supabase/equipe_v4.sql</code> no SQL Editor do Supabase. Enquanto isso, o resto continua funcionando.</div>` : ""}
     ${st.error ? `<div class="note warn">${esc(st.error)}</div>` : ""}
     ${st.last_error ? `<div class="note warn">Último envio automático: ${esc(st.last_error)}</div>` : ""}
-    <div class="tabs2">
-      <button class="${tab === "ranking" ? "on" : ""}" data-tab="ranking">Ranking da equipe</button>
-      <button class="${tab === "manage" ? "on" : ""}" data-tab="manage">Gerenciar</button>
-    </div>
+    ${invites.map((i) => `<div class="invite-card">${teamLogo({ name: i.team_name, logo_url: i.logo_url })}
+      <div><b>${esc(i.invited_by || "Alguém")}</b> convidou você para a equipe <b>${esc(i.team_name)}</b></div>
+      <span class="spacer"></span><button class="btn primary sm" data-inv="${i.id}" data-acc="1">Aceitar</button>
+      <button class="btn sm" data-inv="${i.id}" data-acc="0">Recusar</button></div>`).join("")}
+    ${pending.map((p) => `<div class="invite-card wait"><div>Pedido enviado para <b>${esc(p.team_name)}</b>. Aguardando um líder aceitar.</div>
+      <span class="spacer"></span><button class="btn sm" data-cancelreq="${p.team_id}">Cancelar pedido</button></div>`).join("")}
+    <div class="tabs2">${tabs.map(([k, t]) => `<button class="${tab === k ? "on" : ""}" data-tab="${k}">${t}</button>`).join("")}</div>
     <div id="tMain"></div>`;
   view.querySelectorAll("[data-team]").forEach((c) => c.onclick = () => {
     teamState.sel = c.dataset.team; try { localStorage.setItem("pitwall.team", teamState.sel); } catch (e) { /* ok */ }
     renderTeam();
   });
   view.querySelectorAll("[data-tab]").forEach((c) => c.onclick = () => renderTeam(c.dataset.tab));
-  $("#tOutBtn").onclick = async () => { await postJ("/api/team/logout"); renderTeam(); };
-  $("#tUp").onclick = async () => {
-    const b = $("#tUp"); b.disabled = true; b.textContent = "Enviando…";
+  view.querySelectorAll("[data-inv]").forEach((b) => b.onclick = async () => {
+    b.disabled = true;
     try {
-      const r = await postJ("/api/team/upload");
-      b.textContent = r.errors.length ? "Erro: " + r.errors[0] : `${r.sent} enviado(s), ${r.skipped} já estavam lá`;
-      setTimeout(() => renderTeam(), 1500);
+      const r = await postJ("/api/team/answer-invite", { id: b.dataset.inv, accept: b.dataset.acc === "1" });
+      if (r.team && r.status === "joined") teamState.sel = r.team.id;
+      renderTeam("ranking");
     } catch (e) { b.textContent = e.message; }
+  });
+  view.querySelectorAll("[data-cancelreq]").forEach((b) => b.onclick = async () => {
+    await postJ("/api/team/cancel-request", { team_id: b.dataset.cancelreq }); renderTeam();
+  });
+  $("#tOutBtn").onclick = async () => { await postJ("/api/team/logout"); renderTeam(); };
+  $("#tSync").onclick = async () => {
+    const b = $("#tSync"); b.disabled = true; b.textContent = "Sincronizando…";
+    await postJ("/api/team/sync");
+    setTimeout(() => renderTeam(tab), 4000);
   };
-  if (tab === "manage" || !team) return teamManage(teams, team, s);
-  if (tab === "community") tab = "ranking";
-  teamBoard(team);
+  const box = $("#tMain");
+  if (tab === "ranking") teamBoard(team);
+  else if (tab === "members") teamMembers(team, manager);
+  else if (tab === "access") teamAccess(team);
+  else if (tab === "discover") teamDiscover(team);
+  else teamSettings(team, s);
 }
 
 const fmtGap = (ms) => (ms > 0 ? "+" + (ms / 1000).toFixed(3) : "—");
@@ -2621,7 +2666,7 @@ async function teamBoard(team) {
     <div class="tfilter"><select id="tfTrack"><option value="">Todas as pistas</option>${tracks.map((t) => `<option value="${esc(t)}" ${t === f.track ? "selected" : ""}>${esc(pretty(t))}</option>`).join("")}</select></div>
     ${comboGroups(data.laps, f).map((g) => `<section class="combo2"><header><h2>${esc(pretty(g[0].track))}</h2><span class="sub">${esc(pretty(g[0].car))}${g[0].game !== "acc" ? " · " + esc(g[0].game) : ""}</span></header>
       <div class="tower2">${towerRows(g, recs)}</div></section>`).join("")}`
-    : `<div class="panel empty">${CAR_SVG("var(--panel-2)")}<b>Ninguém enviou voltas ainda</b>Clique em “Enviar meus recordes”, e chame a turma na aba Gerenciar.</div>`;
+    : `<div class="panel empty">${CAR_SVG("var(--panel-2)")}<b>Ninguém enviou voltas ainda</b>Seus recordes sobem sozinhos quando você grava. Chame a turma em Convites e entrada.</div>`;
   const ft = $("#tfTrack");
   if (ft) ft.onchange = () => { teamState.filter = { track: ft.value }; teamBoard(team); };
   bindTower(box);
@@ -2639,7 +2684,12 @@ async function teamCommunity() {
   const f = teamState.cfilter || (CTX.track ? { track: CTX.track, car: CTX.car } : {});
   const pick = combos.find((g) => g[0].track === f.track && g[0].car === f.car) || combos.find((g) => g.some((r) => r.me)) || combos[0];
   const myPos = pick.findIndex((r) => r.me);
+  const pilots = {};
+  for (const r of rows) (pilots[r.user_id] = pilots[r.user_id] || { name: r.driver, avatar_url: r.avatar_url, me: r.me, n: 0 }).n++;
+  const roster = Object.values(pilots).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   box.innerHTML = `
+    <div class="panel roster"><div class="row"><b>${roster.length} ${roster.length === 1 ? "piloto" : "pilotos"}</b><span class="sub">· ${rows.length} recordes em ${combos.length} combinações de pista e carro</span></div>
+      <div class="rchips">${roster.map((p) => `<span class="rchip ${p.me ? "me" : ""}" title="${p.n} recorde(s)">${avatar(p)}${esc(p.name)}<em>${p.n}</em></span>`).join("")}</div></div>
     <div class="tfilter"><select id="cfCombo">${combos.map((g, i) => `<option value="${i}" ${g === pick ? "selected" : ""}>${esc(pretty(g[0].track))} · ${esc(pretty(g[0].car))} (${g.length})</option>`).join("")}</select>
       ${myPos >= 0 ? `<span class="mypos">Você está em <b>${myPos + 1}º</b> de ${pick.length}</span>` : `<span class="sub">Você ainda não tem tempo nessa combinação.</span>`}</div>
     <section class="combo2"><header><h2>${esc(pretty(pick[0].track))}</h2><span class="sub">${esc(pretty(pick[0].car))} · ranking de todos os pilotos do Pitwall</span></header>
@@ -2648,78 +2698,196 @@ async function teamCommunity() {
   bindTower(box);
 }
 
-function teamManage(teams, team, s) {
+// ---- membros e cargos
+async function teamMembers(team, manager) {
   const box = $("#tMain");
-  if (team) $("#thMembers").innerHTML = "";
-  const owner = team && team.role === "owner";
+  box.innerHTML = `<div class="sub">Carregando…</div>`;
+  let data, mg = { requests: [], invites: [] };
+  try {
+    data = await api(`/api/team/board/${team.id}`);
+    if (manager) mg = await api(`/api/team/manage/${team.id}`).catch(() => mg);
+  } catch (e) { box.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
+  const owner = team.role === "owner";
+  const order = { owner: 0, admin: 1, member: 2 };
+  const members = data.members.slice().sort((a, b) => order[a.role] - order[b.role] || String(a.joined_at).localeCompare(String(b.joined_at)));
+  box.innerHTML = `
+    ${mg.requests.length ? `<div class="panel" style="margin-bottom:14px"><h2>Pedidos para entrar <span class="tag pw">${mg.requests.length}</span></h2>
+      ${mg.requests.map((r) => `<div class="mrow">${avatar(r)}<div class="mname"><b>${esc(r.name)}</b><small>pediu ${agoText(r.created_at)}</small></div><span class="spacer"></span>
+        <button class="btn primary xs" data-ans="${r.user_id}" data-acc="1">Aceitar</button><button class="btn xs" data-ans="${r.user_id}" data-acc="0">Recusar</button></div>`).join("")}</div>` : ""}
+    <div class="panel"><h2>${members.length} ${members.length === 1 ? "membro" : "membros"}</h2>
+      ${members.map((m) => `<div class="mrow">${avatar(m)}
+        <div class="mname"><b>${esc(m.name)}${m.me ? " <em>você</em>" : ""}</b><small>desde ${fmtDate(m.joined_at)}</small></div>
+        <span class="role ${m.role}">${ROLE_NAME[m.role]}</span><span class="spacer"></span>
+        ${m.me || m.role === "owner" ? "" : `
+          ${owner ? `<button class="btn xs" data-role="${m.user_id}" data-to="${m.role === "admin" ? "member" : "admin"}">${m.role === "admin" ? "Tirar de líder" : "Tornar líder"}</button>` : ""}
+          ${owner ? `<button class="btn xs" data-own="${m.user_id}" title="Você vira líder">Passar a equipe</button>` : ""}
+          ${manager && (owner || m.role !== "admin") ? `<button class="btn xs danger" data-kick="${m.user_id}">Remover</button>` : ""}`}
+      </div>`).join("")}
+      <p class="note">Dono: tudo, inclusive cargos e apagar. Líder: convida, aceita pedidos, remove pilotos e edita a equipe. Piloto: grava, compara e vê o ranking.</p></div>`;
+  const confirmBtn = (b, label, fn) => b.onclick = async () => {
+    if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = label; return; }
+    b.disabled = true;
+    try { await fn(); renderTeam("members"); } catch (e) { b.textContent = e.message; }
+  };
+  box.querySelectorAll("[data-ans]").forEach((b) => b.onclick = async () => {
+    b.disabled = true;
+    try { await postJ("/api/team/answer-request", { team_id: team.id, user_id: b.dataset.ans, accept: b.dataset.acc === "1" }); renderTeam("members"); }
+    catch (e) { b.textContent = e.message; }
+  });
+  box.querySelectorAll("[data-role]").forEach((b) => b.onclick = async () => {
+    b.disabled = true;
+    try { await postJ("/api/team/role", { team_id: team.id, user_id: b.dataset.role, role: b.dataset.to }); renderTeam("members"); }
+    catch (e) { b.textContent = e.message; }
+  });
+  box.querySelectorAll("[data-own]").forEach((b) => confirmBtn(b, "Confirmar: você deixa de ser dono", () => postJ("/api/team/transfer", { team_id: team.id, user_id: b.dataset.own })));
+  box.querySelectorAll("[data-kick]").forEach((b) => confirmBtn(b, "Confirmar remoção", () => postJ("/api/team/remove-member", { team_id: team.id, user_id: b.dataset.kick })));
+  $("#thMembers").innerHTML = `<div class="avstack">${data.members.slice(0, 8).map((m) => avatar(m)).join("")}</div>`;
+}
+
+// ---- convites (e-mail e link) e como a equipe aceita gente
+async function teamAccess(team) {
+  const box = $("#tMain");
+  box.innerHTML = `<div class="sub">Carregando…</div>`;
+  let mg = { requests: [], invites: [] };
+  try { mg = await api(`/api/team/manage/${team.id}`); } catch (e) { /* tabela ainda não criada */ }
+  const link = team.invite_link;
+  const mailto = (email) => `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("Convite para a equipe " + team.name + " no Pitwall")}&body=${encodeURIComponent(`Oi! Te convidei para a equipe ${team.name} no Pitwall (telemetria e ranking de voltas).\n\nAbra o link, entre com o Google e pronto:\n${link}\n\nSe preferir, é só entrar no app/site com este e-mail que o convite já aparece lá.`)}`;
   box.innerHTML = `
     <div class="mgrid">
-      ${team ? `<div class="panel"><h2>Convidar para ${esc(team.name)}</h2>
-        <code class="invcode">${esc(team.invite_link)}</code>
-        <div class="row"><button class="btn primary sm" id="tInvCopy">Copiar convite</button>
-          ${owner ? `<button class="btn sm" id="tInvNew" title="O convite antigo para de funcionar">Gerar novo</button>` : ""}</div>
-        <p class="sub">Quem abrir o link entra com o Google e já fica na equipe.</p></div>
-      <div class="panel"><h2>Logo da equipe</h2>
+      <div class="panel"><h2>Convidar por e-mail</h2>
+        <div class="row"><input id="tMail" class="inp" type="email" placeholder="amigo@exemplo.com"><button class="btn primary sm" id="tMailBtn">Convidar</button></div>
+        <div class="sub" id="tMailOut">O convite fica esperando a pessoa entrar com esse e-mail no app ou no site. Você também pode mandar o link por e-mail.</div>
+        ${mg.invites.length ? `<div class="invlist">${mg.invites.map((i) => `<div class="mrow"><div class="mname"><b>${esc(i.email)}</b><small>convidado ${agoText(i.created_at)} · aguardando</small></div>
+          <span class="spacer"></span><a class="btn xs" href="${mailto(i.email)}">Enviar e-mail</a><button class="btn xs" data-cinv="${i.id}">Cancelar</button></div>`).join("")}</div>` : ""}
+      </div>
+      <div class="panel"><h2>Link de convite</h2>
+        <code class="invcode">${esc(link)}</code>
+        <div class="row"><button class="btn primary sm" id="tInvCopy">Copiar link</button>
+          <button class="btn sm" id="tInvNew" title="O link antigo para de funcionar">Gerar novo</button></div>
+        <p class="sub">Quem abrir o link entra com o Google e já fica na equipe, em qualquer modo.</p></div>
+      <div class="panel"><h2>Quem pode entrar</h2>
+        <div class="modes">${Object.entries(MODE_INFO).map(([k, [t, d]]) => `<label class="mode ${team.join_mode === k ? "on" : ""}"><input type="radio" name="tMode" value="${k}" ${team.join_mode === k ? "checked" : ""}><span><b>${t}</b><small>${d}</small></span></label>`).join("")}</div>
+        <label class="stack">Descrição (aparece na lista de equipes)<input id="tDesc" class="inp" maxlength="200" placeholder="Ex.: Equipe de GT3 no ACC, corridas às quartas" value="${esc(team.description || "")}"></label>
+        <div class="row"><button class="btn sm" id="tOptSave">Salvar</button><span class="sub" id="tOptOut"></span></div></div>
+      <div class="panel"><h2>Logo e nome</h2>
         <div class="row" style="gap:16px">${teamLogo(team, "xl")}
-          ${owner ? `<div style="flex:1;display:grid;gap:8px">
+          <div style="flex:1;display:grid;gap:8px">
             <label class="btn sm" style="justify-self:start">Enviar imagem<input type="file" id="tLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden></label>
             <div class="row"><input id="tLogoUrl" class="inp" placeholder="ou cole o link da imagem (https://…)" value="${esc(team.logo_url && !team.logo_url.includes("/storage/") ? team.logo_url : "")}">
               <button class="btn sm" id="tLogoSave">Usar link</button></div>
-            <span class="sub" id="tLogoOut">PNG, JPG, WEBP ou SVG até 2 MB.</span></div>` : `<span class="sub">Só quem criou a equipe pode trocar a logo.</span>`}</div></div>` : ""}
-      <div class="panel"><h2>Entrar numa equipe</h2>
-        <div class="row"><input id="tJoin" class="inp" placeholder="Cole o link ou o código do convite"><button class="btn primary sm" id="tJoinBtn">Entrar</button></div>
-        <span class="sub" id="tJoinOut"></span></div>
-      <div class="panel"><h2>Criar outra equipe</h2>
-        <div class="row"><input id="tNew" class="inp" placeholder="Nome da equipe"><button class="btn sm" id="tNewBtn">Criar</button></div>
-        <span class="sub" id="tNewOut"></span></div>
-      <div class="panel fuel"><h2>O que vai para a nuvem</h2>
-        <label>Enviar meu recorde novo automaticamente <input id="tAuto" type="checkbox" ${s.team_auto_upload ? "checked" : ""}></label>
-        <label>Enviar o setup usado junto <input id="tSetup" type="checkbox" ${s.team_share_setup ? "checked" : ""}></label>
-        <label>Enviar um clipe de vídeo da volta (720p) <input id="tClip" type="checkbox" ${s.team_share_clip ? "checked" : ""}></label>
-        <p class="sub">Só o seu melhor tempo de cada carro em cada pista. Ele aparece para a sua equipe e no ranking da comunidade.
-          O setup só vai se você marcou na sessão qual setup usou (no engenheiro de setup).</p></div>
-      ${team ? `<div class="panel"><h2>Sair</h2><button class="btn danger sm" id="tLeave">Sair de ${esc(team.name)}</button></div>` : ""}
+            <span class="sub" id="tLogoOut">PNG, JPG, WEBP ou SVG até 2 MB.</span></div></div>
+        <label class="stack" style="margin-top:12px">Nome da equipe<input id="tName" class="inp" maxlength="60" value="${esc(team.name)}"></label>
+        <div class="row"><button class="btn sm" id="tNameSave">Salvar nome</button><span class="sub" id="tNameOut"></span></div></div>
     </div>`;
-  const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
-  $("#tAuto").onchange = () => put({ team_auto_upload: $("#tAuto").checked });
-  $("#tSetup").onchange = () => put({ team_share_setup: $("#tSetup").checked });
-  $("#tClip").onchange = () => put({ team_share_clip: $("#tClip").checked });
-  $("#tJoinBtn").onclick = async () => {
-    $("#tJoinOut").textContent = "Entrando…";
-    try { const t = await postJ("/api/team/join", { code: $("#tJoin").value }); teamState.sel = t.id; renderTeam("ranking"); }
-    catch (e) { $("#tJoinOut").textContent = e.message; }
+  $("#tMailBtn").onclick = async () => {
+    const out = $("#tMailOut"), email = $("#tMail").value.trim();
+    out.textContent = "Convidando…";
+    try {
+      const r = await postJ("/api/team/invite-email", { team_id: team.id, email });
+      out.innerHTML = `Convite criado para <b>${esc(r.email)}</b>. ${r.already_has_account ? "Essa pessoa já usa o Pitwall e vai ver o convite ao abrir." : "Ela vê o convite ao entrar com esse e-mail."}
+        <a class="lnk" href="${mailto(r.email)}">Enviar o e-mail agora</a>`;
+      $("#tMail").value = "";
+      setTimeout(() => teamAccess(team), 4000);
+    } catch (e) { out.textContent = e.message; }
   };
-  $("#tNewBtn").onclick = async () => {
-    $("#tNewOut").textContent = "Criando…";
-    try { const t = await postJ("/api/team/create", { name: $("#tNew").value }); teamState.sel = t.id; renderTeam("manage"); }
-    catch (e) { $("#tNewOut").textContent = e.message; }
-  };
-  if (!team) return;
-  $("#tInvCopy").onclick = () => { try { navigator.clipboard.writeText(team.invite_link); } catch (e) { /* ok */ } $("#tInvCopy").textContent = "Copiado"; };
-  if ($("#tInvNew")) $("#tInvNew").onclick = async (ev) => {
+  box.querySelectorAll("[data-cinv]").forEach((b) => b.onclick = async () => { await postJ("/api/team/cancel-invite", { id: b.dataset.cinv }); teamAccess(team); });
+  $("#tInvCopy").onclick = () => { try { navigator.clipboard.writeText(link); } catch (e) { /* ok */ } $("#tInvCopy").textContent = "Copiado"; };
+  $("#tInvNew").onclick = async (ev) => {
     const b = ev.currentTarget;
     if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "O antigo para. Confirmar?"; return; }
-    await postJ("/api/team/invite", { team_id: team.id }); renderTeam("manage");
+    await postJ("/api/team/invite", { team_id: team.id }); renderTeam("access");
   };
-  $("#tLeave").onclick = async (ev) => {
-    const b = ev.currentTarget;
-    if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmar saída"; return; }
-    await postJ("/api/team/leave", { team_id: team.id }); teamState.sel = null; renderTeam("ranking");
+  $("#tOptSave").onclick = async () => {
+    const mode = (box.querySelector("input[name=tMode]:checked") || {}).value;
+    $("#tOptOut").textContent = "Salvando…";
+    try { await postJ("/api/team/options", { team_id: team.id, values: { join_mode: mode, description: $("#tDesc").value } }); renderTeam("access"); }
+    catch (e) { $("#tOptOut").textContent = e.message; }
+  };
+  $("#tNameSave").onclick = async () => {
+    $("#tNameOut").textContent = "Salvando…";
+    try { await postJ("/api/team/options", { team_id: team.id, values: { name: $("#tName").value } }); renderTeam("access"); }
+    catch (e) { $("#tNameOut").textContent = e.message; }
   };
   const lf = $("#tLogoFile");
-  if (lf) lf.onchange = async () => {
+  lf.onchange = async () => {
     const file = lf.files[0]; if (!file) return;
     $("#tLogoOut").textContent = "Enviando…";
     try {
       const r = await fetch(`/api/team/logo?team_id=${encodeURIComponent(team.id)}`, { method: "POST", headers: { "Content-Type": file.type }, body: file });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
-      renderTeam("manage");
+      renderTeam("access");
     } catch (e) { $("#tLogoOut").textContent = e.message; }
   };
-  if ($("#tLogoSave")) $("#tLogoSave").onclick = async () => {
+  $("#tLogoSave").onclick = async () => {
     $("#tLogoOut").textContent = "Salvando…";
-    try { await postJ("/api/team/logo", { team_id: team.id, url: $("#tLogoUrl").value }); renderTeam("manage"); }
+    try { await postJ("/api/team/logo", { team_id: team.id, url: $("#tLogoUrl").value }); renderTeam("access"); }
     catch (e) { $("#tLogoOut").textContent = e.message; }
+  };
+}
+
+// ---- descobrir equipes, entrar por código, criar
+async function teamDiscover(team) {
+  const box = $("#tMain");
+  box.innerHTML = `<div class="sub">Carregando…</div>`;
+  let list = [], err = "";
+  try { list = await api("/api/team/discover"); } catch (e) { err = e.message; }
+  const lbl = { open: "Entrar", request: "Pedir para entrar" };
+  box.innerHTML = `
+    <div class="mgrid">
+      <div class="panel wide"><h2>Equipes abertas</h2>
+        ${err ? `<div class="note warn">${esc(err)}</div>` : list.length ? list.map((t) => `<div class="mrow">${teamLogo(t)}
+          <div class="mname"><b>${esc(t.name)}</b><small>${t.members} ${t.members === 1 ? "piloto" : "pilotos"} · ${(MODE_INFO[t.join_mode] || [""])[0]}${t.description ? " · " + esc(t.description) : ""}</small></div><span class="spacer"></span>
+          ${t.my_status === "member" ? `<span class="tag ok">Você está</span>` : t.my_status === "pending" ? `<span class="tag pw">Aguardando aprovação</span>`
+            : `<button class="btn primary xs" data-lst="${t.id}">${lbl[t.join_mode]}</button>`}</div>`).join("")
+          : `<div class="sub">Nenhuma equipe aberta ainda. Quem deixar a equipe como “Aberta” ou “Por aprovação” aparece aqui.</div>`}</div>
+      <div class="panel"><h2>Entrar com um convite</h2>
+        <div class="row"><input id="tJoin" class="inp" placeholder="Cole o link ou o código do convite"><button class="btn primary sm" id="tJoinBtn">Entrar</button></div>
+        <span class="sub" id="tJoinOut"></span></div>
+      <div class="panel"><h2>Criar uma equipe</h2>
+        <div class="row"><input id="tNew" class="inp" placeholder="Nome da equipe"><button class="btn sm" id="tNewBtn">Criar</button></div>
+        <span class="sub" id="tNewOut">Quem cria vira dono e escolhe depois como a equipe aceita gente.</span></div>
+    </div>`;
+  box.querySelectorAll("[data-lst]").forEach((b) => b.onclick = async () => {
+    b.disabled = true; b.textContent = "Enviando…";
+    try {
+      const r = await postJ("/api/team/join-listed", { team_id: b.dataset.lst });
+      if (r.status === "joined") { teamState.sel = r.team.id; renderTeam("ranking"); } else renderTeam("discover");
+    } catch (e) { b.textContent = e.message; }
+  });
+  $("#tJoinBtn").onclick = async () => {
+    $("#tJoinOut").textContent = "Entrando…";
+    try { const r = await postJ("/api/team/join", { code: $("#tJoin").value }); teamState.sel = (r.team || r).id; renderTeam("ranking"); }
+    catch (e) { $("#tJoinOut").textContent = e.message; }
+  };
+  $("#tNewBtn").onclick = async () => {
+    $("#tNewOut").textContent = "Criando…";
+    try { const t = await postJ("/api/team/create", { name: $("#tNew").value }); teamState.sel = t.id; renderTeam("access"); }
+    catch (e) { $("#tNewOut").textContent = e.message; }
+  };
+}
+
+// ---- ajustes do envio e sair
+function teamSettings(team, s) {
+  const box = $("#tMain");
+  box.innerHTML = `
+    <div class="mgrid">
+      <div class="panel fuel"><h2>O que vai para a nuvem</h2>
+        <label>Enviar meus recordes automaticamente <input id="tAuto" class="tgl" type="checkbox" ${s.team_auto_upload ? "checked" : ""}></label>
+        <label>Enviar o setup usado junto <input id="tSetup" class="tgl" type="checkbox" ${s.team_share_setup ? "checked" : ""}></label>
+        <label>Enviar um clipe de vídeo da volta (720p) <input id="tClip" class="tgl" type="checkbox" ${s.team_share_clip ? "checked" : ""}></label>
+        <p class="sub">É automático: ao abrir o app, ao entrar numa equipe e a cada recorde novo, sobe o seu melhor tempo de cada carro em cada pista. Aparece para a sua equipe e no ranking da comunidade. O setup só vai se você marcou na sessão qual usou.</p></div>
+      ${team ? `<div class="panel"><h2>Sair da equipe</h2>
+        ${team.role === "owner" ? `<p class="sub">Você é o dono: passe a equipe para outra pessoa em Membros antes de sair.</p>` : `<button class="btn danger sm" id="tLeave">Sair de ${esc(team.name)}</button><span class="sub" id="tLeaveOut"></span>`}</div>` : ""}
+    </div>`;
+  const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
+  $("#tAuto").onchange = () => put({ team_auto_upload: $("#tAuto").checked });
+  $("#tSetup").onchange = () => put({ team_share_setup: $("#tSetup").checked });
+  $("#tClip").onchange = () => put({ team_share_clip: $("#tClip").checked });
+  const lv = $("#tLeave");
+  if (lv) lv.onclick = async () => {
+    if (lv.dataset.confirm !== "1") { lv.dataset.confirm = "1"; lv.textContent = "Confirmar saída"; return; }
+    try { await postJ("/api/team/leave", { team_id: team.id }); teamState.sel = null; renderTeam("discover"); }
+    catch (e) { $("#tLeaveOut").textContent = e.message; }
   };
 }
 

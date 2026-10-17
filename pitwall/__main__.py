@@ -108,6 +108,7 @@ def main(argv=None):
     from .team import Team
     team = Team(db, settings, args.port)
     recorder.on_lap_saved.append(team.upload_async_if_pb)
+    team.start_auto_sync()
 
     def _suggest_setup(session_id, f):
         """Ao entrar na pista: escolhe o setup da biblioteca mais adequado."""
