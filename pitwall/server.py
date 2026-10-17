@@ -606,6 +606,14 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
 
     app.mount("/static", StaticFiles(directory=WEB), name="static")
 
+    @app.middleware("http")
+    async def no_stale_ui(request: Request, call_next):
+        """A janela do app guarda cache em disco: sem isso a interface nova não aparece depois de atualizar."""
+        resp = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.get("/")
     def index():
         return FileResponse(WEB / "index.html")
