@@ -2109,42 +2109,63 @@ async function renderSettings() {
     try { au = await api("/api/autostart"); } catch (e) { /* ok */ }
     const sel = (id, opts, val) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${String(val) === String(k) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
     const tested = Object.entries(v.tested || {}).map(([k, r]) => `<div><span class="tag">${k}</span> ${r === "ok" ? `<span class="status ok">funcionou</span>` : `<span class="status bad">${esc(r)}</span>`}</div>`).join("");
+    const ver = await api("/api/update").catch(() => ({ current: "?" }));
     view.innerHTML = `
       <div class="head"><div><h1>Configurações</h1><div class="sub">As mudanças valem a partir da próxima sessão.</div></div></div>
-      <div class="panel fuel" style="margin-bottom:14px">
-        <h2>Inicialização</h2>
-        ${au.supported ? `
-        <label>Iniciar com o Windows, em segundo plano <input id="cAuto" type="checkbox" ${au.enabled ? "checked" : ""}></label>
-        ${au.outdated ? `<div class="note warn">O registro aponta para outra pasta do Pitwall. Desligue e ligue de novo para atualizar.</div>` : ""}
-        <div class="note">Ligado, o Pitwall abre sozinho quando você entra no Windows: fica só com um ícone perto do relógio,
-          esperando o ACC, e grava sem você precisar lembrar. Quando começar a gravar aparece uma notificação.
-          Clique no ícone para abrir esta tela, ou use "Sair" no menu dele. Para iniciar agora sem reiniciar o PC,
-          feche esta janela de terminal e rode <code>iniciar-em-segundo-plano.bat</code>.</div>
-        <div class="row" style="margin-top:12px"><button class="btn" id="cLnk">Criar atalhos na Área de Trabalho e no Menu Iniciar</button>
-          <span class="sub" id="cLnkOut"></span></div>`
-        : `<div class="sub">Disponível só no Windows.</div>`}
+      <div class="set-tabs" id="setTabs" role="tablist">
+        ${SET_TABS.map(([k, t, ic]) => `<button class="set-tab" data-tab="${k}" role="tab">${ic}<span>${t}</span>${k === "update" && ver.available ? `<i class="set-dot" title="Nova versão"></i>` : ""}</button>`).join("")}
       </div>
-      <div class="strat">
-        <div class="panel fuel">
-          <h2>Vídeo da tela</h2>
-          <label>Gravar vídeo nas sessões <input id="cVid" type="checkbox" ${s.video_enabled ? "checked" : ""}></label>
-          <label>Monitor do jogo ${sel("cMon", [[0, "1 (principal)"], [1, "2"], [2, "3"], [3, "4"]], s.video_monitor)}</label>
-          <label>Encoder ${sel("cEnc", [["auto", "Automático (GPU)"], ["nvenc", "NVIDIA (NVENC)"], ["amf", "AMD (AMF)"], ["cpu", "Processador (720p)"]], s.video_encoder)}</label>
-          <label>Quadros por segundo ${sel("cFps", [[30, "30"], [60, "60"]], s.video_fps)}</label>
-          <label>Qualidade ${sel("cBr", [[4, "Leve (4 Mbps)"], [6, "Normal (6 Mbps)"], [10, "Alta (10 Mbps)"]], s.video_bitrate_mbps)}</label>
-          <label>Manter vídeos das últimas ${sel("cKeep", [[5, "5 sessões"], [15, "15 sessões"], [30, "30 sessões"], [100, "100 sessões"]], s.video_keep_sessions)}</label>
-          <div class="note">Na qualidade normal, 1 hora de vídeo ocupa cerca de 2,7 GB. Os vídeos ficam em %LOCALAPPDATA%\\Pitwall\\videos.</div>
+
+      <section class="set-sec" data-sec="geral">
+        <div class="set-card"><h2>Inicialização</h2>
+          ${au.supported ? `
+          ${setRow("Iniciar com o Windows, em segundo plano", "Fica só com um ícone perto do relógio, esperando o jogo, e grava sozinho. Quando começar a gravar aparece uma notificação. Clique no ícone para abrir esta tela ou use “Sair” no menu dele.", `<input id="cAuto" class="tgl" type="checkbox" ${au.enabled ? "checked" : ""}>`)}
+          ${au.outdated ? `<div class="note warn">O registro aponta para outra pasta do Pitwall. Desligue e ligue de novo para atualizar.</div>` : ""}
+          ${setRow("Atalhos", "Cria o ícone do Pitwall na Área de Trabalho e no Menu Iniciar.", `<button class="btn" id="cLnk">Criar atalhos</button>`)}
+          <div class="sub" id="cLnkOut"></div>`
+          : `<div class="sub">Disponível só no Windows.</div>`}
         </div>
-        <div class="panel">
-          <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Status da gravação</h2><span class="spacer"></span>
+        <div class="set-card"><h2>Jogos</h2>
+          ${setRow("Ler telemetria de", "iRacing: o traçado do mapa é reconstruído pela velocidade e direção, e o engenheiro de setup fica limitado. Le Mans Ultimate ainda não. Mudar aqui exige reiniciar o Pitwall.", sel("xGames", [["auto", "Detectar sozinho (ACC e iRacing)"], ["acc", "Só ACC"], ["iracing", "Só iRacing"]], s.games))}
+        </div>
+      </section>
+
+      <section class="set-sec" data-sec="video">
+        <div class="set-card"><h2>Gravação de vídeo</h2>
+          ${setRow("Gravar vídeo nas sessões", "Grava a tela durante a sessão, sincronizada com a telemetria.", `<input id="cVid" class="tgl" type="checkbox" ${s.video_enabled ? "checked" : ""}>`)}
+          ${setRow("Monitor do jogo", "Qual tela gravar.", sel("cMon", [[0, "1 (principal)"], [1, "2"], [2, "3"], [3, "4"]], s.video_monitor))}
+          ${setRow("Encoder", "Automático tenta NVIDIA, depois AMD e, por último, o processador.", sel("cEnc", [["auto", "Automático"], ["nvenc", "NVIDIA (NVENC)"], ["amf", "AMD (AMF)"], ["cpu", "Processador (720p)"]], s.video_encoder))}
+          ${setRow("Quadros por segundo", "", sel("cFps", [[30, "30"], [60, "60"]], s.video_fps))}
+          ${setRow("Qualidade", "Na normal, 1 hora de vídeo ocupa cerca de 2,7 GB.", sel("cBr", [[4, "Leve (4 Mbps)"], [6, "Normal (6 Mbps)"], [10, "Alta (10 Mbps)"]], s.video_bitrate_mbps))}
+          ${setRow("Manter vídeos das últimas", "Os vídeos ficam em %LOCALAPPDATA%\\Pitwall\\videos.", sel("cKeep", [[5, "5 sessões"], [15, "15 sessões"], [30, "30 sessões"], [100, "100 sessões"]], s.video_keep_sessions))}
+        </div>
+        <div class="set-card"><div class="row" style="margin-bottom:6px"><h2 style="margin:0">Status da gravação</h2><span class="spacer"></span>
             <button class="btn sm" id="cTest">Testar de novo</button></div>
-          <div class="kv"><span>ffmpeg</span><code>${esc(v.ffmpeg || "não encontrado")}</code></div>
           <div class="kv"><span>Encoder em uso</span>${v.probing ? `<span class="sub">testando…</span>` : v.selected ? `<span class="status ok">${v.selected}</span>` : `<span class="status bad">${esc(v.error || "nenhum")}</span>`}</div>
           <div class="kv"><span>Testes</span><div>${tested || `<span class="sub">—</span>`}</div></div>
           ${v.last_error ? `<div class="kv"><span>Último erro</span><code>${esc(v.last_error)}</code></div>` : ""}
-          <div class="note">O teste grava 1,5 s do monitor escolhido sem salvar nada. Se a GPU não funcionar, escolha "Processador".</div>
+          <div class="kv"><span>ffmpeg</span><code>${esc(v.ffmpeg || "não encontrado")}</code></div>
+          <div class="note">O teste grava 1,5 s do monitor escolhido sem salvar nada. Se a GPU não funcionar, escolha “Processador”. Problemas ficam registrados em <code>%LOCALAPPDATA%\\Pitwall\\videos\\video.log</code>.</div>
         </div>
-      </div>${extraSettings(s)}`;
+      </section>
+
+      <section class="set-sec" data-sec="recursos">${extraSettings(s)}</section>
+
+      <section class="set-sec" data-sec="backup">${backupSettings(s)}</section>
+
+      <section class="set-sec" data-sec="update"><div class="set-card" id="updCard"></div></section>
+
+      <section class="set-sec" data-sec="about">${aboutCard(ver)}</section>`;
+    const tab = (() => { try { return localStorage.getItem("pitwall.settab"); } catch (e) { return null; } })();
+    const showTab = (k) => {
+      if (!SET_TABS.some((t) => t[0] === k)) k = "geral";
+      view.querySelectorAll(".set-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === k));
+      view.querySelectorAll(".set-sec").forEach((x) => x.classList.toggle("on", x.dataset.sec === k));
+      try { localStorage.setItem("pitwall.settab", k); } catch (e) { /* ok */ }
+    };
+    view.querySelectorAll(".set-tab").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+    showTab(tab);
+    drawUpdateCard(ver);
     const save = async () => {
       await api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         video_enabled: $("#cVid").checked, video_monitor: +$("#cMon").value, video_encoder: $("#cEnc").value,
@@ -2773,38 +2794,108 @@ async function openOverlay() {
 function extraSettings(s) {
   const sel = (id, opts, val) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${String(val) === String(k) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
   return `
-    <div class="strat" style="margin-top:14px">
-      <div class="panel fuel"><h2>Delta ao vivo</h2>
-        <label>Abrir sozinho quando começar a gravar <input id="xOv" type="checkbox" ${s.overlay_enabled ? "checked" : ""}></label>
-        <label>Comparar contra ${sel("xOvRef", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], s.overlay_reference)}</label>
-        <div class="row" style="margin-top:12px"><button class="btn" id="xOvOpen">Abrir agora</button></div>
-        <div class="note">Uma janelinha sempre por cima do jogo com o delta da volta, o tempo previsto e quantas voltas o
-          combustível aguenta (e quanto falta até a bandeirada na corrida). Use o jogo em “janela sem bordas”. Mostrar/esconder
-          também pelo ícone perto do relógio.</div>
-      </div>
-      <div class="panel fuel"><h2>Setup sugerido</h2>
-        <label>Escolher pela temperatura ${sel("xBasis", [["air", "do ar"], ["track", "da pista"]], s.setup_temp_basis)}</label>
-        <label>Variante preferida <input id="xVar" placeholder="ex.: Safe, Esport (vazio = qualquer)" value="${esc(s.setup_variant_pref)}"></label>
-        <div class="note">Quando a sessão começa, o Pitwall procura na sua biblioteca o setup do carro e da pista mais próximo
-          da temperatura do momento (e do tipo de sessão: classificação ou corrida) e avisa na notificação.</div>
+    <div class="set-card"><h2>Delta ao vivo</h2>
+      ${setRow("Abrir sozinho quando começar a gravar", "Uma janelinha sempre por cima do jogo com o delta da volta, o tempo previsto e quantas voltas o combustível aguenta. Use o jogo em “janela sem bordas”.", `<input id="xOv" class="tgl" type="checkbox" ${s.overlay_enabled ? "checked" : ""}>`)}
+      ${setRow("Comparar contra", "Referência do delta.", sel("xOvRef", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], s.overlay_reference))}
+      ${setRow("Janela do delta", "Também dá para mostrar/esconder pelo ícone perto do relógio.", `<button class="btn" id="xOvOpen">Abrir agora</button>`)}
+    </div>
+    <div class="set-card"><h2>Setup sugerido</h2>
+      ${setRow("Escolher pela temperatura", "Ao começar a sessão, o Pitwall procura na sua biblioteca o setup do carro e da pista mais próximo da temperatura do momento e avisa na notificação.", sel("xBasis", [["air", "do ar"], ["track", "da pista"]], s.setup_temp_basis))}
+      ${setRow("Variante preferida", "Vazio = qualquer.", `<input id="xVar" placeholder="ex.: Safe, Esport" value="${esc(s.setup_variant_pref)}">`)}
+    </div>`;
+}
+function backupSettings(s) {
+  const sel = (id, opts, val) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${String(val) === String(k) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  return `<div class="set-card"><h2>Backup</h2>
+      ${setRow("Backup automático", "Cópia do seu banco de dados (voltas, sessões e configurações).", `<input id="xBk" class="tgl" type="checkbox" ${s.backup_enabled ? "checked" : ""}>`)}
+      ${setRow("A cada", "", sel("xBkH", [[6, "6 horas"], [24, "1 dia"], [72, "3 dias"], [168, "1 semana"]], s.backup_every_hours))}
+      ${setRow("Guardar os últimos", "", sel("xBkK", [[5, "5"], [10, "10"], [20, "20"], [50, "50"]], s.backup_keep))}
+      ${setRow("Pasta", "Vazio = padrão.", `<input id="xBkDir" placeholder="padrão" value="${esc(s.backup_dir)}">`)}
+      <div class="row" style="margin-top:14px"><button class="btn primary" id="xBkRun">Fazer backup agora</button><span class="sub" id="xBkOut"></span></div>
+      <div id="xBkList" style="margin-top:12px"></div>
+    </div>`;
+}
+
+// ---- peças das configurações
+const SET_ICON = (d) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const SET_TABS = [
+  ["geral", "Geral", SET_ICON('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>')],
+  ["video", "Vídeo", SET_ICON('<rect x="2" y="5" width="14" height="14" rx="3"/><path d="M16 10l6-3v10l-6-3"/>')],
+  ["recursos", "Recursos", SET_ICON('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>')],
+  ["backup", "Backup", SET_ICON('<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>')],
+  ["update", "Atualização", SET_ICON('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>')],
+  ["about", "Sobre", SET_ICON('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>')],
+];
+function setRow(title, desc, ctl) {
+  return `<div class="set-row"><div class="set-txt"><b>${title}</b>${desc ? `<small>${desc}</small>` : ""}</div><div class="set-ctl">${ctl}</div></div>`;
+}
+function aboutCard(ver) {
+  return `
+    <div class="set-card about">
+      <div class="about-hero">
+        <svg viewBox="0 0 32 32" width="56" height="56" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="22" cy="22" r="2" fill="currentColor"/></svg>
+        <div><h2 style="margin:0">Pitwall</h2><div class="sub">Telemetria, vídeo e análise de voltas para ACC e iRacing</div>
+          <span class="tag ok" style="margin-top:8px">Versão ${esc(ver.current === "dev" ? "de desenvolvimento" : ver.current)}</span></div>
       </div>
     </div>
-    <div class="strat" style="margin-top:14px">
-      <div class="panel fuel"><h2>Jogos</h2>
-        <label>Ler telemetria de ${sel("xGames", [["auto", "Detectar sozinho (ACC e iRacing)"], ["acc", "Só ACC"], ["iracing", "Só iRacing"]], s.games)}</label>
-        <div class="note">iRacing: o traçado no mapa é reconstruído pela velocidade e direção (o jogo não informa a posição),
-          e o engenheiro de setup fica limitado (o iRacing não dá o ângulo de deriva ao vivo). Le Mans Ultimate ainda não.
-          Mudar aqui exige reiniciar o Pitwall.</div>
+    <div class="set-card"><h2>Desenvolvedor</h2>
+      <div class="dev">
+        <div class="dev-av">H</div>
+        <div><b>Hygor Rocha</b><div class="sub">Criador e desenvolvedor do Pitwall</div></div>
       </div>
-      <div class="panel fuel"><h2>Backup</h2>
-        <label>Backup automático <input id="xBk" type="checkbox" ${s.backup_enabled ? "checked" : ""}></label>
-        <label>A cada ${sel("xBkH", [[6, "6 horas"], [24, "1 dia"], [72, "3 dias"], [168, "1 semana"]], s.backup_every_hours)}</label>
-        <label>Guardar os últimos ${sel("xBkK", [[5, "5"], [10, "10"], [20, "20"], [50, "50"]], s.backup_keep)}</label>
-        <label>Pasta <input id="xBkDir" placeholder="padrão" value="${esc(s.backup_dir)}"></label>
-        <div class="row" style="margin-top:12px"><button class="btn" id="xBkRun">Fazer backup agora</button><span class="sub" id="xBkOut"></span></div>
-        <div id="xBkList" style="margin-top:10px"></div>
+      <div class="about-links">
+        <a class="btn" href="https://github.com/devhygor" target="_blank" rel="noopener">GitHub · devhygor</a>
+        <a class="btn" href="https://github.com/devhygor/pitwall" target="_blank" rel="noopener">Código do projeto</a>
+        <a class="btn" href="https://pitwall.hygor.com.br/" target="_blank" rel="noopener">Site da equipe</a>
+        <a class="btn" href="https://github.com/devhygor/pitwall/issues" target="_blank" rel="noopener">Reportar um problema</a>
       </div>
+    </div>
+    <div class="set-card"><h2>Seus dados</h2>
+      <div class="kv"><span>Pasta de dados</span><code>%LOCALAPPDATA%\\Pitwall</code></div>
+      <div class="kv"><span>Vídeos</span><code>%LOCALAPPDATA%\\Pitwall\\videos</code></div>
+      <div class="note">Tudo fica no seu computador. Só vão para a nuvem as voltas que você compartilha com a sua equipe. Atualizar o app não apaga nada disso.</div>
     </div>`;
+}
+async function drawUpdateCard(ver) {
+  const card = $("#updCard");
+  if (!card) return;
+  const paint = (u, msg = "") => {
+    const dl = u.download || {};
+    card.innerHTML = `<h2>Atualização do app</h2>
+      <div class="upd-top">
+        <div><span class="sub">Versão instalada</span><div class="upd-v">${esc(u.current === "dev" ? "desenvolvimento" : u.current)}</div></div>
+        <div><span class="sub">Última versão publicada</span><div class="upd-v">${esc(u.latest || "—")}</div></div>
+        <span class="spacer"></span>
+        ${u.available ? `<span class="tag pw">Nova versão disponível</span>` : u.current === "dev" ? `<span class="tag">Código-fonte</span>` : u.latest ? `<span class="tag ok">Você está em dia</span>` : ""}
+      </div>
+      ${u.error ? `<div class="note warn">Não consegui consultar o GitHub: ${esc(u.error)}</div>` : ""}
+      ${u.available && u.notes ? `<div class="note" style="white-space:pre-wrap">${esc(u.notes)}</div>` : ""}
+      <div class="row" style="margin-top:14px">
+        ${u.available && u.frozen ? `<button class="btn primary" id="updGo">${dl.state === "downloading" ? `Baixando ${dl.pct || 0}%` : dl.state === "installing" ? "Instalando…" : "Atualizar agora"}</button>` : ""}
+        ${u.available && !u.frozen ? `<a class="btn primary" href="${esc(u.page || "#")}" target="_blank" rel="noopener">Abrir página da versão</a><span class="sub">Rodando pelo código-fonte: atualize com git pull.</span>` : ""}
+        <button class="btn" id="updChk">Verificar agora</button><span class="sub" id="updMsg">${esc(msg)}</span>
+      </div>
+      <div class="note">Atualizar mantém suas sessões, vídeos e configurações. O instalador fecha o Pitwall e abre de novo no fim.</div>`;
+    $("#updChk").onclick = async () => {
+      $("#updMsg").textContent = "Verificando…";
+      try { const n = await api("/api/update?force=true"); paint(n, n.available ? "" : "Nenhuma versão nova."); }
+      catch (e) { $("#updMsg").textContent = e.message; }
+    };
+    const go = $("#updGo");
+    if (go) go.onclick = async () => {
+      go.disabled = true;
+      try { await api("/api/update/install", { method: "POST" }); } catch (e) { $("#updMsg").textContent = e.message; go.disabled = false; return; }
+      const t = setInterval(async () => {
+        try {
+          const n = await api("/api/update");
+          if (current.name !== "settings") return clearInterval(t);
+          if (n.download && n.download.state === "error") { clearInterval(t); paint(n, n.download.error); }
+          else paint(n);
+        } catch (e) { clearInterval(t); }
+      }, 800);
+    };
+  };
+  paint(ver);
 }
 function bindExtraSettings(draw) {
   const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
@@ -3168,6 +3259,8 @@ async function checkUpdate() {
   let u;
   try { u = await api("/api/update"); } catch (e) { return; }
   if (!u.available) return;
+  const gear = document.querySelector('[data-nav="settings"]');
+  if (gear && !gear.querySelector(".nav-dot")) gear.insertAdjacentHTML("beforeend", '<i class="nav-dot" title="Nova versão disponível"></i>');
   const b = document.createElement("div");
   b.className = "update-bar";
   b.innerHTML = `<span>Nova versão do Pitwall disponível: <b>${esc(u.latest)}</b> (você está na ${esc(u.current)})</span>
