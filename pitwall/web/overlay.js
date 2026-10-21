@@ -467,11 +467,11 @@ function standingsOverlay() {
     };
     const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || (rows.some((r) => r.cls) && !multi)) && (c !== "car" || rows.some((r) => r.brand)));
     const bestAll = Math.min(...rows.map((r) => r.best_ms || 1e12));
-    const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", car: cfg.carstyle === "logo" ? "58px" : cfg.carstyle === "text" ? "92px" : "118px" };
+    const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", car: cfg.carstyle === "logo" ? "64px" : cfg.carstyle === "text" ? "92px" : "118px" };
     const tpl = cols.map((c) => W[c] || "74px").join(" ");
     const clsPos = multi && cfg.classpos;
     const rowHtml = (r) => cols.map((c, ci) => {
-      let v = "", cls = COLS[c][1], style = "";
+      let v = "", cls = COLS[c][1] + (c === "car" && cfg.carstyle === "logo" ? " mid" : ""), style = "";
       if (c === "pos") v = clsPos ? r.cls_pos : r.pos;
       else if (c === "number") v = r.number != null ? "#" + r.number : "";
       else if (c === "name") v = nameOf(r).replace(/</g, "&lt;");
@@ -507,7 +507,7 @@ function standingsOverlay() {
       bar = `<div class="st-bar">${t}<span class="st-lap">${lap}</span><span class="st-cnt"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.6"/></svg><b class="num">${H.count || rows.length}</b></span></div>`;
     } else bar = `<div class="title"><span>${s.race ? "Corrida" : "Classificação"}</span><span>${rows.length} pilotos</span></div>`;
     let h = bar + `<div class="grid" style="grid-template-columns:${tpl}">`;
-    h += cols.map((c) => `<div class="cell hd ${COLS[c][1].includes("r") ? "r" : COLS[c][1].includes("c") ? "pos" : ""}">${COLS[c][0]}</div>`).join("");
+    h += cols.map((c) => `<div class="cell hd ${COLS[c][1].includes("r") ? "r" : COLS[c][1].includes("c") ? "pos" : c === "car" && cfg.carstyle === "logo" ? "mid" : ""}">${COLS[c][0]}</div>`).join("");
     const emit = (list) => { for (const r of list) { if (!r) { h += `<div class="sep" style="grid-column:1/-1"></div>`; continue; } h += rowHtml(r); } };
     if (multi) {
       for (const g of classes) {

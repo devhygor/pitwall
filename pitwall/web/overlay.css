@@ -123,5 +123,10 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .carchip.plain b { font-size: 12px; } .carchip.plain i { opacity: .6; }
 .carchip.sym.plain { padding: 0; }
 .carchip.sym.plain .logo { width: 26px; height: 22px; }
-.carlogo.color { height: 22px; width: auto; max-width: 48px; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); }
-.carchip.sym.plain .carlogo.color { height: 26px; max-width: 52px; }
+/* todo logotipo ocupa uma "vaga" de tamanho fixo e fica centralizado nela: os mais compridos não empurram os outros */
+.carlogo.color { width: 34px; height: 24px; object-fit: contain; object-position: center; display: block; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .55)); }
+.carchip.sym.plain .carlogo.color { width: 46px; height: 26px; }
+.carchip.sym.plain .logo { width: 46px; height: 24px; }
+.carchip.withsym .logo { width: 34px; height: 24px; }
+.carchip.sym { width: 100%; justify-content: center; }
+.stand .mid { justify-content: center; }
