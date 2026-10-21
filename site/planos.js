@@ -138,7 +138,18 @@ async function renderAccount() {
   let a;
   try { a = await rpc("my_account"); } catch (e) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">${esc(e.message)}</div></div></section>`; return; }
   myPlan = a; window.PITWALL_NO_ADS = (a.features || []).includes("no_ads");
+  // voltou do pagamento: espera o aviso do Asaas chegar e libera o plano na tela sozinho
+  if (/[?&]pago=1/.test(location.hash) && a.plan === "free" && !(window._pagoTries > 12)) {
+    window._pagoTries = (window._pagoTries || 0) + 1;
+    view.innerHTML = `<section class="sect"><div class="wrap acct"><span class="eyebrow">Pagamento</span><h1 class="plans-h">Recebemos o seu pagamento!</h1>
+      <p class="lede">Estamos liberando o seu plano, leva alguns segundos…</p></div></section>`;
+    setTimeout(() => { if (location.hash.startsWith("#/conta")) renderAccount(); }, 2500);
+    return;
+  }
+  if (/[?&]pago=1/.test(location.hash)) { window._pagoTries = 0; history.replaceState(null, "", "#/conta"); }
   const paid = a.plan !== "free";
+  // a validade mostrada é a do que foi pago (o sistema dá 3 dias de tolerância por trás, sem aparecer)
+  if (a.source === "subscription" && a.ends_at) a.ends_at = new Date(new Date(a.ends_at).getTime() - 3 * 86400000).toISOString();
   const left = days(a.ends_at);
   const far = a.ends_at && new Date(a.ends_at).getFullYear() > 2100;
   const { data: pays } = await sb.from("payments").select("*").order("created_at", { ascending: false }).limit(20);

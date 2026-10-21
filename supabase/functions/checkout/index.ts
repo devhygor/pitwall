@@ -83,22 +83,35 @@ Deno.serve(async (req) => {
   if ((price.starts_at && new Date(price.starts_at) > now) || (price.ends_at && new Date(price.ends_at) < now)) return json({ error: "preco_fora_do_prazo" }, 400);
 
   try {
+    // cliques repetidos em "Assinar" não podem empilhar cobranças: cancela as assinaturas ainda não pagas deste e-mail
+    const { data: stale } = await admin.from("subscriptions").select("id, provider_subscription_id")
+      .eq("email", email).eq("status", "pending").eq("provider", "asaas");
+    for (const o of stale || []) {
+      if (o.provider_subscription_id) { try { await asaas(`/subscriptions/${o.provider_subscription_id}`, { method: "DELETE" }); } catch { /* já não existe */ } }
+      await admin.from("subscriptions").update({ status: "canceled" }).eq("id", o.id);
+    }
     const { data: sub, error: se } = await admin.from("subscriptions").insert({
       email, user_id: u.user.id, name, doc, plan_code: price.plan_code, period: price.period, provider: "asaas", status: "pending",
     }).select("id").single();
     if (se) throw new Error(se.message);
 
-    const customer = await asaas("/customers", { method: "POST", body: JSON.stringify({ name, email, cpfCnpj: doc, externalReference: sub.id }) });
+    // reaproveita o cliente do Asaas se o mesmo CPF/CNPJ já assinou antes (evita cliente duplicado)
+    let customer: any = null;
+    try { customer = (await asaas(`/customers?cpfCnpj=${doc}&limit=1`))?.data?.[0] || null; } catch { /* cria novo */ }
+    if (!customer) customer = await asaas("/customers", { method: "POST", body: JSON.stringify({ name, email, cpfCnpj: doc, externalReference: sub.id }) });
     const today = new Date().toISOString().slice(0, 10);
-    const subscription = await asaas("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify({
-        customer: customer.id, billingType: "UNDEFINED", value: price.amount_cents / 100, nextDueDate: today,
-        cycle: price.period === "year" ? "YEARLY" : "MONTHLY",
-        description: `Pitwall ${price.plan_code === "team" ? "Equipe" : "Pro"} (${price.period === "year" ? "anual" : "mensal"})`,
-        externalReference: sub.id,
-      }),
-    });
+    const subBody: Record<string, unknown> = {
+      customer: customer.id, billingType: "UNDEFINED", value: price.amount_cents / 100, nextDueDate: today,
+      cycle: price.period === "year" ? "YEARLY" : "MONTHLY",
+      description: `Pitwall ${price.plan_code === "team" ? "Equipe" : "Pro"} (${price.period === "year" ? "anual" : "mensal"})`,
+      externalReference: sub.id,
+    };
+    let subscription;
+    try {   // depois de pagar, o Asaas devolve a pessoa para a conta do Pitwall
+      subscription = await asaas("/subscriptions", { method: "POST", body: JSON.stringify({ ...subBody, callback: { successUrl: "https://pitwall.hygor.com.br/#/conta?pago=1", autoRedirect: true } }) });
+    } catch {   // se o Asaas recusar o redirecionamento (domínio não cadastrado), cria sem ele
+      subscription = await asaas("/subscriptions", { method: "POST", body: JSON.stringify(subBody) });
+    }
     await admin.from("subscriptions").update({ provider_customer_id: customer.id, provider_subscription_id: subscription.id }).eq("id", sub.id);
 
     // link da primeira cobrança

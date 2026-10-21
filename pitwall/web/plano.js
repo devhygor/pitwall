@@ -22,7 +22,8 @@ async function renderPlano() {
   const paid = s.plan !== "free";
   const fmt = (iso) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" }) : "";
   const endsFar = s.ends_at && new Date(s.ends_at).getFullYear() > 2100;
-  const until = !paid ? "" : endsFar ? "Sem data para acabar." : s.ends_at ? `Válido até ${fmt(s.ends_at)}.` : "";
+  const shownEnd = s.ends_at && s.source === "subscription" ? new Date(new Date(s.ends_at).getTime() - 3 * 86400000).toISOString() : s.ends_at;
+  const until = !paid ? "" : endsFar ? "Sem data para acabar." : shownEnd ? `Válido até ${fmt(shownEnd)}.` : "";
   view.innerHTML = `
     <div class="head"><div><h1>Plano</h1><div class="sub">O que o seu plano libera e como mudar.</div></div></div>
     <div class="set-sec on">
