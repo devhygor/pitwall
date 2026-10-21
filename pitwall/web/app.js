@@ -3067,18 +3067,20 @@ async function openOverlay() {
 }
 
 // ---------------------------------------------------------------- Overlays (ferramenta completa: palco + um overlay por vez)
-const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["delta", "Delta"]];
-const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", delta: "Delta da volta" };
+const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["tyres", "Pneus"], ["delta", "Delta"]];
+const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", tyres: "Pneus", delta: "Delta da volta" };
 const OV_ICON = {
   map: '<path d="M4 15c3-9 6 3 9-5s5 2 7-2"/><circle cx="19" cy="6" r="1.6"/>',
   pedals: '<path d="M3 20V9M9 20V5M15 20v-8M21 20V8"/>',
   standings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="7" cy="6" r=".6"/>',
   delta: '<path d="M12 4l8 15H4z"/>',
+  tyres: '<rect x="7" y="3" width="10" height="18" rx="4"/><path d="M7 9h10M7 15h10"/>',
 };
 const OV_MODE_TXT = { off: "Desligado", game: "Só na pista", always: "Sempre aberto" };
 const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
   ["interval", "Intervalo p/ o da frente"], ["gap_leader", "Dif. p/ o líder"], ["last", "Última volta"], ["best", "Melhor volta"],
   ["laps", "Voltas"], ["pit", "Box"]];
+OV_COLS.splice(3, 0, ["car", "Carro (abreviado)"]);
 
 // peças da tela de opções
 const ovChip = (n, k, label, v, tip) => `<button type="button" class="ovchip ${v ? "on" : ""}" data-ov="${n}" data-k="${k}" data-chip="1" title="${esc(tip || "")}"><i></i>${label}</button>`;
@@ -3110,9 +3112,25 @@ function ovPanel(n, S) {
     g += ovGroup("Gráfico", ovSlider(n, "seconds", "Janela de tempo", c.seconds, 3, 20, 1, " s"));
   } else if (n === "standings") {
     g += ovGroup("Quais pilotos", ovSeg(n, "view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], c.view) + ovSlider(n, "rows", "Linhas", c.rows, 3, 30, 1, ""));
+    g += ovGroup("Cabeçalho e classes", `<div class="ovchips">${ovChip(n, "header", "Tempo e volta", c.header, "Tempo restante da sessão, volta atual e número de pilotos")}
+      ${ovChip(n, "group", "Separar por classe", c.group, "Quando há mais de uma classe de carro (GT3, GT4…)")}
+      ${ovChip(n, "classpos", "Posição na classe", c.classpos, "Com as classes separadas, mostra a posição dentro da classe")}</div>` +
+      ovSlider(n, "others", "Linhas das outras classes", c.others, 1, 10, 1, ""));
+    g += ovGroup("Carro (coluna Carro)", ovSeg(n, "carstyle", [["both", "Símbolo e texto"], ["logo", "Só o símbolo"], ["text", "Só o texto"]], c.carstyle),
+      "marcas sem símbolo (Lexus, Alpine, Ginetta) aparecem em texto");
     g += ovGroup("Nome do piloto", ovSeg(n, "name", [["short", "Sigla"], ["last", "Sobrenome"], ["full", "Nome completo"]], c.name));
     g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => `<button type="button" class="ovchip ${c.cols.includes(k) ? "on" : ""}" data-col="${k}"><i></i>${t}</button>`).join("")}</div>
       <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um.</p>`);
+  } else if (n === "tyres") {
+    g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "temp", "Temperatura", c.temp, "Temperatura do núcleo do pneu; a cor mostra se está fria, ideal ou quente")}
+      ${ovChip(n, "press", "Pressão", c.press, "A cor mostra se está abaixo, dentro ou acima da faixa ideal")}
+      ${ovChip(n, "brake", "Freio", c.brake, "Barra com a temperatura do disco de freio de cada roda")}
+      ${ovChip(n, "wear", "Desgaste", c.wear, "Quanto resta de cada pneu (o ACC não informa o desgaste; o iRacing sim)")}
+      ${ovChip(n, "compound", "Composto", c.compound)}</div>`);
+    g += ovGroup("Unidade da pressão", ovSeg(n, "punit", [["psi", "psi"], ["bar", "bar"]], c.punit));
+    g += ovGroup("Faixa ideal", ovSlider(n, "tmin", "Temp. mínima", c.tmin, 40, 120, 1, " °C") + ovSlider(n, "tmax", "Temp. máxima", c.tmax, 50, 140, 1, " °C") +
+      ovSlider(n, "pmin", "Pressão mínima", c.pmin, 20, 35, 0.1, " psi") + ovSlider(n, "pmax", "Pressão máxima", c.pmax, 20, 35, 0.1, " psi"),
+      "abaixo = azul, dentro = verde, acima = vermelho");
   } else if (n === "delta") {
     g += ovGroup("Comparar contra", ovSeg("", "ref", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], S.overlay_reference));
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "predicted", "Tempo previsto", c.predicted)}${ovChip(n, "fuel", "Combustível", c.fuel, "Voltas restantes e quanto falta/sobra até o fim")}</div>`);
@@ -3130,7 +3148,7 @@ async function renderOverlays() {
   if (current.name !== "overlays") return;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const sw = screen.width || 1920, sh = screen.height || 1080;
-  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36] };
+  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36], tyres: [24, sh - 330] };
   let sel = localStorage.getItem("pitwall.ovSel");
   if (!OV_NAMES.some((x) => x[0] === sel)) sel = "map";
   view.innerHTML = `<div class="ovpage">

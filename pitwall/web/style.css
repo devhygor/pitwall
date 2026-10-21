@@ -905,7 +905,7 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
 @media (max-width: 1250px) { .ovpage { grid-template-columns: 1fr; } .ov-left { position: static; } }
 
 /* overlays: escolher um por vez */
-.ov-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.ov-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 12px; }
 .ovtile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 11px 13px; cursor: pointer; transition: border-color .15s, background .15s; display: flex; flex-direction: column; gap: 1px; }
 .ovtile:hover { border-color: #3a4352; }
 .ovtile.sel { border-color: var(--accent, #f2a93b); background: rgba(242, 169, 59, .08); }

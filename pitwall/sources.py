@@ -62,6 +62,11 @@ class Frame:
     cars: list = field(default_factory=list)
     player_id: int = -1                        # índice do carro do jogador dentro de `cars`
     cars_status: str = ""                      # por que a lista de carros está vazia (ex.: sem conexão)
+    tyre_wear: tuple = ()                      # desgaste de cada pneu, 0 (novo) a 1 (gasto); vazio = o jogo não informa
+    tyre_compound: str = ""
+    pad_life: tuple = ()                       # vida restante das pastilhas (mm) no ACC
+    session_total_ms: float = -1.0             # duração total da sessão (ms), -1 = desconhecida
+    total_laps: int = 0                        # voltas da corrida (0 = sessão por tempo ou desconhecido)
     extra: dict = field(default_factory=dict)
 
 
@@ -116,7 +121,11 @@ class ACCSource:
             if self.udp is not None:
                 f.cars = self.udp.snapshot()
                 f.cars_status = self.udp.status
+                ss = self.udp.session or {}
+                if ss.get("end", 0) and ss["end"] > 0 and ss.get("time", -1) >= 0:
+                    f.session_total_ms = float(ss["time"] + ss["end"])
                 f.player_id = getattr(sm.Graphics, "player_car_id", -1)
+            f.total_laps = int(getattr(sm.Graphics, "number_of_laps", 0) or 0)
             yield f
             time.sleep(period)
 
@@ -183,7 +192,7 @@ class ACCSource:
             road_temp=p.road_temp,
             grip=getattr(g.track_grip_status, "name", "").replace("ACC_", "").title(),
             session_time_left=float(g.session_time_left or -1),
-            flags=flags,
+            flags=flags, tyre_compound=clean(getattr(g, "tyre_compound", "")), pad_life=w(p.pad_life),
         )
 
 
@@ -282,6 +291,8 @@ class IRacingSource:
         self._n += 1
         if self._n % 6 == 1:
             self._cars = self._field(ir, drivers, me)
+        tt = ir["SessionTimeTotal"]
+        sl = ir["SessionLapsTotal"]
         sf = int(ir["SessionFlags"] or 0)
         yellow = bool(sf & (0x8 | 0x100 | 0x4000 | 0x8000))
         flags = {"yellow": [yellow] * 3, "red": bool(sf & 0x10), "green": bool(sf & 0x4), "white": bool(sf & 0x2),
@@ -303,8 +314,27 @@ class IRacingSource:
             air_temp=float(ir["AirTemp"] or 0), road_temp=float(ir["TrackTempCrew"] or ir["TrackTemp"] or 0),
             g_lat=float(ir["LatAccel"] or 0) / 9.81,
             session_time_left=float(tl) * 1000 if tl and tl > 0 else -1.0, game="iracing",
-            flags=flags, cars=self._cars, player_id=me,
+            flags=flags, cars=self._cars, player_id=me, **self._tyres(ir),
+            session_total_ms=float(tt) * 1000 if tt and 0 < tt < 1e7 else -1.0,
+            total_laps=int(sl) if sl and 0 < sl < 10000 else 0,
         )
+
+    @staticmethod
+    def _tyres(ir) -> dict:
+        """Temperatura (média das 3 faixas), pressão e desgaste de cada pneu."""
+        def g(k):
+            try:
+                v = ir[k]
+            except Exception:  # noqa: BLE001
+                v = None
+            return float(v) if v is not None else 0.0
+        temp, press, wear = [], [], []
+        for w in ("LF", "RF", "LR", "RR"):
+            temp.append(sum(g(f"{w}temp{z}") for z in ("CL", "CM", "CR")) / 3)
+            press.append(g(f"{w}pressure") * 0.145038)                 # kPa -> psi
+            wr = [g(f"{w}wear{z}") for z in ("L", "M", "R")]
+            wear.append(1 - sum(wr) / 3 if any(wr) else 0.0)           # iRacing informa o que resta (1 = novo)
+        return {"tyre_temp": tuple(temp), "tyre_press": tuple(press), "tyre_wear": tuple(wear)}
 
     @staticmethod
     def _field(ir, drivers, me) -> list:
@@ -324,11 +354,13 @@ class IRacingSource:
             if surf and i < len(surf) and surf[i] == -1:      # fora do mundo (desconectado/no box)
                 continue
             name = str(d.get("UserName") or "")
+            from .carinfo import short_car
+            brand, model = short_car(d.get("CarScreenNameShort") or d.get("CarScreenName") or d.get("CarPath"))
             ms = lambda v: int(v * 1000) if v and v > 0 else None
             out.append({"id": i, "first": name.split(" ")[0], "last": " ".join(name.split(" ")[1:]) or name,
                         "short": (name.split(" ")[-1] or name)[:3].upper(), "number": d.get("CarNumber"),
                         "team": d.get("TeamName") or "", "cls": d.get("CarClassShortName") or "",
-                        "cls_color": d.get("CarClassColor"), "spline": max(0.0, float(pct[i])), "laps": max(0, int(lap[i]) - 1),
+                        "cls_color": d.get("CarClassColor"), "brand": brand, "model": model, "spline": max(0.0, float(pct[i])), "laps": max(0, int(lap[i]) - 1),
                         "pos": int(pos[i]) if i < len(pos) else 0, "cup_pos": int(cpos[i]) if i < len(cpos) else 0,
                         "best_ms": ms(best[i]) if i < len(best) else None, "last_ms": ms(last[i]) if i < len(last) else None,
                         "pit": bool(pit[i]) if i < len(pit) else False})
@@ -466,9 +498,14 @@ class _DemoField:
         self.rng = rng
         self.length = length
         self.cars = []
+        models = [("BMW", "M4"), ("FER", "296"), ("POR", "992 R"), ("AUD", "R8 Evo2"), ("MER", "AMG"), ("LAM", "Evo2")]
         for i, (a, b) in enumerate(self.NAMES):
+            gt4 = i % 4 == 3                                         # alguns carros de outra classe, mais lentos
+            br, md = ("BMW", "M4 GT4") if gt4 else models[i % len(models)]
             self.cars.append({"id": i + 1, "first": a, "last": b, "short": b[:3].upper(), "number": 10 + i * 7,
-                              "team": "", "cls": "GT3", "pace": rng.uniform(0.985, 1.045), "dist": -0.012 * (i + 1) + rng.uniform(-0.2, 0.9),
+                              "team": "", "cls": "GT4" if gt4 else "GT3", "brand": br, "model": md,
+                              "cls_color": "#3d8bff" if gt4 else "#e8505b",
+                              "pace": rng.uniform(1.07, 1.12) if gt4 else rng.uniform(0.985, 1.045), "dist": -0.012 * (i + 1) + rng.uniform(-0.2, 0.9),
                               "best_ms": None, "last_ms": None, "laps_done": 0, "pit": False, "lap_t": 0.0})
         self.base = None
 
@@ -484,10 +521,11 @@ class _DemoField:
                 c["best_ms"] = c["last_ms"] if not c["best_ms"] else min(c["best_ms"], c["last_ms"])
                 c["lap_t"] = 0.0
             out.append({"id": c["id"], "first": c["first"], "last": c["last"], "short": c["short"], "number": c["number"],
-                        "team": c["team"], "cls": c["cls"], "spline": c["dist"] % 1.0 if c["dist"] > 0 else (c["dist"] % 1.0),
+                        "team": c["team"], "cls": c["cls"], "brand": c["brand"], "model": c["model"], "cls_color": c["cls_color"], "spline": c["dist"] % 1.0 if c["dist"] > 0 else (c["dist"] % 1.0),
                         "laps": max(0, int(c["dist"])), "pos": 0, "cup_pos": 0, "best_ms": c["best_ms"],
                         "last_ms": c["last_ms"], "pit": c["pit"], "_dist": c["dist"]})
         out.append({"id": 0, "first": "Piloto", "last": "Demo", "short": "DEM", "number": 99, "team": "", "cls": "GT3",
+                    "brand": "MCL", "model": "720S Evo", "cls_color": "#e8505b",
                     "spline": me_dist % 1.0, "laps": int(me_dist), "pos": 0, "cup_pos": 0,
                     "best_ms": my_best or None, "last_ms": my_last or None, "pit": False, "_dist": me_dist})
         for i, c in enumerate(sorted(out, key=lambda c: -c["_dist"])):
@@ -553,6 +591,7 @@ class DemoSource:
         lock_corner = None       # trecho da volta onde vai travar a roda
         stint_laps = 0           # voltas no stint atual (o pneu esquenta aos poucos)
         tyre = [70.0] * 4
+        bt = [400.0, 330.0]      # temperatura dos freios (dianteiro, traseiro)
         wall0 = time.time()
         field_ = _DemoField(self.rng, tr.length)
         while completed < self.laps:
@@ -595,6 +634,8 @@ class DemoSource:
             steer = max(-1, min(1, tr.curv[i] * tr.curv_sign[i] * 140))
             gear = 2 + min(5, int(v / 48))
             rpm = int(4000 + (v % 48) / 48 * 3400)
+            bt[0] += ((260 + 700 * brake) - bt[0]) * 0.02
+            bt[1] += ((220 + 480 * brake) - bt[1]) * 0.02
             for k in range(4):
                 tyre[k] += ((82 + (4 if k < 2 else 0) + stint_laps * 0.6) - tyre[k]) * 0.0005
             # equilíbrio simulado: carro com subesterço em curva lenta, traseira solta
@@ -654,9 +695,12 @@ class DemoSource:
                 air_temp=22, road_temp=29, grip="Optimum",
                 wall=time.time() if self.realtime else wall0 + t,
                 slip_angle=(saf, saf, sar, sar), slip_ratio=(srf, srf * 0.9, srr, srr),
-                g_lat=g_lat, brake_temp=(560, 555, 420, 418), susp=(0.04, 0.04, 0.05, 0.05),
+                g_lat=g_lat, brake_temp=(bt[0], bt[0] - 6, bt[1], bt[1] - 3), susp=(0.04, 0.04, 0.05, 0.05),
+                tyre_wear=tuple(min(0.9, 0.012 * (stint_laps + d) + (0.004 if k < 2 else 0)) for k in range(4)),
+                tyre_compound="dry_compound", pad_life=(24.0, 24.0, 22.0, 22.0),
                 session_time_left=max(0.0, 20 * 60_000 - t * 1000) if self.session_type == "Race" else -1.0,
                 flags=_demo_flags(t), cars=field_.step(dt, completed + d, best, last, lap_ms), player_id=0,
+                session_total_ms=20 * 60_000.0 if self.session_type == "Race" else -1.0, total_laps=self.laps if self.session_type == "Race" else 0,
             )
             if self.realtime:
                 time.sleep(dt / self.speed)

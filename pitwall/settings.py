@@ -15,8 +15,11 @@ OVERLAY_DEFAULTS = {
             "sectors": True},
     "pedals": {**_BASE, "bg": 25, "seconds": 8, "steer": False, "gear": True, "coast": True, "bars": True, "speed": True},
     "standings": {**_BASE, "bg": 25, "rows": 10, "view": "around", "name": "short",
-                  "cols": ["pos", "number", "name", "vs_me", "last", "best"]},
+                  "cols": ["pos", "number", "name", "car", "vs_me", "last", "best"],
+                  "group": True, "classpos": True, "header": True, "others": 3, "carstyle": "both"},
     "delta": {**_BASE, "bg": 35, "fuel": True, "predicted": True},
+    "tyres": {**_BASE, "bg": 25, "temp": True, "press": True, "brake": True, "wear": True, "compound": True, "punit": "psi",
+              "tmin": 80, "tmax": 100, "pmin": 26.5, "pmax": 28.0},
 }
 
 

@@ -112,7 +112,8 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
     ov: dict = {}                      # nome -> {"win", "nat": (w, h) tamanho natural da página}
     ov_lock = threading.RLock()
     ov_save = {}
-    TITLES = {"map": "Pitwall Mapa", "pedals": "Pitwall Pedais", "standings": "Pitwall Participantes", "delta": "Pitwall Delta"}
+    TITLES = {"map": "Pitwall Mapa", "pedals": "Pitwall Pedais", "standings": "Pitwall Participantes", "delta": "Pitwall Delta",
+              "tyres": "Pitwall Pneus"}
 
     def ov_cfg(name):
         from .settings import merged_overlays
@@ -124,7 +125,7 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
         except Exception:  # noqa: BLE001
             sw, sh = 1920, 1080
         return {"map": (sw - 460, 60), "pedals": (int(sw / 2 - 260), sh - 260), "standings": (24, 180),
-                "delta": (int(sw / 2 - 190), 36)}[name]
+                "delta": (int(sw / 2 - 190), 36), "tyres": (24, sh - 330)}[name]
 
     def ov_glass(name, win):
         """Fundo realmente transparente (vidro do Windows) e, fora do modo de edição, cliques atravessam."""

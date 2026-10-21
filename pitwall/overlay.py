@@ -155,7 +155,7 @@ class OverlayHub:
                 "corners": [{**c, "name": names.get(str(c["n"]), "")} for c in corners]}
 
     def snapshot(self, since: int = 0, parts: str = "all") -> dict:
-        want = set(parts.split(",")) if parts != "all" else {"pedals", "flags", "cars", "delta"}
+        want = set(parts.split(",")) if parts != "all" else {"pedals", "flags", "cars", "delta", "tyres"}
         now = time.monotonic()
         with self._lock:
             f = self.frame
@@ -172,6 +172,10 @@ class OverlayHub:
                                   "car": f.car, "in_pit": f.in_pit_lane, "valid": f.is_valid_lap, "pos": f.norm_pos}
                 if "flags" in want:
                     out["flags"] = f.flags
+                if "tyres" in want:
+                    out["tyres"] = {"temp": [round(v, 1) for v in f.tyre_temp], "press": [round(v, 2) for v in f.tyre_press],
+                                    "brake": [round(v) for v in f.brake_temp], "wear": [round(v, 3) for v in f.tyre_wear] or None,
+                                    "pad": [round(v, 1) for v in f.pad_life] or None, "compound": f.tyre_compound, "game": f.game}
                 if "cars" in want:
                     out["standings"] = self._standings(f)
                     out["me"] = {"spline": f.norm_pos, "x": f.x, "z": f.z, "id": f.player_id}
@@ -186,9 +190,15 @@ class OverlayHub:
     # ---- participantes -----------------------------------------------------------
     @staticmethod
     def _standings(f) -> dict:
+        from .carinfo import acc_car
         cars = f.cars
         if not cars:
             return {"rows": [], "status": f.cars_status or "sem dados dos outros pilotos neste jogo/sessão"}
+        for c in cars:
+            if c.get("model") is not None and not c.get("brand"):
+                info = acc_car(c["model"])
+                c["brand"], c["cls"], c["cls_color"] = info["brand"], c.get("cls") or info["cls"], c.get("cls_color") or info["cls_color"]
+                c["model"] = info["model"] if info["model"] else c["model"]
         race = (f.session_type or "").lower().startswith("race")
         me = next((c for c in cars if c.get("id") == f.player_id), None)
         for c in cars:
@@ -203,6 +213,7 @@ class OverlayHub:
             ahead = order[i - 1] if i else None
             row = {"pos": c.get("pos") or i + 1, "number": c.get("number"), "first": c.get("first", ""), "last": c.get("last", ""),
                    "short": c.get("short", ""), "cls": c.get("cls", ""), "cls_color": c.get("cls_color"), "laps": c.get("laps", 0),
+                   "brand": c.get("brand", "") if isinstance(c.get("brand"), str) else "", "model": c.get("model", "") if isinstance(c.get("model"), str) else "",
                    "best_ms": c.get("best_ms"), "last_ms": c.get("last_ms"), "pit": bool(c.get("pit")),
                    "me": c is me, "id": c.get("id")}
             if race:
@@ -215,7 +226,18 @@ class OverlayHub:
                 row["interval"] = {"ms": cb - ab} if ahead and cb and ab else None
                 row["vs_me"] = {"ms": cb - mb} if me and c is not me and cb and mb else None
             rows.append(row)
-        return {"rows": rows, "race": race, "ref_ms": ref_ms}
+        # posição dentro da classe e as classes (a mais à frente primeiro)
+        classes: dict = {}
+        for r in rows:
+            k = r["cls"] or ""
+            g = classes.setdefault(k, {"name": k, "color": r["cls_color"], "n": 0, "pos": r["pos"]})
+            g["n"] += 1
+            r["cls_pos"] = g["n"]
+            if g["color"] is None:
+                g["color"] = r["cls_color"]
+        header = {"time_left": f.session_time_left, "total": f.session_total_ms, "lap": f.completed_laps + 1,
+                  "total_laps": f.total_laps, "count": len(rows), "type": f.session_type}
+        return {"rows": rows, "race": race, "ref_ms": ref_ms, "classes": list(classes.values()), "header": header}
 
 
 def _gap(dist_diff: float, ref_ms: float) -> dict:
