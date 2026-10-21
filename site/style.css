@@ -366,3 +366,5 @@ canvas.chart { width: 100%; display: block; }
 .rchip.me { border-color: var(--sodium); }
 .rchip em { color: var(--sodium); font-style: normal; font-size: 12px; }
 .rchip .av, .rchip img { width: 24px; height: 24px; }
+
+.stc .stcar { display: block; color: var(--muted); font-size: 11px; font-style: normal; margin-top: 1px; }

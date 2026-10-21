@@ -74,3 +74,11 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .delta .dbar i { position: absolute; top: 0; bottom: 0; }
 .delta .dbar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, .5); }
 .delta .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+/* alças de redimensionar (só no modo de edição, na janela do jogo) */
+.rz2 { position: absolute; background: #ff3b4e; z-index: 5; }
+.rz2-nw, .rz2-ne, .rz2-sw, .rz2-se { width: calc(14px / var(--s)); height: calc(14px / var(--s)); border-radius: 4px; border: 1px solid #fff; }
+.rz2-nw { left: -7px; top: -7px; cursor: nwse-resize; } .rz2-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.rz2-ne { right: -7px; top: -7px; cursor: nesw-resize; } .rz2-sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.rz2-n, .rz2-s { left: 16px; right: 16px; height: calc(6px / var(--s)); opacity: .55; } .rz2-n { top: -3px; cursor: ns-resize; } .rz2-s { bottom: -3px; cursor: ns-resize; }
+.rz2-e, .rz2-w { top: 16px; bottom: 16px; width: calc(6px / var(--s)); opacity: .55; } .rz2-e { right: -3px; cursor: ew-resize; } .rz2-w { left: -3px; cursor: ew-resize; }

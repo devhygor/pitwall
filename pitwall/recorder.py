@@ -242,6 +242,8 @@ class Recorder:
         c = lap.cols
         # descarta amostras do "fim da volta anterior" logo após cruzar a linha
         d = f.norm_pos
+        if not c["d"] and d > 0.9 and f.current_time_ms < 5000:
+            return                      # primeira amostra ainda é do fim da volta anterior
         if c["d"] and d < 0.5 and c["d"][-1] > 0.5 and f.current_time_ms > 5000:
             return
         if lap.start_wall is None and f.wall:

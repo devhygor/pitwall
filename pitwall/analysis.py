@@ -112,8 +112,17 @@ def fuel_plan(avg_lap_ms: float | None, fuel_per_lap: float | None,
 def _monotonic(d: np.ndarray, *others: np.ndarray):
     """Mantém só amostras com distância estritamente crescente."""
     keep = np.ones(len(d), dtype=bool)
+    # a volta pode começar com amostras velhas (fim da volta anterior, d ~ 1.0): sem tirar, o resto seria descartado
+    start = 0
+    for i in range(1, min(len(d), 120)):
+        if d[i] < d[i - 1] - 0.5:         # volta grande para trás logo no começo: o que veio antes é da volta anterior
+            start = i
+            break
+    keep[:start] = False
     hi = -1.0
     for i, v in enumerate(d):
+        if i < start:
+            continue
         if v > hi:
             hi = v
         else:

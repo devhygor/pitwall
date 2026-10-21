@@ -60,6 +60,7 @@ const routes = [
   [/^#\/lfm$/, () => renderLfm()],
   [/^#\/community$/, () => renderCommunity()],
   [/^#\/overlay$/, () => renderOverlay()],
+  [/^#\/overlays$/, () => renderOverlays()],
 ];
 let current = { name: "", id: null };
 let plots = [];
@@ -79,7 +80,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -2151,8 +2152,6 @@ async function renderSettings() {
 
       <section class="set-sec" data-sec="recursos">${extraSettings(s)}</section>
 
-      <section class="set-sec" data-sec="overlays">${overlaySettings(s)}</section>
-
       <section class="set-sec" data-sec="backup">${backupSettings(s)}</section>
 
       <section class="set-sec" data-sec="update"><div class="set-card" id="updCard"></div></section>
@@ -3003,6 +3002,120 @@ async function openOverlay() {
   if (!r.window) window.open("#/overlay", "pitwall-delta", "width=380,height=150");
 }
 
+// ---------------------------------------------------------------- Overlays (ferramenta completa: palco + opções)
+const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["delta", "Delta"]];
+let ovStageTimer = null;
+async function renderOverlays() {
+  current = { name: "overlays" };
+  view.classList.add("wide");
+  view.innerHTML = `<div class="sub">Carregando…</div>`;
+  let S;
+  try { S = (await api("/api/settings")).settings; } catch (e) { view.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
+  if (current.name !== "overlays") return;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sw = screen.width || 1920, sh = screen.height || 1080;
+  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36] };
+  view.innerHTML = `<div class="ovpage">
+    <div class="ov-left">
+      <div class="ov-head"><div><h1>Overlays</h1><div class="sub">Mapa com bandeiras, pedais, participantes e delta, transparentes por cima do jogo.</div></div>
+        <button class="btn ${S.overlay_edit ? "primary" : ""}" id="ovEdit" title="Mostra os overlays ligados direto na tela, com dados de exemplo se o jogo estiver fechado. Arraste-os e puxe as bordas para redimensionar.">${S.overlay_edit ? "Concluir edição" : "Editar na tela do jogo"}</button></div>
+      <div class="ov-pills" id="ovPills"></div>
+      <div class="ov-stage" id="ovStage"><span class="ov-stagelbl">Sua tela · ${sw}×${sh}</span></div>
+      <div class="sub" style="margin-top:8px">Arraste um overlay para mover e puxe as bordas ou os cantos para mudar o tamanho. Os overlays abertos no jogo acompanham na hora.
+        Em “Editar na tela do jogo” você faz o mesmo direto sobre o jogo (use-o em “janela sem bordas”); ao concluir, os cliques atravessam o overlay.</div>
+    </div>
+    <div class="ov-right">${overlaySettings(S)}</div></div>`;
+  const stage = $("#ovStage"), boxes = {};
+  const put = async (v) => {
+    const r = await api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
+    S = r.settings; paintStage(); return r;
+  };
+  const k = () => stage.clientWidth / sw;
+  const sizeStage = () => { stage.style.height = Math.round(stage.clientWidth * sh / sw) + "px"; };
+  sizeStage();
+  const place = (name) => {
+    const b = boxes[name]; if (!b || b.busy) return;
+    const c = S.overlays[name], [dx, dy] = defPos[name], x = c.x ?? dx, y = c.y ?? dy, kk = k();
+    b.el.style.left = x * kk + "px"; b.el.style.top = y * kk + "px";
+    if (b.w) { b.el.style.width = b.w * kk + "px"; b.el.style.height = b.h * kk + "px"; b.fr.style.transform = `scale(${kk})`; b.fr.style.width = b.w + "px"; b.fr.style.height = b.h + "px"; b.el.style.opacity = 1; }
+  };
+  function paintStage() {
+    $("#ovPills").innerHTML = OV_NAMES.map(([n, t]) => `<button class="ovpill ${S.overlays[n].mode !== "off" ? "on" : ""}" data-pill="${n}">${t}</button>`).join("");
+    $("#ovPills").querySelectorAll("[data-pill]").forEach((b) => b.onclick = () => {
+      const n = b.dataset.pill, on = S.overlays[n].mode === "off";
+      put({ overlays: { [n]: { mode: on ? "game" : "off" } } }).then(() => { const sel = $(`[data-ov="${n}"][data-k="mode"]`); if (sel) sel.value = S.overlays[n].mode; });
+    });
+    for (const [n] of OV_NAMES) {
+      const on = S.overlays[n].mode !== "off";
+      if (on && !boxes[n]) makeBox(n);
+      if (!on && boxes[n]) { boxes[n].el.remove(); delete boxes[n]; }
+      place(n);
+    }
+  }
+  function makeBox(name) {
+    const el = document.createElement("div");
+    el.className = "ovbox"; el.style.opacity = 0;
+    el.innerHTML = `<iframe src="/overlay/${name}?preview=1" tabindex="-1" scrolling="no"></iframe><span class="ovtag">${OV_NAMES.find((x) => x[0] === name)[1]}</span>` +
+      ["n", "s", "e", "w", "nw", "ne", "sw", "se"].map((d) => `<i class="rz rz-${d}" data-d="${d}"></i>`).join("");
+    stage.appendChild(el);
+    const b = boxes[name] = { el, fr: el.querySelector("iframe"), w: 0, h: 0, busy: false };
+    let drag = null;
+    const begin = (e, dir) => {
+      e.preventDefault(); e.stopPropagation();
+      const c = S.overlays[name], kk = k();
+      drag = { dir, sx: e.clientX, sy: e.clientY, x0: c.x ?? defPos[name][0], y0: c.y ?? defPos[name][1], s0: c.scale, w0: b.w, h0: b.h, kk };
+      b.busy = true; el.classList.add("drag"); el.setPointerCapture(e.pointerId);
+    };
+    el.onpointerdown = (e) => begin(e, e.target.dataset.d || "move");
+    el.onpointermove = (e) => {
+      if (!drag) return;
+      const d = drag, dx = (e.clientX - d.sx) / d.kk, dy = (e.clientY - d.sy) / d.kk;
+      if (d.dir === "move") {
+        d.x = clamp(d.x0 + dx, -d.w0 + 40, sw - 40); d.y = clamp(d.y0 + dy, -d.h0 + 40, sh - 40); d.r = 1;
+        el.style.left = d.x * d.kk + "px"; el.style.top = d.y * d.kk + "px"; return;
+      }
+      const rx = d.dir.includes("e") ? (d.w0 + dx) / d.w0 : d.dir.includes("w") ? (d.w0 - dx) / d.w0 : null;
+      const ry = d.dir.includes("s") ? (d.h0 + dy) / d.h0 : d.dir.includes("n") ? (d.h0 - dy) / d.h0 : null;
+      let r = rx != null && ry != null ? (rx + ry) / 2 : rx ?? ry;
+      r = clamp(r, 50 / d.s0, 300 / d.s0);
+      const w1 = d.w0 * r, h1 = d.h0 * r;
+      d.r = r; d.x = d.dir.includes("w") ? d.x0 + d.w0 - w1 : d.x0; d.y = d.dir.includes("n") ? d.y0 + d.h0 - h1 : d.y0;
+      el.style.left = d.x * d.kk + "px"; el.style.top = d.y * d.kk + "px";
+      el.style.width = w1 * d.kk + "px"; el.style.height = h1 * d.kk + "px";
+      b.fr.style.transform = `scale(${d.kk * r})`;
+    };
+    el.onpointerup = el.onpointercancel = async () => {
+      if (!drag) return;
+      const d = drag; drag = null; el.classList.remove("drag");
+      const v = { x: Math.round(d.x ?? d.x0), y: Math.round(d.y ?? d.y0) };
+      if (d.r && d.r !== 1) { v.scale = Math.round(d.s0 * d.r); b.w = d.w0 * d.r; b.h = d.h0 * d.r; b.fr.style.width = b.w + "px"; b.fr.style.height = b.h + "px"; b.fr.style.transform = `scale(${d.kk})`; }
+      b.busy = false;
+      await put({ overlays: { [name]: v } });
+      const sc = $(`[data-ov="${name}"][data-k="scale"]`); if (sc) { sc.value = S.overlays[name].scale; sc.nextElementSibling.textContent = sc.value + "%"; }
+    };
+  }
+  // tamanho que cada overlay ocupa (a página dele avisa)
+  const onMsg = (e) => {
+    const m = e.data;
+    if (!m || !m.pitwallOverlay || !boxes[m.name]) return;
+    const b = boxes[m.name]; b.w = m.w; b.h = m.h; place(m.name);
+  };
+  window.addEventListener("message", onMsg);
+  const onResize = () => { sizeStage(); OV_NAMES.forEach(([n]) => place(n)); };
+  window.addEventListener("resize", onResize);
+  const cleanup = () => { window.removeEventListener("message", onMsg); window.removeEventListener("resize", onResize); window.removeEventListener("hashchange", cleanup); };
+  window.addEventListener("hashchange", cleanup);
+  paintStage();
+  bindOverlaySettings(put);
+  $("#ovEdit").onclick = async () => {
+    const ed = $("#ovEdit"), on = !ed.classList.contains("primary");
+    let r = null;
+    try { r = await api("/api/ui/overlay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ show: on }) }); } catch (e) { /* ok */ }
+    if (!r || !r.window) await put({ overlay_edit: on });
+    ed.classList.toggle("primary", on); ed.textContent = on ? "Concluir edição" : "Editar na tela do jogo";
+  };
+}
+
 // ---------------------------------------------------------------- overlays no jogo (janelas transparentes)
 const OV_MODES = [["off", "Desligado"], ["game", "Só quando estou na pista"], ["always", "Sempre aberto"]];
 const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
@@ -3017,10 +3130,6 @@ function overlaySettings(s) {
   const common = (n) => setRow("Tamanho", "", rng(n, "scale", O[n].scale, 50, 250, 5, "%")) + setRow("Fundo", "0% = totalmente transparente.", rng(n, "bg", O[n].bg, 0, 90, 5, "%"));
   const m = O.map, p = O.pedals, st = O.standings, d = O.delta;
   return `
-    <div class="set-card"><h2>Overlays no jogo</h2>
-      ${setRow("Posicionar e conferir", "Mostra todos os overlays ligados, com dados de exemplo se o jogo estiver fechado; arraste cada um para o lugar certo. Ao concluir, os cliques passam direto para o jogo. Também no ícone perto do relógio. Use o jogo em “janela sem bordas”.",
-        `<button class="btn ${s.overlay_edit ? "primary" : ""}" id="ovEdit">${s.overlay_edit ? "Concluir" : "Mover / ver agora"}</button>`)}
-    </div>
     <div class="set-card"><h2>Mapa da pista</h2>
       ${mode("map")}${common("map")}
       <div class="sub" style="margin:2px 0 10px">A pista muda de cor em tempo real: amarela (só no setor da bandeira), vermelha, azul, branca ou verde.</div>
@@ -3099,14 +3208,6 @@ function bindOverlaySettings(put) {
     };
   }
   const ref = $("#xOvRef"); if (ref) ref.onchange = () => put({ overlay_reference: ref.value });
-  const ed = $("#ovEdit");
-  if (ed) ed.onclick = async () => {
-    const on = !ed.classList.contains("primary");
-    let r = null;
-    try { r = await api("/api/ui/overlay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ show: on }) }); } catch (e) { /* ok */ }
-    if (!r || !r.window) await put({ overlay_edit: on });
-    ed.classList.toggle("primary", on); ed.textContent = on ? "Concluir" : "Mover / ver agora";
-  };
 }
 
 // ---------------------------------------------------------------- configurações extras
@@ -3136,7 +3237,6 @@ const SET_TABS = [
   ["geral", "Geral", SET_ICON('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>')],
   ["video", "Vídeo", SET_ICON('<rect x="2" y="5" width="14" height="14" rx="3"/><path d="M16 10l6-3v10l-6-3"/>')],
   ["recursos", "Recursos", SET_ICON('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>')],
-  ["overlays", "Overlays", SET_ICON('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M7 12l3-3 3 2 4-4"/>')],
   ["backup", "Backup", SET_ICON('<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>')],
   ["update", "Atualização", SET_ICON('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>')],
   ["about", "Sobre", SET_ICON('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>')],
@@ -3214,7 +3314,6 @@ async function drawUpdateCard(ver) {
 }
 function bindExtraSettings(draw) {
   const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
-  bindOverlaySettings(put);
   $("#xBasis").onchange = () => put({ setup_temp_basis: $("#xBasis").value });
   $("#xVar").onchange = () => put({ setup_variant_pref: $("#xVar").value.trim() });
   $("#xGames").onchange = () => put({ games: $("#xGames").value });

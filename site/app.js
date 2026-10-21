@@ -464,7 +464,7 @@ const teamLogo = (t, cls = "") => t && t.logo_url
 let myRecs = null;
 async function myRecords() {
   if (myRecs) return myRecs;
-  const { data } = await sb.from("laps").select("id,car,track,game").eq("user_id", session.user.id);
+  const { data } = await sb.from("laps").select("id,car,track,game,lap_time_ms").eq("user_id", session.user.id);
   myRecs = data || [];
   return myRecs;
 }
@@ -483,7 +483,9 @@ function bindRows(root) {
   root.querySelectorAll("[data-cmp]").forEach((b) => b.onclick = async () => {
     if (b.dataset.me) { location.hash = `#/compare/${b.dataset.cmp}`; return; }
     const [track, car, game] = b.dataset.combo.split("|");
-    const mine = (await myRecords()).find((x) => x.track === track && x.car === car && x.game === game);
+    const recs = await myRecords(), tl = (t) => String(t).toLowerCase();
+    const mine = recs.find((x) => tl(x.track) === tl(track) && x.car === car && x.game === game)
+      || recs.filter((x) => tl(x.track) === tl(track) && x.game === game).sort((a, b) => a.lap_time_ms - b.lap_time_ms)[0];
     location.hash = mine ? `#/compare/${mine.id}/${b.dataset.cmp}` : `#/compare/${b.dataset.cmp}`;
   });
   root.querySelectorAll("[data-setup]").forEach((b) => b.onclick = async () => {

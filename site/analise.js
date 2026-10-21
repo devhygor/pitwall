@@ -29,8 +29,10 @@ const sgn = (v, nd = 3, suf = "") => v == null || isNaN(v) ? "—" : (v > 0 ? "+
 
 // ---------------------------------------------------------------- cálculo (porta do analysis.py)
 function anMonotonic(d) {
-  const keep = []; let hi = -1;
-  for (let i = 0; i < d.length; i++) if (d[i] != null && d[i] > hi) { hi = d[i]; keep.push(i); }
+  const keep = []; let hi = -1, start = 0;
+  // a volta pode começar com amostras velhas (fim da volta anterior, d ~ 1.0): sem tirar, o resto seria descartado
+  for (let i = 1; i < Math.min(d.length, 120); i++) if (d[i] != null && d[i - 1] != null && d[i] < d[i - 1] - 0.5) { start = i; break; }
+  for (let i = start; i < d.length; i++) if (d[i] != null && d[i] > hi) { hi = d[i]; keep.push(i); }
   return keep;
 }
 function anInterp(grid, d, arr) {
@@ -171,7 +173,7 @@ function anCompare(telA, telB) {
 
 // ---------------------------------------------------------------- tela
 let AS = null;   // estado da análise no site
-const anState = { target: "a" };
+const anState = { target: "a", cars: store.get("pitwall.site.anCars") || "all" };
 function stopAnalysis() {
   if (!AS) return;
   cancelAnimationFrame(AS.raf);
@@ -194,9 +196,15 @@ async function renderAnalysis(idA, idB) {
   const R = anCompare(telA, telB);
   if (!R) { view.innerHTML = `<div class="wrap page"><div class="panel empty"><b>Volta sem telemetria</b></div></div>`; return; }
   // outras voltas do mesmo carro/pista (o recorde de cada piloto)
-  const { data: others } = await sb.from("laps").select("id,user_id,lap_time_ms,recorded_at,clip_path,setup_name,profiles(name,avatar_url)")
-    .eq("game", LA.game).eq("car", LA.car).eq("track", LA.track).order("lap_time_ms").limit(200);
-  const opts = (others || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?" }));
+  // outras voltas da mesma pista (qualquer carro, ou só o mesmo carro); o nome da pista pode vir com outra caixa
+  const trackLike = LA.track.replace(/[\\%_]/g, (c) => "\\" + c);
+  const { data: others } = await sb.from("laps").select("id,user_id,car,lap_time_ms,recorded_at,clip_path,setup_name,profiles(name,avatar_url)")
+    .eq("game", LA.game).ilike("track", trackLike).order("lap_time_ms").limit(300);
+  const allOpts = (others || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?" }));
+  const manyCars = new Set(allOpts.map((r) => r.car)).size > 1;
+  const sameOnly = anState.cars === "same" && manyCars;
+  const opts = sameOnly ? allOpts.filter((r) => r.car === LA.car) : allOpts;
+  const otherCar = LB && LB.car !== LA.car;
   const me = session.user.id;
   const nameOf = (L) => (L.profiles || {}).name || "?";
   const hasB = !!LB, n = R.n, segs = R.segments;
@@ -231,7 +239,8 @@ async function renderAnalysis(idA, idB) {
     </header>
 
     <section class="an-strip">
-      <div class="st-top"><b>Voltas neste carro e pista</b><span class="sub">o recorde de cada piloto</span>
+      <div class="st-top"><b>${sameOnly ? "Voltas neste carro e pista" : "Voltas nesta pista"}</b><span class="sub">o recorde de cada piloto${otherCar ? " · comparando carros diferentes" : ""}</span>
+        ${manyCars ? `<div class="seg"><button class="${sameOnly ? "" : "on"}" data-cars="all">Todos os carros</button><button class="${sameOnly ? "on" : ""}" data-cars="same">Só este carro</button></div>` : ""}
         <span class="spacer"></span><span class="sub">Clique troca:</span>
         <div class="seg"><button class="${anState.target === "a" ? "on" : ""}" data-tgt="a"><i class="dot a"></i>Volta analisada</button>
           <button class="${anState.target === "b" ? "on" : ""}" data-tgt="b"><i class="dot b"></i>Referência</button></div>
@@ -239,7 +248,8 @@ async function renderAnalysis(idA, idB) {
       <div class="st-row"><button class="btn small st-nav" id="stPrev" title="Anterior ( [ )">◀</button>
         <div class="st-laps">${ordered.map((r, i) => `<button class="stc ${r.id === LA.id ? "isa" : ""} ${LB && r.id === LB.id ? "isb" : ""} ${r.user_id === me ? "mine" : ""}" data-lap="${r.id}">
           <small>${i + 1}º · ${esc(r.driver)}${r.user_id === me ? " (você)" : ""}</small><b>${fmtLap(r.lap_time_ms)}</b>
-          <em>${i ? fmtGap(r.lap_time_ms - ordered[0].lap_time_ms) : "mais rápido"}${r.clip_path ? " · ▶" : ""}</em></button>`).join("")}</div>
+          <em>${i ? fmtGap(r.lap_time_ms - ordered[0].lap_time_ms) : "mais rápido"}${r.clip_path ? " · ▶" : ""}</em>
+          ${manyCars && !sameOnly ? `<em class="stcar">${esc(pretty(r.car))}</em>` : ""}</button>`).join("")}</div>
         <button class="btn small st-nav" id="stNext" title="Próxima ( ] )">▶</button></div>
     </section>
 
@@ -294,6 +304,10 @@ async function renderAnalysis(idA, idB) {
     else go(id, LB ? LB.id : null);
   };
   view.querySelectorAll("[data-lap]").forEach((c) => c.onclick = () => pick(c.dataset.lap));
+  view.querySelectorAll("[data-cars]").forEach((c) => c.onclick = () => {
+    anState.cars = c.dataset.cars; store.set("pitwall.site.anCars", anState.cars);
+    renderAnalysis(LA.id, LB ? LB.id : null);
+  });
   view.querySelectorAll("[data-tgt]").forEach((c) => c.onclick = () => {
     anState.target = c.dataset.tgt;
     view.querySelectorAll("[data-tgt]").forEach((x) => x.classList.toggle("on", x === c));

@@ -245,6 +245,14 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
 
     app.state.ui_overlay_sync = None
     app.state.ui_overlay_size = None
+    app.state.ui_overlay_scale = None
+
+    @app.post("/api/ui/overlay-scale")
+    def ui_overlay_scale(name: str = Body(..., embed=True), scale: int = Body(..., embed=True), anchor: str = Body("lt", embed=True)):
+        """Redimensionar arrastando a borda: muda a escala e mantém fixo o canto oposto ao que foi puxado."""
+        if app.state.ui_overlay_scale:
+            app.state.ui_overlay_scale(name, scale, anchor)
+        return {"ok": True}
 
     @app.post("/api/ui/overlay")
     def ui_overlay(show: bool | None = Body(None, embed=True)):

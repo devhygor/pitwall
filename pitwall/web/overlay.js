@@ -4,6 +4,7 @@
 
 const NAME = (location.pathname.split("/").pop() || "map").replace(/[^a-z]/g, "");
 const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta" };
+const PREVIEW = /[?&]preview/.test(location.search);       // dentro do palco da página Overlays: só mostra, com dados de exemplo
 const root = document.getElementById("root");
 root.dataset.title = TITLES[NAME] || NAME;
 
@@ -44,14 +45,20 @@ function reportSize() {
   const w = root.offsetWidth, h = root.offsetHeight, k = w + "x" + h + "@" + cfg.scale;
   if (k === lastSize || !w || !h) return;
   lastSize = k;
+  if (PREVIEW) {                              // o palco precisa do tamanho já com a escala aplicada
+    const sc = clamp(cfg.scale, 40, 300) / 100;
+    parent.postMessage({ pitwallOverlay: true, name: NAME, w: Math.round(w * sc), h: Math.round(h * sc) }, "*");
+    return;
+  }
   fetch("/api/ui/overlay-size", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: NAME, w, h }) }).catch(() => {});
 }
 function applyCfg(settings) {
   const o = (settings.overlays || {})[NAME] || {};
   cfg = { ...DEFAULT_CFG, ...o };
-  edit = !!settings.overlay_edit;
+  edit = PREVIEW ? false : !!settings.overlay_edit;
   document.body.classList.toggle("edit", edit);
+  handles();
   document.documentElement.style.setProperty("--s", String(clamp(cfg.scale, 40, 300) / 100));
   document.documentElement.style.setProperty("--bg", String(clamp(cfg.bg, 0, 100)));
 }
@@ -62,12 +69,56 @@ async function settingsLoop() {
   setTimeout(settingsLoop, 1500);
 }
 
+// ------------------------------------------------------------------ redimensionar arrastando as bordas (modo de edição)
+let rzOn = false, rzLast = 0;
+function handles() {
+  const want = edit && !PREVIEW;
+  if (want === rzOn) return;
+  rzOn = want;
+  root.querySelectorAll(".rz2").forEach((e) => e.remove());
+  if (!want) return;
+  for (const d of ["n", "s", "e", "w", "nw", "ne", "sw", "se"]) {
+    const h = document.createElement("i");
+    h.className = "rz2 rz2-" + d; h.dataset.d = d;
+    h.addEventListener("mousedown", (ev) => startResize(ev, d));
+    root.appendChild(h);
+  }
+}
+function startResize(ev, dir) {
+  ev.preventDefault(); ev.stopPropagation();                // stopPropagation: senão a janela inteira começa a ser arrastada
+  const s0 = cfg.scale, w0 = root.offsetWidth * s0 / 100, h0 = root.offsetHeight * s0 / 100, sx = ev.screenX, sy = ev.screenY;
+  const anchor = (dir.includes("w") ? "r" : "l") + (dir.includes("n") ? "b" : "t");
+  const move = (e) => {
+    const dx = e.screenX - sx, dy = e.screenY - sy;
+    const rx = dir.includes("e") ? (w0 + dx) / w0 : dir.includes("w") ? (w0 - dx) / w0 : null;
+    const ry = dir.includes("s") ? (h0 + dy) / h0 : dir.includes("n") ? (h0 - dy) / h0 : null;
+    const r = clamp(rx != null && ry != null ? (rx + ry) / 2 : rx ?? ry, 40 / s0, 300 / s0);
+    const sc = Math.round(s0 * r);
+    cfg.scale = sc;
+    document.documentElement.style.setProperty("--s", String(sc / 100));
+    const now = performance.now();
+    if (now - rzLast > 45) {
+      rzLast = now;
+      fetch("/api/ui/overlay-scale", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: NAME, scale: sc, anchor }) }).catch(() => {});
+    }
+  };
+  const up = (e) => {
+    window.removeEventListener("mousemove", move, true); window.removeEventListener("mouseup", up, true);
+    move(e); rzLast = 0;
+    fetch("/api/ui/overlay-scale", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: NAME, scale: cfg.scale, anchor }) }).catch(() => {});
+  };
+  window.addEventListener("mousemove", move, true); window.addEventListener("mouseup", up, true);
+}
+
 // ------------------------------------------------------------------ dados ao vivo
 let seq = 0, data = null, recvAt = 0;
 const samples = [];                       // [t, gas, brake, steer, speed, gear, rpm]
 let previewing = false;
 async function dataLoop(parts, every) {
   const tick = async () => {
+    if (PREVIEW) { previewing = true; data = null; if (current && current.onData) current.onData(); reportSize(); setTimeout(tick, every); return; }
     try {
       const d = await getJSON(`/api/overlay/data?since=${seq}&parts=${parts}`);
       if (d.seq < seq) { samples.length = 0; }

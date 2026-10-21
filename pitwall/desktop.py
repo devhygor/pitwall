@@ -176,6 +176,8 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
 
     def ov_moved(name, x, y):
         ov_save[name] = (x, y)
+        if name in ov:
+            ov[name]["pos"] = (int(x), int(y))
 
         def flush():
             xy = ov_save.pop(name, None)
@@ -194,7 +196,7 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
         w = webview.create_window(TITLES[name], f"{url}/overlay/{name}", width=420, height=220, x=int(x), y=int(y),
                                   frameless=True, easy_drag=True, resizable=False, on_top=True, transparent=True,
                                   focus=False, shadow=False, background_color="#000000")
-        ov[name] = {"win": w, "nat": None, "size": None}
+        ov[name] = {"win": w, "nat": None, "size": None, "pos": (int(x), int(y))}
         w.events.shown += lambda: ov_glass(name, w)
         w.events.loaded += lambda: ov_glass(name, w)
         w.events.moved += lambda x, y: ov_moved(name, x, y)
@@ -222,6 +224,10 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
                         ov.pop(name)["win"].destroy()
                     elif has:
                         ov_apply_size(name)
+                        c = ov_cfg(name)
+                        if c["x"] is not None and c["y"] is not None and ov[name].get("pos") != (c["x"], c["y"]):
+                            ov[name]["pos"] = (c["x"], c["y"])
+                            ov[name]["win"].move(int(c["x"]), int(c["y"]))
                         ed = bool(app.state.settings.get("overlay_edit"))
                         if ov[name].get("edit") != ed:
                             ov[name]["edit"] = ed
@@ -237,6 +243,28 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
         ov_sync()
         return want
 
+    def ov_scale(name, scale, anchor):
+        """Alça arrastada no overlay: aplica a escala já e mantém o canto oposto no lugar."""
+        scale = max(40, min(300, int(scale)))
+        with ov_lock:
+            d = ov.get(name)
+            st = app.state.settings
+            if not d or not d.get("nat") or not st:
+                return
+            w1, h1 = int(d["nat"][0] * scale / 100) + 2, int(d["nat"][1] * scale / 100) + 2
+            w0, h0 = d.get("size") or (w1, h1)
+            x, y = d.get("pos") or (0, 0)
+            nx = x + (w0 - w1) if anchor[:1] == "r" else x
+            ny = y + (h0 - h1) if anchor[1:2] == "b" else y
+            d["size"], d["pos"] = (w1, h1), (nx, ny)
+            try:
+                d["win"].resize(w1, h1)
+                if (nx, ny) != (x, y):
+                    d["win"].move(nx, ny)
+            except Exception:  # noqa: BLE001
+                pass
+            st.update({"overlays": {name: {"scale": scale, "x": nx, "y": ny}}})
+
     def ov_size(name, w, h):
         with ov_lock:
             if name in ov:
@@ -245,6 +273,7 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
     app.state.ui_overlay = overlay
     app.state.ui_overlay_sync = ov_sync
     app.state.ui_overlay_size = ov_size
+    app.state.ui_overlay_scale = ov_scale
 
     # janela do LFM dentro do Pitwall (o próprio site do LFM, com o seu login)
     lw = {"win": None}
