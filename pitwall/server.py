@@ -13,7 +13,7 @@ from .db import DB
 WEB = Path(__file__).parent / "web"
 
 
-def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None, alerts=None, engineer=None) -> FastAPI:
+def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None, alerts=None, engineer=None, lic=None) -> FastAPI:
     app = FastAPI(title="Pitwall", docs_url="/api/docs")
 
     @app.get("/api/live")
@@ -735,6 +735,44 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         if engineer and any(before.get(k) != new.get(k) for k in new if k.startswith("eng_")):
             engineer.apply()
         return {"settings": new, "video": video.status if video else {}}
+
+    # --- plano e licença ----------------------------------------------------------------
+    def _lic():
+        if not lic:
+            raise HTTPException(400, "Licença indisponível.")
+        return lic
+
+    @app.post("/api/open-url")
+    def open_url(url: str = Body(..., embed=True)):
+        """Abre um endereço do próprio Pitwall no navegador (só o nosso domínio, por segurança)."""
+        import webbrowser
+        from urllib.parse import urlparse
+        host = urlparse(url).hostname or ""
+        if urlparse(url).scheme != "https" or not (host == "pitwall.hygor.com.br" or host.endswith(".hygor.com.br")):
+            raise HTTPException(400, "Endereço não permitido.")
+        webbrowser.open(url)
+        return {"ok": True}
+
+    @app.get("/api/license")
+    def license_status():
+        return _lic().status()
+
+    @app.post("/api/license/refresh")
+    def license_refresh():
+        return _lic().refresh()
+
+    @app.post("/api/license/key")
+    def license_key(key: str = Body(..., embed=True)):
+        return _lic().activate_key(key)
+
+    @app.post("/api/license/trial")
+    def license_trial():
+        return _lic().start_trial()
+
+    @app.post("/api/license/clear")
+    def license_clear():
+        _lic().clear()
+        return _lic().status()
 
     # --- engenheiro de voz --------------------------------------------------------------
     def _eng():

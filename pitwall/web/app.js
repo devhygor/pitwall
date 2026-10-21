@@ -62,6 +62,7 @@ const routes = [
   [/^#\/overlay$/, () => renderOverlay()],
   [/^#\/overlays$/, () => renderOverlays()],
   [/^#\/engineer$/, () => renderVoiceEngineer()],
+  [/^#\/plano$/, () => renderPlano()],
 ];
 let current = { name: "", id: null };
 let plots = [];
@@ -81,7 +82,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -3379,7 +3380,7 @@ function aboutCard(ver) {
   return `
     <div class="set-card about">
       <div class="about-hero">
-        <svg viewBox="0 0 32 32" width="56" height="56" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="22" cy="22" r="2" fill="currentColor"/></svg>
+        <svg viewBox="0 0 32 32" width="56" height="56" aria-hidden="true"><defs><linearGradient id="pwgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2ee59d"/><stop offset=".55" stop-color="#3b9cff"/><stop offset="1" stop-color="#b98cff"/></linearGradient></defs><rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="url(#pwgB)" stroke-width="2.2"/><path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="url(#pwgB)" stroke-width="2.2" stroke-linejoin="round"/><circle cx="22" cy="22" r="2.2" fill="#b98cff"/></svg>
         <div><h2 style="margin:0">Pitwall</h2><div class="sub">Telemetria, vídeo e análise de voltas para ACC e iRacing</div>
           <span class="tag ok" style="margin-top:8px">Versão ${esc(ver.current === "dev" ? "de desenvolvimento" : ver.current)}</span></div>
       </div>

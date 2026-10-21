@@ -12,8 +12,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-REPO = "devhygor/pitwall"
-API = f"https://api.github.com/repos/{REPO}/releases/latest"
+# Onde estão os instaladores publicados. O repositório de código pode ficar privado: os instaladores vão para um
+# repositório público só de downloads. Consulta os dois e fica com a versão mais nova (assim funciona antes, durante e
+# depois da troca).
+REPOS = ["devhygor/pitwall-releases", "devhygor/pitwall"]
 ASSET = "Pitwall-Setup.exe"
 CACHE_S = 1800
 
@@ -41,14 +43,22 @@ def check(force: bool = False) -> dict:
         if not force and _cache["data"] is not None and time.time() - _cache["at"] < CACHE_S:
             rel = _cache["data"]
         else:
-            try:
-                req = urllib.request.Request(API, headers={"User-Agent": "Pitwall", "Accept": "application/vnd.github+json"})
-                with urllib.request.urlopen(req, timeout=8) as r:
-                    rel = json.load(r)
-                _cache.update(at=time.time(), data=rel)
-            except Exception as e:  # noqa: BLE001
-                out["error"] = str(e)
+            rel, last = None, None
+            for repo in REPOS:
+                try:
+                    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/latest",
+                                                 headers={"User-Agent": "Pitwall", "Accept": "application/vnd.github+json"})
+                    with urllib.request.urlopen(req, timeout=8) as r:
+                        cand = json.load(r)
+                except Exception as e:  # noqa: BLE001
+                    last = e
+                    continue
+                if rel is None or (_parse(str(cand.get("tag_name", ""))) or ()) > (_parse(str(rel.get("tag_name", ""))) or ()):
+                    rel = cand
+            if rel is None:
+                out["error"] = str(last)
                 return out
+            _cache.update(at=time.time(), data=rel)
     latest = str(rel.get("tag_name", ""))
     url = next((a["browser_download_url"] for a in rel.get("assets", []) if a.get("name") == ASSET), None)
     out.update(latest=latest.lstrip("v"), url=url, notes=rel.get("body") or "", page=rel.get("html_url"))

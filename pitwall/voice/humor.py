@@ -153,6 +153,8 @@ class Mood:
 
     def personality(self) -> str:
         p = self.eng.settings.get("eng_personality") if self.eng.settings else "profissional"
+        if not self.eng.allows("voice_personality"):
+            return "profissional"
         return p if p in dict(PERSONALITIES) else "profissional"
 
     def tone(self, event: str, personality: str | None = None) -> str:

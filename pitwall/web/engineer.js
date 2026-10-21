@@ -219,6 +219,11 @@ async function renderVoiceEngineer() {
       if (st.listener.error) warn.push(st.listener.error);
       if (S.eng_ptt_mode !== "open" && !st.binding.value) warn.push("Defina a tecla de falar.");
     }
+    if (st.plan === "free") {
+      if (S.eng_voice_mode === "online") warn.push("A voz online é do plano Pro: por enquanto ele usa a voz offline. Veja o menu Plano.");
+      if (S.eng_personality !== "profissional") warn.push("A personalidade (humor, bronca) é do plano Pro. Veja o menu Plano.");
+      warn.push("Plano Grátis: avisos e perguntas básicas. Pneus, freios, rivais, observador e o resto liberam no Pro (teste grátis de 10 dias no menu Plano).");
+    }
     if (st.tts.last_error) warn.push("Voz: " + st.tts.last_error);
     if (st.errors.length) warn.push(st.errors[st.errors.length - 1]);
     $("#eWarn").innerHTML = warn.map((w) => `<div class="note warn">${esc(w)}</div>`).join("");

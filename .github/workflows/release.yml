@@ -54,6 +54,7 @@ jobs:
           --collect-all _sounddevice_data
           --collect-all edge_tts
           --collect-all certifi
+          --collect-all cryptography
           --hidden-import pyaccsharedmemory
           --paths .
 
@@ -74,6 +75,22 @@ jobs:
         with:
           name: Pitwall-Setup
           path: dist/Pitwall-Setup.exe
+
+      - name: Publicar no repositório público de downloads
+        if: env.RELEASES_TOKEN != ''
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: devhygor/pitwall-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: v${{ steps.ver.outputs.version }}
+          make_latest: true
+          files: dist/Pitwall-Setup.exe
+          name: Pitwall ${{ steps.ver.outputs.version }}
+          body: |
+            Baixe **Pitwall-Setup.exe**, abra e siga o instalador (não pede administrador).
+            O Windows pode avisar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.
 
       - name: Publicar na página de downloads (Releases)
         uses: softprops/action-gh-release@v2

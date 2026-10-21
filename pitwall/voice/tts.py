@@ -326,6 +326,7 @@ class TTS:
         self.last_engine = ""
         self.last_error = ""
         self._online_fail_until = 0.0
+        self.online_allowed = lambda: True          # o Engineer troca por uma checagem da licença
 
     def _cfg(self, k, d=""):
         v = self.settings.get(k) if self.settings else None
@@ -335,7 +336,7 @@ class TTS:
         mode = self._cfg("eng_voice_mode", "offline")
         off = self._cfg("eng_offline_engine", "piper")
         offline = [off, "windows" if off == "piper" else "piper"]
-        return (["edge"] + offline) if mode == "online" else offline
+        return (["edge"] + offline) if mode == "online" and self.online_allowed() else offline
 
     def _voice_for(self, eng: str) -> str:
         if eng == "edge":

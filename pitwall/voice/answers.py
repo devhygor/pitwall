@@ -119,7 +119,17 @@ def _cmp_time(a, b) -> str:
     return f", {seg(abs(d))} {'mais lenta' if d > 0 else 'mais rápida'} que a sua"
 
 
+FREE_INTENTS = {"mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "fuel_level", "fuel_laps", "fuel_end",
+                "position", "last_lap", "best_lap", "laps_left", "time_left", "lap_number", "session_info", "track_info", "car_info"}
+PERSONALITY_INTENTS = {"praise", "scold", "joke", "tip", "how_am_i"}
+UPGRADE = "Essa pergunta faz parte do plano Pro. Veja o menu Plano para conhecer ou fazer o teste grátis de 10 dias."
+
+
 def answer(p: Parsed, eng) -> str:
+    if p.intent in PERSONALITY_INTENTS and not eng.allows("voice_personality"):
+        return UPGRADE
+    if p.intent not in FREE_INTENTS and p.intent not in PERSONALITY_INTENTS and not eng.allows("voice_full"):
+        return UPGRADE
     fn = _H.get(p.intent)
     if fn is None:
         return phrases.say("not_understood")

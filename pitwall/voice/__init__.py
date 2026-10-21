@@ -158,7 +158,9 @@ class Engineer:
         self.spotter = Spotter(settings)
         self.mood = Mood(self)
         self.monitor = Monitor(self)
+        self.license = None                           # License (plano pago); sem ela tudo liberado só nos testes
         self.tts = TTS(settings, self.root)
+        self.tts.online_allowed = lambda: self.allows("voice_online")
         self.stt = WhisperSTT(settings, self.root)
         self.speaker = Speaker(self)
         self.listener = Listener(self)
@@ -180,6 +182,10 @@ class Engineer:
     @property
     def enabled(self) -> bool:
         return bool(self.settings.get("eng_enabled"))
+
+    def allows(self, feature: str) -> bool:
+        """O plano atual libera este recurso? (sem módulo de licença ligado, libera: só acontece em testes)"""
+        return True if self.license is None else self.license.has(feature)
 
     def log(self, kind: str, text: str, **kw):
         self._log.append({"t": time.time(), "kind": kind, "text": text, **kw})
@@ -208,7 +214,7 @@ class Engineer:
             if f.status != "live":
                 return
             self.spotter.update(f, self.state)
-            if self._on("spotter") and not self.muted:
+            if self._on("spotter") and self.allows("spotter") and not self.muted:
                 for k in self.spotter.calls():
                     self.speaker.enqueue(phrases.say(k), prio=5, ttl=1.6, cat="spotter", key=f"spot_{k}")
             self.monitor.update(self.state)
@@ -431,7 +437,7 @@ class Engineer:
                         "capture": self.keys.capture_state},
             "spotter": {"source": sp.source, "left": sp.left, "right": sp.right, "calibrated": sp.tf is not None},
             "game": {"live": bool(f and f.status == "live"), "track": f.track if f else "", "cars": len(self.state.rows)},
-            "mood": {"label": self.mood.label(), "score": round(self.mood.score, 2)}, "test": self.test, "log": list(self._log)[-40:], "errors": list(self.errors),
+            "plan": self.license.plan if self.license is not None else "pro", "mood": {"label": self.mood.label(), "score": round(self.mood.score, 2)}, "test": self.test, "log": list(self._log)[-40:], "errors": list(self.errors),
             "audio": {"available": audio.available()},
         }
 

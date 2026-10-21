@@ -44,7 +44,10 @@ function route() {
   const h = location.hash || "#/";
   let m;
   if ((m = h.match(/^#\/join\/([A-Za-z0-9]{8})/))) return joinRoute(m[1].toUpperCase());
+  if (h.startsWith("#/planos")) { markTop(); return renderPlans(); }
   if (!session) return renderLanding();
+  if (h.startsWith("#/conta")) { markTop(); return renderAccount(); }
+  if (h.startsWith("#/admin")) { markTop(); return renderAdmin(); }
   if ((m = h.match(/^#\/team\/([0-9a-f-]{36})/))) return renderTeam(m[1]);
   if ((m = h.match(/^#\/compare\/([0-9a-f-]{36})(?:\/([0-9a-f-]{36}))?/))) return renderAnalysis(m[1], m[2]);
   markTop();
@@ -55,19 +58,19 @@ window.addEventListener("hashchange", route);
 
 function markTop() {
   const h = location.hash || "#/";
-  const top = h.startsWith("#/ranking") ? "ranking" : (h === "#/" || h === "#") ? "home" : "";
+  const top = h.startsWith("#/ranking") ? "ranking" : h.startsWith("#/planos") ? "planos" : h.startsWith("#/conta") ? "conta" : h.startsWith("#/admin") ? "admin" : (h === "#/" || h === "#") ? "home" : "";
   document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === top));
 }
 
 function renderMe() {
   const el = $("#me");
   if (!session) {
-    el.innerHTML = `<nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#engenheiro" data-go="engenheiro">Engenheiro</a><a href="#equipe" data-go="equipe">Equipe</a></nav>
+    el.innerHTML = `<nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#engenheiro" data-go="engenheiro">Engenheiro</a><a href="#equipe" data-go="equipe">Equipe</a><a href="#/planos" data-top="planos">Planos</a></nav>
       <a class="btn small quiet" href="#entrar" data-go="entrar" id="goLogin">Entrar</a>`;
     return;
   }
   const u = profile || {};
-  el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a></nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
+  el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
     <button class="btn small quiet" id="logout">Sair</button>`;
   markTop();
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
@@ -78,6 +81,7 @@ async function loadProfile() {
   const { data } = await sb.from("profiles").select("id,name,avatar_url").eq("id", session.user.id).maybeSingle();
   const meta = session.user.user_metadata || {};
   profile = data || { id: session.user.id, name: meta.full_name || meta.name || session.user.email, avatar_url: meta.avatar_url };
+  if (typeof loadAccountFlags === "function") await loadAccountFlags();
 }
 
 // ---------------------------------------------------------------- página inicial (não logado)
@@ -212,6 +216,7 @@ function renderLanding(invite) {
       </div>
     </section>
 
+    ${typeof adSlot === "function" ? adSlot("landing") : ""}
     <section class="sect" id="analise">
       <div class="wrap">
         <span class="eyebrow">Compare com os amigos</span>
@@ -761,7 +766,8 @@ async function renderCommunity() {
   const R = rankingBlock(rows, session.user.id, "pitwall.commF", renderCommunity);
   view.innerHTML = `<div class="wrap page">
     <div class="page-head"><div><h1>Comunidade</h1><div class="sub">${R.pilots} ${R.pilots === 1 ? "piloto" : "pilotos"} · ${R.tracks} pistas · ${R.cars} carros · ${rows.length} recordes. A melhor volta de cada um; filtre por pista, carro ou piloto.</div></div></div>
-    ${R.html}</div>`;
+    ${R.html}
+    ${typeof adSlot === "function" ? adSlot("ranking") : ""}</div>`;
   R.bind(view);
 }
 

@@ -1053,3 +1053,17 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .navfoot .live.video .rec { display: inline-block; }
 .sidenav:not(:hover):not(.pinned) .navfoot .live .rec { display: none; }
 .navfoot .live.waiting .dot { animation: pulse 2.4s infinite; }
+
+/* ---- plano ---- */
+.plan-hero { background: linear-gradient(135deg, rgba(46,229,157,.07), rgba(59,156,255,.05) 60%, rgba(185,140,255,.06)); }
+.plan-hero.paid { border-color: rgba(46,229,157,.4); }
+.plan-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.plan-chip { display: inline-block; padding: 4px 14px; border-radius: 99px; font-weight: 700; font-size: 15px; background: var(--panel-2); border: 1px solid var(--line); }
+.plan-chip.pro { background: var(--grad); color: #04140d; border-color: transparent; }
+.plan-line { margin: 12px 0; font-size: 15px; }
+.plan-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.plan-table { display: grid; gap: 2px; margin-top: 8px; }
+.plan-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid #19212e; color: var(--muted); }
+.plan-row.on { color: var(--text); }
+.plan-row i { width: 22px; text-align: center; font-style: normal; color: var(--accent); }
+.plan-row em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 2px 8px; border-radius: 99px; background: rgba(185,140,255,.15); color: var(--accent-3); }

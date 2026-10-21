@@ -11,9 +11,9 @@
   <aside class="sidenav" id="sidenav">
     <a class="brand" href="#/" title="Pitwall">
       <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true">
-        <rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="currentColor" stroke-width="2.5"/>
-        <path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
-        <circle cx="22" cy="22" r="2.2" fill="currentColor"/>
+        <defs><linearGradient id="pwgA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2ee59d"/><stop offset=".55" stop-color="#3b9cff"/><stop offset="1" stop-color="#b98cff"/></linearGradient></defs><rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="url(#pwgA)" stroke-width="2.5"/>
+        <path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="url(#pwgA)" stroke-width="2.5" stroke-linejoin="round"/>
+        <circle cx="22" cy="22" r="2.4" fill="#b98cff"/>
       </svg><span>Pitwall</span>
     </a>
     <nav>
@@ -35,12 +35,14 @@
     </nav>
     <div class="navfoot">
       <div id="live" class="live waiting" title=""><span class="dot"></span><div class="lv-txt"><b class="lv-t">Aguardando o jogo</b><small class="lv-s">Abra o ACC ou o iRacing</small></div><span class="rec" title="Gravando vídeo">REC</span></div>
+      <a href="#/plano" data-nav="plano" title="Plano"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg><span>Plano</span></a>
       <a href="#/settings" data-nav="settings" title="Configurações"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Configurações</span></a>
     </div>
   </aside>
   <main id="view"></main>
   <script src="/static/vendor/uPlot.iife.min.js"></script>
   <script src="/static/engineer.js"></script>
+  <script src="/static/plano.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -17,19 +17,35 @@ def available() -> bool:
 
 
 def _icon_image(recording: bool, s: int = 64):
+    """Logo do Pitwall: contorno e P em degradê verde, azul e roxo (todo verde quando está gravando)."""
     from PIL import Image, ImageDraw
     k = s / 64
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    color = (63, 214, 139, 255) if recording else (59, 156, 255, 255)
-    d.rounded_rectangle((4 * k, 4 * k, s - 4 * k, s - 4 * k), radius=14 * k, fill=(19, 22, 27, 255),
-                        outline=color, width=max(1, round(5 * k)))
-    # letra P: "barriga" (anel arredondado) + haste
-    bg = (19, 22, 27, 255)
-    d.rounded_rectangle((20 * k, 15 * k, 46 * k, 40 * k), radius=12 * k, fill=color)
-    d.rounded_rectangle((27 * k, 22 * k, 39 * k, 33 * k), radius=5 * k, fill=bg)
-    d.rectangle((20 * k, 15 * k, 27 * k, 50 * k), fill=color)
-    return img
+    mask = Image.new("L", (s, s), 0)
+    d = ImageDraw.Draw(mask)
+    d.rounded_rectangle((4 * k, 4 * k, s - 4 * k, s - 4 * k), radius=14 * k, outline=255, width=max(1, round(5 * k)))
+    d.rounded_rectangle((20 * k, 15 * k, 46 * k, 40 * k), radius=12 * k, fill=255)
+    d.rounded_rectangle((27 * k, 22 * k, 39 * k, 33 * k), radius=5 * k, fill=0)
+    d.rectangle((20 * k, 15 * k, 27 * k, 50 * k), fill=255)
+    stops = [(0.0, (46, 229, 157)), (0.55, (59, 156, 255)), (1.0, (185, 140, 255))]
+
+    def col(t):
+        if recording:
+            return stops[0][1]
+        for (a, ca), (b, cb) in zip(stops, stops[1:]):
+            if t <= b:
+                u = (t - a) / (b - a)
+                return tuple(round(ca[x] + (cb[x] - ca[x]) * u) for x in range(3))
+        return stops[-1][1]
+
+    grad = Image.new("RGBA", (s, s))
+    px = grad.load()
+    for y in range(s):
+        for x in range(s):
+            px[x, y] = col((x + y) / (2 * max(1, s - 1))) + (255,)
+    bg = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    ImageDraw.Draw(bg).rounded_rectangle((4 * k, 4 * k, s - 4 * k, s - 4 * k), radius=14 * k, fill=(10, 14, 20, 255))
+    out = Image.alpha_composite(bg, Image.composite(grad, Image.new("RGBA", (s, s), (0, 0, 0, 0)), mask))
+    return out
 
 
 def _pretty(name: str) -> str:

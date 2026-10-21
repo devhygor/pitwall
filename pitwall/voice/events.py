@@ -20,6 +20,7 @@ CATEGORIES = [
     ("incidents", "Rodadas e incidentes"), ("humor", "Humor, dicas e broncas (veja Personalidade)"), ("info", "Boas-vindas e informações"),
 ]
 DEFAULT_EVENTS = {k: True for k, _ in CATEGORIES}
+FREE_CATEGORIES = {"flags", "track_limits", "penalties", "fuel", "session"}   # avisos do plano Grátis
 
 # aviso -> evento de humor (ver humor.py)
 MOOD_EVENTS = {"lap_invalid": "invalid", "track_limits": "invalid", "cut_penalty": "penalty", "penalty": "penalty", "spin": "spin",
@@ -86,6 +87,8 @@ class Monitor:
 
     # ---- infraestrutura ---------------------------------------------------------------------
     def _on(self, cat) -> bool:
+        if cat not in FREE_CATEGORIES and not self.eng.allows("voice_full"):
+            return False                                  # avisos além do básico são do plano Pro
         ev = self.eng.settings.get("eng_events") if self.eng.settings else None
         return bool((ev or DEFAULT_EVENTS).get(cat, True))
 

@@ -255,6 +255,9 @@ class VideoRecorder:
 
     def cleanup(self):
         keep = max(1, self.settings.get("video_keep_sessions"))
+        lic = getattr(self, "license", None)
+        if lic is not None and not lic.has("video_unlimited"):
+            keep = min(keep, 5)                          # plano Grátis guarda os vídeos das últimas 5 sessões
         for s in self.db.sessions_with_video()[keep:]:
             _rm(Path(s["video_path"]))
             self.db.set_session_video(s["id"], video_path=None)
