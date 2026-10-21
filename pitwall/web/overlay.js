@@ -445,7 +445,7 @@ function standingsOverlay() {
     const cars = [["BMW", "M4"], ["FER", "296"], ["POR", "992 R"], ["AUD", "R8 Evo2"], ["MER", "AMG"], ["MCL", "720S"]];
     const rows = names.map((n, i) => { const gt4 = i >= 8, c = gt4 ? ["BMW", "M4 GT4"] : cars[i % cars.length];
       return { pos: i + 1, number: 10 + i * 7, first: n[0], last: n[1], short: n[1].slice(0, 3).toUpperCase(), cls: gt4 ? "GT4" : "GT3", cls_color: gt4 ? "#3d8bff" : "#e8505b",
-        brand: c[0], model: c[1], cls_pos: gt4 ? i - 7 : i + 1, laps: 7, best_ms: 98500 + i * 410, last_ms: 98900 + i * 380, pit: i === 9, me: i === 5,
+        brand: c[0], model: c[1], cls_pos: gt4 ? i - 7 : i + 1, laps: 7, best_ms: 98500 + i * 410, last_ms: i === 0 || i === 2 || i === 8 ? 98500 + i * 410 : 98900 + i * 380, pit: i === 9, me: i === 5,
         gap_leader: i ? { ms: i * 1300 } : null, interval: i ? { ms: 900 + i * 40 } : null, vs_me: i === 5 ? null : { ms: (5 - i) * 1100 } }; });
     return { race: true, rows, classes: [{ name: "GT3", color: "#e8505b", n: 8 }, { name: "GT4", color: "#3d8bff", n: 4 }],
       header: { time_left: 1208000, total: 2700000, lap: 7, total_laps: 20, count: 36, type: "Race" } };
@@ -467,6 +467,9 @@ function standingsOverlay() {
     };
     const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || (rows.some((r) => r.cls) && !multi)) && (c !== "car" || rows.some((r) => r.brand)));
     const bestAll = Math.min(...rows.map((r) => r.best_ms || 1e12));
+    const bestCls = {};                                    // com várias classes, o mais rápido de cada classe fica roxo
+    for (const r of rows) { const k = r.cls || ""; if (r.best_ms && (!bestCls[k] || r.best_ms < bestCls[k])) bestCls[k] = r.best_ms; }
+    const isBest = (r) => r.best_ms && r.best_ms === (multi ? bestCls[r.cls || ""] : bestAll);
     const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", car: cfg.carstyle === "logo" ? "64px" : cfg.carstyle === "text" ? "92px" : "118px" };
     const tpl = cols.map((c) => W[c] || "74px").join(" ");
     const clsPos = multi && cfg.classpos;
@@ -491,8 +494,12 @@ function standingsOverlay() {
       else if (c === "gap_leader") v = (clsPos ? r.cls_pos === 1 : r.pos === 1) ? "" : fmtGap(r.gap_leader);
       else if (c === "interval") v = r.interval ? fmtGap(r.interval) : "";
       else if (c === "vs_me") { v = r.me ? "" : fmtGap(r.vs_me); const g = r.vs_me; if (g) cls += (g.laps ? g.laps < 0 : g.ms < 0) ? " ahead" : " behind"; }
-      else if (c === "last") v = r.last_ms ? fmtLap(r.last_ms) : "—";
-      else if (c === "best") { v = r.best_ms ? fmtLap(r.best_ms) : "—"; if (r.best_ms && r.best_ms === bestAll) cls += " best-all"; }
+      else if (c === "last") {                          // roxo: a última volta foi a melhor da sessão (da classe); verde: foi a melhor dele
+        v = r.last_ms ? fmtLap(r.last_ms) : "—";
+        if (r.last_ms && isBest({ ...r, best_ms: r.last_ms })) cls += " best-all";
+        else if (r.last_ms && r.last_ms === r.best_ms) cls += " best-own";
+      }
+      else if (c === "best") { v = r.best_ms ? fmtLap(r.best_ms) : "—"; if (isBest(r)) cls += " best-all"; }
       else if (c === "laps") v = r.laps;
       else if (c === "pit") v = r.pit ? `<span class="pit">BOX</span>` : "";
       if (ci === 0 && r.cls_color && multi) style = `box-shadow: inset 3px 0 0 ${r.cls_color}`;

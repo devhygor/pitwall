@@ -3122,7 +3122,7 @@ function ovPanel(n, S) {
       "colorido e branco ficam sem fundo; só a etiqueta clara tem fundo");
     g += ovGroup("Nome do piloto", ovSeg(n, "name", [["short", "Sigla"], ["last", "Sobrenome"], ["full", "Nome completo"]], c.name));
     g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => `<button type="button" class="ovchip ${c.cols.includes(k) ? "on" : ""}" data-col="${k}"><i></i>${t}</button>`).join("")}</div>
-      <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um.</p>`);
+      <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um. Roxo = a melhor volta da sessão (da classe, se houver mais de uma); na coluna Última, roxo mostra quem acabou de fazer a melhor volta e verde, quem acabou de fazer a melhor dele.</p>`);
   } else if (n === "tyres") {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "temp", "Temperatura", c.temp, "Temperatura do núcleo do pneu; a cor mostra se está fria, ideal ou quente")}
       ${ovChip(n, "press", "Pressão", c.press, "A cor mostra se está abaixo, dentro ou acima da faixa ideal")}

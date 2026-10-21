@@ -62,7 +62,8 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .stand .ahead { color: #ff8a96; } .stand .behind { color: #7ff0b6; }
 .stand .dim { color: var(--muted); }
 .stand .pit { font-size: 10px; font-weight: 800; letter-spacing: .06em; color: #0b0d10; background: var(--amber); border-radius: 4px; padding: 1px 5px; }
-.stand .best-all { color: #d79bff; font-weight: 700; }
+.stand .best-own { color: #5be39a; font-weight: 700; }
+.stand .best-all { color: #c77dff; font-weight: 800; background: rgba(168, 85, 247, .24); border-radius: 6px; }
 .stand .sep { height: 6px; }
 .stand .msg { padding: 10px 12px; font-size: 12px; color: var(--muted); max-width: 300px; line-height: 1.4; }
 
