@@ -21,7 +21,7 @@ def _icon_image(recording: bool, s: int = 64):
     k = s / 64
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    color = (63, 214, 139, 255) if recording else (255, 176, 32, 255)
+    color = (63, 214, 139, 255) if recording else (59, 156, 255, 255)
     d.rounded_rectangle((4 * k, 4 * k, s - 4 * k, s - 4 * k), radius=14 * k, fill=(19, 22, 27, 255),
                         outline=color, width=max(1, round(5 * k)))
     # letra P: "barriga" (anel arredondado) + haste

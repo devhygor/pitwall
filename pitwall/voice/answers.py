@@ -37,6 +37,7 @@ EXAMPLES = [
         "Quem é o líder?", "Quanto falta para o líder?", "Qual a melhor volta do líder?", "Quem é o carro 23?",
         "Qual a última volta do carro número 7?", "Quem está em P3?", "Quem é o quinto colocado?",
         "O Fulano parou no box?", "Qual a diferença para o Fulano?", "Estou sendo dobrado?"]},
+    {"group": "Humor, dicas e broncas", "items": ["Como estou indo?", "Me dá uma dica", "Me elogia", "Me dá uma bronca", "Conta uma piada"]},
     {"group": "Controle", "items": ["Repete", "Silêncio (para os avisos)", "Pode voltar a falar", "Rádio check", "Ajuda"]},
 ]
 
@@ -124,7 +125,7 @@ def answer(p: Parsed, eng) -> str:
         return phrases.say("not_understood")
     st = eng.state
     f = st.f
-    if f is None and p.intent not in ("mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello"):
+    if f is None and p.intent not in ("mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "praise", "scold", "joke"):
         return "Ainda não estou recebendo dados do jogo."
     try:
         return fn(p, eng, st, f) or phrases.say("no_data")
@@ -157,6 +158,32 @@ def h_thanks(p, eng, st, f):
 
 def h_help(p, eng, st, f):
     return HELP
+
+
+def h_praise(p, eng, st, f):
+    import random
+    from .humor import PRAISE
+    return random.choice(PRAISE)
+
+
+def h_scold(p, eng, st, f):
+    import random
+    from .humor import SCOLD
+    return random.choice(SCOLD)
+
+
+def h_joke(p, eng, st, f):
+    import random
+    from .humor import JOKES
+    return random.choice(JOKES)
+
+
+def h_tip(p, eng, st, f):
+    return eng.mood.context_tip()
+
+
+def h_how_am_i(p, eng, st, f):
+    return eng.mood.assessment()
 
 
 def h_hello(p, eng, st, f):
@@ -601,7 +628,7 @@ def h_rv_summary(p, eng, st, f):
 
 _H = {
     "mute": h_mute, "unmute": h_unmute, "repeat": h_repeat, "radio_check": h_radio, "thanks": h_thanks, "help": h_help,
-    "hello": h_hello, "fuel_level": h_fuel_level, "fuel_laps": h_fuel_laps, "fuel_use": h_fuel_use, "fuel_end": h_fuel_end,
+    "hello": h_hello, "praise": h_praise, "scold": h_scold, "joke": h_joke, "tip": h_tip, "how_am_i": h_how_am_i, "fuel_level": h_fuel_level, "fuel_laps": h_fuel_laps, "fuel_use": h_fuel_use, "fuel_end": h_fuel_end,
     "pit_when": h_pit_when, "tyre_temp": h_tyre_temp, "tyre_press": h_tyre_press, "tyre_wear": h_tyre_wear, "tyre_all": h_tyre_all,
     "brake_temp": h_brake_temp, "brake_pads": h_brake_pads, "brake_all": h_brake_all, "laps_left": h_laps_left,
     "time_left": h_time_left, "lap_number": h_lap_number, "last_lap": h_last_lap, "best_lap": h_best_lap, "delta": h_delta,

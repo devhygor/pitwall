@@ -96,37 +96,7 @@ const CTX = (() => { try { return JSON.parse(localStorage.getItem("pitwall.ctx")
 function setCtx(car, track) {
   CTX.car = car || ""; CTX.track = track || "";
   try { localStorage.setItem("pitwall.ctx", JSON.stringify(CTX)); } catch (e) { /* ok */ }
-  renderCtx();
 }
-let ctxCombos = [];
-async function renderCtx(reload) {
-  const el = $("#ctx");
-  if (!el) return;
-  if (reload || !ctxCombos.length) {
-    try { ctxCombos = await api("/api/records"); } catch (e) { ctxCombos = []; }
-  }
-  if (!ctxCombos.length) { el.innerHTML = `<b>Analisando</b><div class="sub">Grave uma volta para começar.</div>`; return; }
-  if (!ctxCombos.some((c) => c.track === CTX.track && c.car === CTX.car)) {
-    const recent = [...ctxCombos].sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0];
-    CTX.car = recent.car; CTX.track = recent.track;
-  }
-  const tracks = [...new Set(ctxCombos.map((c) => c.track))].sort();
-  const cars = ctxCombos.filter((c) => c.track === CTX.track).map((c) => c.car);
-  const q = `car=${encodeURIComponent(CTX.car)}&track=${encodeURIComponent(CTX.track)}`;
-  el.innerHTML = `<b>Analisando</b>
-    <select id="ctxTrack" aria-label="Pista">${tracks.map((t) => `<option value="${esc(t)}" ${t === CTX.track ? "selected" : ""}>${esc(pretty(t))}</option>`).join("")}</select>
-    <select id="ctxCar" aria-label="Carro">${cars.map((c) => `<option value="${esc(c)}" ${c === CTX.car ? "selected" : ""}>${esc(pretty(c))}</option>`).join("")}</select>
-    <div class="go"><a href="#/compare?${q}">Análise</a><a href="#/replay?${q}">Replay</a><a href="#/progress?${q}">Progresso</a></div>`;
-  const changed = () => {
-    if (current.name === "progress") location.hash = `#/progress?car=${encodeURIComponent(CTX.car)}&track=${encodeURIComponent(CTX.track)}`;
-  };
-  $("#ctxTrack").onchange = (e) => {
-    const t = e.target.value, c = (ctxCombos.find((x) => x.track === t && x.car === CTX.car) || ctxCombos.find((x) => x.track === t)).car;
-    setCtx(c, t); changed();
-  };
-  $("#ctxCar").onchange = (e) => { setCtx(e.target.value, CTX.track); changed(); };
-}
-
 // ---------------------------------------------------------------- status ao vivo
 let lastLive = {};
 async function pollLive() {
@@ -135,14 +105,15 @@ async function pollLive() {
     const el = $("#live");
     el.className = "live " + (l.state || "waiting") + (l.video ? " video" : "");
     const gname = l.game === "iracing" ? "iRacing" : "ACC";
-    let txt = "Aguardando o jogo (ACC / iRacing)…";
+    let t = "Aguardando o jogo", sub = "Abra o ACC ou o iRacing";
     if (l.state === "recording") {
-      txt = `Gravando · ${pretty(l.track)} · Volta ${l.lap} · ${fmtLap(l.current_ms)}` +
-        (l.delta_ms != null && !l.in_pit_lane ? ` · ${fmtDelta(l.delta_ms)}` : "") +
-        (l.in_pit_lane ? " · Box" : "");
-    } else if (l.state === "pause") txt = `${gname} pausado`;
-    else if (l.state === "replay") txt = "Replay (não grava)";
-    $(".txt", el).textContent = txt;
+      t = "Gravando";
+      sub = `${pretty(l.track)} · Volta ${l.lap} · ${fmtLap(l.current_ms)}` +
+        (l.delta_ms != null && !l.in_pit_lane ? ` · ${fmtDelta(l.delta_ms)}` : "") + (l.in_pit_lane ? " · Box" : "");
+    } else if (l.state === "pause") { t = `${gname} pausado`; sub = "A gravação continua quando voltar"; }
+    else if (l.state === "replay") { t = "Replay"; sub = "Não grava replays"; }
+    $(".lv-t", el).textContent = t;
+    $(".lv-s", el).textContent = sub;
     el.title = l.suggested_setup ? `Setup sugerido para hoje: ${l.suggested_setup}` : "";
     if (l.laps_saved !== lastLive.laps_saved || l.session_id !== lastLive.session_id) {
       const changed = lastLive.state !== undefined;
@@ -1028,9 +999,9 @@ function drawTraces(r, hasB) {
     const x0 = u.valToPos(x[s.start], "x", true), x1 = u.valToPos(x[s.end], "x", true);
     const { top, height } = u.bbox;
     u.ctx.save();
-    u.ctx.fillStyle = "rgba(255,176,32,0.07)";
+    u.ctx.fillStyle = "rgba(46,229,157,0.07)";
     u.ctx.fillRect(x0, top, x1 - x0, height);
-    u.ctx.strokeStyle = "rgba(255,176,32,0.35)";
+    u.ctx.strokeStyle = "rgba(46,229,157,0.35)";
     u.ctx.setLineDash([4, 4]);
     u.ctx.beginPath(); u.ctx.moveTo(x0, top); u.ctx.lineTo(x0, top + height);
     u.ctx.moveTo(x1, top); u.ctx.lineTo(x1, top + height); u.ctx.stroke();
@@ -1044,7 +1015,7 @@ function drawTraces(r, hasB) {
       series = [{}, { stroke: "transparent" }];
     } else if (t.key === "delta") {
       data = [x, r.delta];
-      series = [{}, { stroke: A, width: 1.8, fill: "rgba(255,176,32,.08)" }];
+      series = [{}, { stroke: A, width: 1.8, fill: "rgba(46,229,157,.08)" }];
     } else {
       const pct = (arr) => arr.map((v) => v == null ? null : v * 100);
       data = [x, t.pct ? pct(r.a[t.key]) : r.a[t.key]];
@@ -1145,8 +1116,8 @@ function drawZoomMap(r, hasB) {
       <g id="zLineA">${phaseMapPaths(ax, az, AN.runsA, A)}</g>
       ${brA.map(([x, z]) => `<circle cx="${x}" cy="${z}" class="bk" stroke="${A}"/>`).join("")}
       ${brB.map(([x, z]) => `<circle cx="${x}" cy="${z}" class="bk" stroke="${B}"/>`).join("")}
-      ${hasB ? `<circle id="zB" fill="${B}" stroke="#0b0d10" stroke-width="2" vector-effect="non-scaling-stroke"/>` : ""}
-      <circle id="zA" fill="${A}" stroke="#0b0d10" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      ${hasB ? `<circle id="zB" fill="${B}" stroke="#080b11" stroke-width="2" vector-effect="non-scaling-stroke"/>` : ""}
+      <circle id="zA" fill="${A}" stroke="#080b11" stroke-width="2" vector-effect="non-scaling-stroke"/>
     </g>
   </svg>`;
   const world = $("#zWorld");
@@ -1222,7 +1193,7 @@ function drawFullMap(r, hasB, segs) {
     <path id="fSeg" d="" fill="none" stroke="${A}" stroke-opacity=".9" stroke-width="${8 * k}" stroke-linecap="round" stroke-linejoin="round"/>
     ${segs.map((s) => ax[s.start] != null ? `<circle cx="${ax[s.start]}" cy="${az[s.start]}" r="${2.2 * k}" fill="#8a93a3"/>` : "").join("")}
     ${labels}
-    ${hasB ? `<circle id="fB" r="${5 * k}" fill="${B}" stroke="#0b0d10" stroke-width="${2 * k}"/>` : ""}
+    ${hasB ? `<circle id="fB" r="${5 * k}" fill="${B}" stroke="#080b11" stroke-width="${2 * k}"/>` : ""}
     <circle id="fA" r="${5.5 * k}" fill="#fff" stroke="${A}" stroke-width="${2.5 * k}"/>
   </svg>`;
   const svg = $("#fSvg");
@@ -2023,7 +1994,7 @@ function drawReplayMini(r, hasB) {
     <path d="${svgPath(ax, az)}" fill="none" stroke="#2a3039" stroke-width="${7 * k}" stroke-linejoin="round"/>
     <path id="rpMiniSeg" d="" fill="none" stroke="${css("--accent")}" stroke-width="${7 * k}" stroke-linecap="round" stroke-linejoin="round"/>
     ${labels}
-    ${hasB ? `<circle id="rpMB" r="${5 * k}" fill="${css("--b")}" stroke="#0b0d10" stroke-width="${1.5 * k}"/>` : ""}
+    ${hasB ? `<circle id="rpMB" r="${5 * k}" fill="${css("--b")}" stroke="#080b11" stroke-width="${1.5 * k}"/>` : ""}
     <circle id="rpMA" r="${5.5 * k}" fill="#fff" stroke="${css("--a")}" stroke-width="${2.5 * k}"/>
   </svg>`;
   let curSeg = -1;
@@ -2382,7 +2353,7 @@ function ratingRing(v, size = 112) {
   const r = size / 2 - 8, c = 2 * Math.PI * r, f = v == null ? 0 : Math.max(0, Math.min(100, v)) / 100;
   const col = v == null ? "#3a414d" : v >= 85 ? "var(--good)" : v >= 70 ? "var(--accent)" : "var(--bad)";
   return `<svg class="ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="Rating ${v ?? "—"}">
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#262b34" stroke-width="9"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#1f2735" stroke-width="9"/>
     <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round"
       stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"/>
     <text x="50%" y="50%" text-anchor="middle" dy=".35em" fill="var(--text)" font-size="${size * 0.3}" font-weight="700">${v ?? "—"}</text></svg>`;
@@ -2519,7 +2490,7 @@ function progressGeneral(P) {
       width: el.clientWidth, height: 220, legend: { show: false }, scales: { x: { time: false, range: [-0.6, W.length - 0.4] } },
       axes: [axis({ values: (u, v) => v.map((i) => (Number.isInteger(i) && W[i] ? new Date(W[i].week + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "")) }),
              axis({ size: 44 })],
-      series: [{}, { label: "Voltas", fill: "rgba(255,176,32,.55)", stroke: css("--accent"), width: 1,
+      series: [{}, { label: "Voltas", fill: "rgba(46,229,157,.55)", stroke: css("--accent"), width: 1,
         paths: uPlot.paths.bars({ size: [0.6, 40] }), points: { show: false } }],
       cursor: { drag: { x: false, y: false } },
     }, [W.map((_, i) => i), W.map((w) => w.laps)], el));
@@ -2563,14 +2534,14 @@ const avatar = (u, cls = "") => u && u.avatar_url
 // desenho original de um carro de corrida (GT genérico, vista lateral)
 const CAR_SVG = (color = "var(--accent)", cls = "") => `<svg class="carart ${cls}" viewBox="0 0 320 96" aria-hidden="true">
   <path d="M12 66 L22 52 C40 46 70 44 96 42 L132 26 C150 19 190 18 214 24 L252 38 C276 42 296 48 306 56 L310 66 Z" fill="${color}"/>
-  <path d="M138 30 L160 24 C180 22 198 23 210 27 L230 38 L132 40 Z" fill="#0b0d10" opacity=".85"/>
-  <path d="M8 66 H312 V72 H8 Z" fill="#0b0d10" opacity=".6"/>
+  <path d="M138 30 L160 24 C180 22 198 23 210 27 L230 38 L132 40 Z" fill="#080b11" opacity=".85"/>
+  <path d="M8 66 H312 V72 H8 Z" fill="#080b11" opacity=".6"/>
   <path d="M286 44 L314 40 L316 46 L292 50 Z" fill="${color}" opacity=".85"/>
   <rect x="300" y="34" width="4" height="12" fill="${color}"/>
-  <circle cx="74" cy="68" r="18" fill="#0b0d10"/><circle cx="74" cy="68" r="10" fill="#2a3039"/><circle cx="74" cy="68" r="4" fill="${color}"/>
-  <circle cx="250" cy="68" r="18" fill="#0b0d10"/><circle cx="250" cy="68" r="10" fill="#2a3039"/><circle cx="250" cy="68" r="4" fill="${color}"/>
-  <path d="M100 52 H200" stroke="#0b0d10" stroke-width="2" opacity=".5"/>
-  <text x="170" y="60" font-size="14" font-weight="800" font-style="italic" fill="#0b0d10" opacity=".7">27</text></svg>`;
+  <circle cx="74" cy="68" r="18" fill="#080b11"/><circle cx="74" cy="68" r="10" fill="#2a3039"/><circle cx="74" cy="68" r="4" fill="${color}"/>
+  <circle cx="250" cy="68" r="18" fill="#080b11"/><circle cx="250" cy="68" r="10" fill="#2a3039"/><circle cx="250" cy="68" r="4" fill="${color}"/>
+  <path d="M100 52 H200" stroke="#080b11" stroke-width="2" opacity=".5"/>
+  <text x="170" y="60" font-size="14" font-weight="800" font-style="italic" fill="#080b11" opacity=".7">27</text></svg>`;
 
 const teamLogo = (t, cls = "") => t && t.logo_url
   ? `<img class="tlogo ${cls}" src="${esc(t.logo_url)}" alt="Logo da equipe ${esc(t.name)}">`
@@ -2621,7 +2592,7 @@ async function renderTeam(tab) {
   const invites = st.invites || [], pending = st.pending || [];
   view.innerHTML = `
     <section class="team-hero">
-      ${CAR_SVG("rgba(255,176,32,.16)", "bg")}
+      ${CAR_SVG("rgba(46,229,157,.16)", "bg")}
       <div class="th-main">${team ? teamLogo(team, "xl") : ""}
         <div><span class="sub">${team ? ROLE_NAME[team.role] + " · " + (MODE_INFO[team.join_mode] || MODE_INFO.invite)[0] : "Equipe"}</span>
           <h1>${esc(team ? team.name : "Sem equipe ainda")}</h1>
@@ -3507,7 +3478,7 @@ async function backupList() {
 }
 
 route();
-if (!location.hash.startsWith("#/overlay")) { pollLive(); renderCtx(); }
+if (!location.hash.startsWith("#/overlay")) { pollLive(); }
 
 // ---------------------------------------------------------------- Low Fuel Motorsport (só leitura)
 const LIC_COL = { ROOKIE: "#9aa3b2", IRON: "#8d7b6a", BRONZE: "#cd7f32", SILVER: "#c8ced8", GOLD: "#ffcf3f",
@@ -3645,7 +3616,7 @@ async function renderLfm(force) {
       cursor: { drag: { x: false, y: false } },
     }, [pts.map((_, i) => i), pts.map((p) => p.rating)], el));
   };
-  lfChart($("#lfElo"), P.elo_graph, "#ffb020", { label: "ELO" });
+  lfChart($("#lfElo"), P.elo_graph, "#2ee59d", { label: "ELO" });
   lfChart($("#lfSr"), P.sr_graph, "#3fd68b", { label: "SR" });
 }
 

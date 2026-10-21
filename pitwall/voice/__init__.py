@@ -15,6 +15,7 @@ from .. import db as _db
 from . import audio, inputs, nlu, phrases
 from .answers import answer
 from .events import CATEGORIES, DEFAULT_EVENTS, Monitor
+from .humor import PERSONALITIES, Mood
 from .listener import Listener
 from .spotter import Spotter
 from .state import RaceState
@@ -155,6 +156,7 @@ class Engineer:
         self.root = _db.data_dir() / "voice"
         self.state = RaceState(live_delta=getattr(recorder, "live_delta", None), settings=settings)
         self.spotter = Spotter(settings)
+        self.mood = Mood(self)
         self.monitor = Monitor(self)
         self.tts = TTS(settings, self.root)
         self.stt = WhisperSTT(settings, self.root)
@@ -368,6 +370,24 @@ class Engineer:
             self.log("ouviu", text)
         self.test = res
 
+    def mood_demo(self, personality: str):
+        """Fala exemplos da personalidade escolhida (sem precisar salvar nem estar no jogo)."""
+        if personality not in dict(PERSONALITIES):
+            return []
+        if personality == "profissional":
+            lines = ["Sem comentários extras: só os avisos essenciais."]
+        else:
+            lines = []
+            for ev in ("spin", "pb", "slow"):
+                t = self.mood.line(ev, self.mood.tone(ev, personality))
+                if t:
+                    lines.append(t)
+        self.speaker.interrupt()
+        for i, t in enumerate(lines):
+            self.speaker.enqueue(t, prio=4, ttl=60, cat="reply", key=f"demo{i}")
+        self.speaker.start()
+        return lines
+
     def stop_audio(self):
         """Para na hora o que estiver falando/tocando (teste, amostra ou fala) e limpa a fila."""
         self._sample_gen += 1
@@ -411,7 +431,7 @@ class Engineer:
                         "capture": self.keys.capture_state},
             "spotter": {"source": sp.source, "left": sp.left, "right": sp.right, "calibrated": sp.tf is not None},
             "game": {"live": bool(f and f.status == "live"), "track": f.track if f else "", "cars": len(self.state.rows)},
-            "test": self.test, "log": list(self._log)[-40:], "errors": list(self.errors),
+            "mood": {"label": self.mood.label(), "score": round(self.mood.score, 2)}, "test": self.test, "log": list(self._log)[-40:], "errors": list(self.errors),
             "audio": {"available": audio.available()},
         }
 

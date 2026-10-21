@@ -6,7 +6,7 @@
 
 const AN_PTS = 2000;
 const CH = ["t", "speed", "gas", "brake", "steer", "gear", "rpm", "x", "z"];
-const COL_A = "#f2a93b", COL_B = "#5cc8ff";
+const COL_A = "#2ee59d", COL_B = "#5cc8ff";
 const PH_COL = ["#39d98a", "#ffd23f", "#ff5a5f"], PH_NAME = ["Acelerando", "Sem pedal", "Freando"];
 const EVT = {
   lock: ["●", "Travou a roda", "a roda travou na freada: alivie um pouco o pedal ou freie em linha reta antes de virar"],
@@ -544,7 +544,7 @@ function anMapDraw() {
   path(a); ctx.strokeStyle = "#1d2738"; ctx.lineWidth = AS.follow ? 26 : 14; ctx.stroke();
   // trecho da curva selecionada
   const s = AS.segs[AS.seg];
-  if (s) { path(a, s.start, s.end); ctx.strokeStyle = "rgba(242,169,59,.22)"; ctx.lineWidth = AS.follow ? 30 : 18; ctx.stroke(); }
+  if (s) { path(a, s.start, s.end); ctx.strokeStyle = "rgba(46,229,157,.22)"; ctx.lineWidth = AS.follow ? 30 : 18; ctx.stroke(); }
   // linha A colorida pela fase do pedal (zoom) ou laranja (inteira)
   if (b) { path(b); ctx.strokeStyle = COL_B; ctx.lineWidth = 1.6; ctx.stroke(); }
   if (AS.follow) {
@@ -561,7 +561,7 @@ function anMapDraw() {
     const [x, y] = P(L.x[sg.apex], L.z[sg.apex]);
     const col = !AS.hasB || sg.delta == null ? "#3a4560" : sg.delta > 0.03 ? "#ff5a5f" : sg.delta < -0.03 ? "#39d98a" : "#5b6780";
     ctx.beginPath(); ctx.arc(x, y, k === AS.seg ? 11 : 9, 0, 7); ctx.fillStyle = col; ctx.fill();
-    if (k === AS.seg) { ctx.lineWidth = 2; ctx.strokeStyle = "#f2a93b"; ctx.stroke(); }
+    if (k === AS.seg) { ctx.lineWidth = 2; ctx.strokeStyle = "#2ee59d"; ctx.stroke(); }
     ctx.fillStyle = "#0b0f18"; ctx.fillText(String(sg.n), x, y + 0.5);
   });
   // problemas
@@ -583,7 +583,7 @@ function anCharts() {
   const marks = (u) => {
     const ctx = u.ctx, { top, height, left, width: w } = u.bbox, s = AS.segs[AS.seg];
     ctx.save();
-    if (s) { const x0 = u.valToPos(x[s.start], "x", true), x1 = u.valToPos(x[s.end], "x", true); ctx.fillStyle = "rgba(242,169,59,.06)"; ctx.fillRect(x0, top, x1 - x0, height); }
+    if (s) { const x0 = u.valToPos(x[s.start], "x", true), x1 = u.valToPos(x[s.end], "x", true); ctx.fillStyle = "rgba(46,229,157,.06)"; ctx.fillRect(x0, top, x1 - x0, height); }
     for (const e of AS.evs) { const px = u.valToPos(x[e.i], "x", true); if (px < left || px > left + w) continue; ctx.strokeStyle = e.type === "lock" ? "#ff9b5d" : e.type === "loss" ? "#ff5a5f" : "#ffd23f"; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, top + height); ctx.stroke(); }
     ctx.restore();
   };
@@ -603,7 +603,7 @@ function anCharts() {
     const el = $(`#tp-${t.key}`);
     let data, series;
     const pct = (arr) => arr.map((v) => v == null ? null : v * 100);
-    if (t.key === "delta") { data = [x, R.delta]; series = [{}, { stroke: COL_A, width: 1.8, fill: "rgba(242,169,59,.08)" }]; }
+    if (t.key === "delta") { data = [x, R.delta]; series = [{}, { stroke: COL_A, width: 1.8, fill: "rgba(46,229,157,.08)" }]; }
     else if (t.key === "phase") { data = [x, x.map(() => null)]; series = [{}, { stroke: "transparent" }]; }
     else {
       const va = t.pct ? pct(R.a[t.key]) : R.a[t.key];

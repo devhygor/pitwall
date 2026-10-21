@@ -89,6 +89,8 @@ DEFAULTS = {
     "eng_listen": True,                 # ouvir o piloto (desligue para só receber avisos)
     "eng_stt_model": "base",            # tiny | base | small (Whisper)
     "eng_verbosity": "normal",          # pouco | normal | muito
+    "eng_personality": "profissional",  # profissional | humor | bravo | variavel (ver pitwall/voice/humor.py)
+    "eng_humor_level": "normal",        # pouco | normal | muito: com que frequência comenta
     "eng_events": {},                   # categorias de aviso ligadas/desligadas (ver pitwall/voice/events.py)
     "eng_spotter_swap": False,          # inverte esquerda/direita do observador
 }

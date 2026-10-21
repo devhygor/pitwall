@@ -813,6 +813,10 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         _eng().stop_listen_test()
         return {"ok": True}
 
+    @app.post("/api/engineer/mood/demo")
+    def eng_mood_demo(personality: str = Body(..., embed=True)):
+        return {"lines": _eng().mood_demo(personality)}
+
     @app.post("/api/engineer/stop")
     def eng_stop():
         _eng().stop_audio()

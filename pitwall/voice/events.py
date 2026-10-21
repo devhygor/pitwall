@@ -17,9 +17,16 @@ CATEGORIES = [
     ("penalties", "Penalidades"), ("fuel", "Combustível"), ("tyres", "Pneus"), ("brakes", "Freios"),
     ("gaps", "Carros perto (frente e trás)"), ("positions", "Ultrapassagens e posição"), ("laps", "Tempos de volta"),
     ("session", "Tempo e voltas restantes"), ("weather", "Clima e aderência"), ("pit", "Box"),
-    ("incidents", "Rodadas e incidentes"), ("info", "Boas-vindas e informações"),
+    ("incidents", "Rodadas e incidentes"), ("humor", "Humor, dicas e broncas (veja Personalidade)"), ("info", "Boas-vindas e informações"),
 ]
 DEFAULT_EVENTS = {k: True for k, _ in CATEGORIES}
+
+# aviso -> evento de humor (ver humor.py)
+MOOD_EVENTS = {"lap_invalid": "invalid", "track_limits": "invalid", "cut_penalty": "penalty", "penalty": "penalty", "spin": "spin",
+               "lost": "lost", "gained": "gained", "lap_pb": "pb", "lap_best": "best", "lap_slow": "slow", "tyre_hot": "tyre_hot",
+               "brake_hot": "brake_hot", "fuel_crit": "fuel", "fuel_low": "fuel", "fuel_short": "fuel", "behind_close": "pressure",
+               "defend": "pressure", "behind_drop": "gap_good", "rain_start": "rain", "pit_in": "pit", "race_start": "start",
+               "chequered": "finish"}
 
 WHERE4 = ["dianteiro esquerdo", "dianteiro direito", "traseiro esquerdo", "traseiro direito"]
 
@@ -46,6 +53,9 @@ class Monitor:
         self._reset_session()
 
     def _reset_session(self):
+        mood = getattr(self.eng, "mood", None)
+        if mood is not None:
+            mood.reset()
         self.greeted = False
         self.live_since = None
         self.prev = None
@@ -91,6 +101,13 @@ class Monitor:
             return False
         self._cool[tag] = now + cool * self._mult()
         self.eng.say(text, prio=prio, ttl=ttl, cat=cat, key=tag)
+        ev = MOOD_EVENTS.get(key)
+        mood = getattr(self.eng, "mood", None)
+        if ev and mood is not None:
+            if ev == "finish":
+                me = self.eng.state.me
+                ev = "finish_good" if (me and me.get("pos", 99) <= 3) or mood.score > 0.3 else "finish_bad"
+            mood.react(ev)
         return True
 
     # ---- laço principal ---------------------------------------------------------------------
@@ -125,6 +142,7 @@ class Monitor:
             self._positions(st, f, now)
             self._session(st, f)
             self._others_best(st)
+            self.eng.mood.spontaneous()
             self._weather(f)
 
     # ---- partes ------------------------------------------------------------------------------

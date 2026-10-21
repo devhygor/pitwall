@@ -62,7 +62,7 @@ function markTop() {
 function renderMe() {
   const el = $("#me");
   if (!session) {
-    el.innerHTML = `<nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#equipe" data-go="equipe">Equipe</a></nav>
+    el.innerHTML = `<nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#engenheiro" data-go="engenheiro">Engenheiro</a><a href="#equipe" data-go="equipe">Equipe</a></nav>
       <a class="btn small quiet" href="#entrar" data-go="entrar" id="goLogin">Entrar</a>`;
     return;
   }
@@ -105,7 +105,7 @@ function overlayShots() {
         <path d="${TRACK}" fill="none" stroke="#3a4560" stroke-width="40" stroke-linejoin="round"/>
         <path d="${TRACK}" fill="none" stroke="#0e1420" stroke-width="30" stroke-linejoin="round"/>
         <path d="M262 592 H600" fill="none" stroke="#ffd23f" stroke-width="30" opacity=".9"/>
-        <circle cx="822" cy="526" r="13" fill="#f2a93b"/><circle cx="522" cy="164" r="10" fill="#a77bff"/><circle cx="420" cy="190" r="10" fill="#8e9bb2"/>
+        <circle cx="822" cy="526" r="13" fill="#2ee59d"/><circle cx="522" cy="164" r="10" fill="#a77bff"/><circle cx="420" cy="190" r="10" fill="#8e9bb2"/>
         <path d="M560 70v52l34-12-34-14" fill="#ffd23f"/><path d="M560 60v90" stroke="#eef2f7" stroke-width="5"/>
       </svg>
     </div><figcaption><b>Mapa com bandeiras</b><span>A pista com todos os carros. A bandeira amarela acende no trecho certo.</span></figcaption></figure>
@@ -117,7 +117,7 @@ function overlayShots() {
       <div class="wheel"><svg viewBox="0 0 48 48" width="54" height="54" aria-hidden="true"><circle cx="24" cy="24" r="19" fill="none" stroke="#eef2f7" stroke-width="4" transform="rotate(-18 24 24)"/><path d="M5 24h13M30 24h13M24 30v13" stroke="#eef2f7" stroke-width="4" transform="rotate(-18 24 24)"/></svg><b>5</b><small>214 km/h</small></div>
     </div></div><figcaption><b>Pedais e volante</b><span>Acelerador, freio e embreagem em tempo real, com marcha e velocidade.</span></figcaption></figure>
     <figure class="ov ov-tyre"><div class="screen"><div class="tyres">
-      ${tyre(84, "27.4", "#f2a93b")}${tyre(86, "27.6", "#ff7a45")}${tyre(79, "27.1", "#39d98a")}${tyre(81, "27.2", "#39d98a")}
+      ${tyre(84, "27.4", "#2ee59d")}${tyre(86, "27.6", "#3b9cff")}${tyre(79, "27.1", "#39d98a")}${tyre(81, "27.2", "#39d98a")}
     </div></div><figcaption><b>Pneus</b><span>Temperatura e pressão das quatro rodas, com a cor mostrando a janela ideal.</span></figcaption></figure>
     <figure class="ov ov-delta"><div class="screen"><div class="dlt">
       <small>contra a sua melhor</small><b>−0.214</b>
@@ -133,7 +133,7 @@ function renderLanding(invite) {
           <span class="eyebrow">ACC · iRacing · Windows</span>
           <h1>Seu engenheiro de corrida, <em>dentro do PC.</em></h1>
           <p>O Pitwall grava cada volta, mostra onde você perde tempo e coloca você lado a lado com os seus amigos.
-            E ainda põe mapa, pedais, pneus e delta por cima do jogo.</p>
+            E ainda põe mapa, pedais, pneus e delta por cima do jogo, e tem um engenheiro que fala português com você.</p>
           <div class="cta-row">
             <a class="btn go xl" href="${esc(PITWALL.download)}">${DL_ICON}Baixar para Windows</a>
             <button class="btn xl quiet" data-go="entrar" type="button">Entrar na minha conta</button>
@@ -144,10 +144,10 @@ function renderLanding(invite) {
           <svg viewBox="70 40 860 590">
             <path d="${TRACK}" fill="none" stroke="#2a3548" stroke-width="46" stroke-linejoin="round"/>
             <path d="${TRACK}" fill="none" stroke="#1a2333" stroke-width="40" stroke-linejoin="round"/>
-            <path d="${TRACK}" fill="none" stroke="#f2a93b" stroke-width="1.6" stroke-dasharray="7 11" opacity=".4" id="tline"/>
+            <path d="${TRACK}" fill="none" stroke="#2ee59d" stroke-width="1.6" stroke-dasharray="7 11" opacity=".4" id="tline"/>
             <g id="sf"></g>
             <circle id="carBglow" r="24" fill="#a77bff" opacity=".2"/><circle id="carB" r="10" fill="#a77bff"/>
-            <circle id="carAglow" r="24" fill="#f2a93b" opacity=".22"/><circle id="carA" r="10" fill="#f2a93b"/>
+            <circle id="carAglow" r="24" fill="#2ee59d" opacity=".22"/><circle id="carA" r="10" fill="#2ee59d"/>
           </svg>
           <div class="tower">
             <div><span class="pos">1</span><span class="who"><i class="dot" style="background:var(--purple)"></i>Lucas</span><span class="gap fast">2:17.512</span></div>
@@ -172,6 +172,33 @@ function renderLanding(invite) {
         <p class="lede">Janelas transparentes que ficam na frente do ACC e do iRacing sem atrapalhar. Você escolhe quais
           mostrar, onde ficam e o tamanho. Os cliques passam direto para o jogo.</p>
         <div class="ovgrid">${overlayShots()}</div>
+      </div>
+    </section>
+
+    <section class="sect voice" id="engenheiro">
+      <div class="wrap">
+        <span class="eyebrow">Engenheiro de voz</span>
+        <h2>Um engenheiro que fala português com você</h2>
+        <p class="lede">Pergunte no meio da corrida e ouça a resposta no fone. Ele também avisa sozinho o que importa, sem
+          precisar de outro programa aberto.</p>
+        <div class="vgrid">
+          <div class="vlist">
+            <div class="vitem"><div class="fi">${ico(`<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>`)}</div><div><h3>Pergunte o que quiser</h3><p>“Quem está atrás de mim?”, “qual a diferença para o da frente?”, “quanto combustível eu tenho?”. Entende gírias, número do carro, posição e nome do piloto.</p></div></div>
+            <div class="vitem"><div class="fi">${ico(`<path d="M4 12h3l2-6 4 12 2-6h5"/>`)}</div><div><h3>Avisa sozinho</h3><p>Carro ao lado (“três de lado, você está no meio”), bandeiras, limites da pista, combustível, pneus, carro colado, recordes e chuva chegando.</p></div></div>
+            <div class="vitem"><div class="fi">${ico(`<path d="M3 12a9 9 0 0 1 18 0M3 12v4a2 2 0 0 0 2 2h1v-6H5M21 12v4a2 2 0 0 1-2 2h-1v-6h1"/>`)}</div><div><h3>Voz offline ou online</h3><p>Voz neural que funciona sem internet, ou a voz online mais natural. Escolha o microfone, o fone e a tecla (ou botão do volante) para falar.</p></div></div>
+            <div class="vitem"><div class="fi">${ico(`<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.5 2.2 2 3.5 2s2.5-.5 3.5-2M9 9.5h.01M15 9.5h.01"/>`)}</div><div><h3>Com personalidade</h3><p>Do profissional ao bem-humorado, que brinca com os erros e comemora os acertos, ou ao bravo, que dá bronca. Seu humor muda com o seu desempenho.</p></div></div>
+          </div>
+          <div class="radio" role="img" aria-label="Exemplo de conversa com o engenheiro">
+            <div class="radio-top"><i></i>Rádio da equipe<em>canal aberto</em></div>
+            <div class="msg me"><small>Você</small>Quem está atrás de mim?</div>
+            <div class="msg eng"><small>Engenheiro</small>É o Lucas, número 24, de Porsche. Está a 1,2 segundo, e chegando.</div>
+            <div class="msg warn"><small>Aviso</small>Carro à esquerda.</div>
+            <div class="msg warn"><small>Aviso</small>Três de lado, você está no meio.</div>
+            <div class="msg eng"><small>Engenheiro</small>Livre dos dois lados. Combustível para 6 voltas.</div>
+            <div class="msg me"><small>Você</small>Como estou indo?</div>
+            <div class="msg eng"><small>Engenheiro</small>Mandou bem! Sua última volta ficou perto da melhor. Mantém o ritmo.</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -211,7 +238,7 @@ function renderLanding(invite) {
               <svg viewBox="0 0 520 230" aria-hidden="true">
                 <g stroke="#2a3548" stroke-width="1"><path d="M0 40H520M0 100H520M0 160H520"/></g>
                 <rect x="292" y="6" width="70" height="150" fill="#ff5a5f" opacity=".1" rx="6"/>
-                <path d="M0 40 C40 40 60 44 80 120 C92 160 120 160 140 120 C170 60 200 30 260 30 C300 30 310 60 330 140 C340 170 370 168 390 120 C420 70 470 50 520 46" fill="none" stroke="#f2a93b" stroke-width="2.5"/>
+                <path d="M0 40 C40 40 60 44 80 120 C92 160 120 160 140 120 C170 60 200 30 260 30 C300 30 310 60 330 140 C340 170 370 168 390 120 C420 70 470 50 520 46" fill="none" stroke="#2ee59d" stroke-width="2.5"/>
                 <path d="M0 42 C38 42 58 50 84 126 C96 164 126 166 146 126 C176 66 206 36 262 34 C302 34 314 66 336 148 C346 176 378 172 396 128 C426 78 472 56 520 52" fill="none" stroke="#5ab0ff" stroke-width="2.5"/>
                 <path d="M0 196 C80 196 130 206 200 200 S300 186 340 192 S460 212 520 214" fill="none" stroke="#39d98a" stroke-width="2"/>
                 <path d="M0 196 H520" stroke="#3c4a63" stroke-dasharray="4 6"/>
@@ -219,7 +246,7 @@ function renderLanding(invite) {
                 <text x="8" y="186" fill="#8e9bb2" font-size="12" font-family="Barlow">Diferença para a referência</text>
                 <text x="298" y="22" fill="#ff5a5f" font-family="Barlow Condensed" font-weight="700" font-size="17">Curva 4</text>
               </svg>
-              <div class="legend"><span><i style="background:#f2a93b"></i>Você</span><span><i style="background:#5ab0ff"></i>Referência</span></div>
+              <div class="legend"><span><i style="background:#2ee59d"></i>Você</span><span><i style="background:#5ab0ff"></i>Referência</span></div>
             </div>
           </div>
         </div>

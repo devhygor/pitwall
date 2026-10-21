@@ -190,6 +190,10 @@ Um engenheiro de rádio que **fala e entende português do Brasil**, sem precisa
   limites da pista, bandeiras, penalidades, combustível, pneus e freios fora da janela, carro colado atrás ou
   ao alcance na frente, ultrapassagens, recordes, tempo e voltas restantes, chuva chegando, box, rodadas.
   Cada grupo liga e desliga; "silêncio" e "pode voltar a falar" funcionam por voz.
+- **Personalidade** (opcional): *profissional* (só os avisos), *bem-humorado* (brinca com os erros), *bravo* (dá bronca e
+  elogia de má vontade) ou *variável* (o humor sobe com recordes e ultrapassagens e cai com rodadas, voltas invalidadas e
+  posições perdidas, e volta ao normal com o tempo). Comenta depois do aviso normal, sem palavrão, e dá para pedir:
+  "como estou indo?", "me dá uma dica", "me elogia", "me dá uma bronca", "conta uma piada". Código em `pitwall/voice/humor.py`.
 - **Voz offline ou online**: *Piper* (neural, ~60 MB baixados uma vez) ou a voz do Windows (Maria): 100% offline.
   Online: *Microsoft Edge TTS* (neural, grátis, sem chave, mas precisa de internet e envia o texto falado à
   Microsoft; sem internet cai para a offline). O áudio de cada frase fica em cache no disco.

@@ -28,6 +28,11 @@ _RULES_SRC: list[tuple[str, list[list[str]], int]] = [
     ("radio_check", [["radio check", "teste de radio", "me ouve", "me escuta", "esta me ouvindo", "ta me ouvindo", "esta ai", "ta ai", "esta na escuta", "voce me ouve", "check de radio"]], 8),
     ("thanks", [["obrigad", "valeu", "brigad", "show", "beleza", "tmj", "tamo junto", "boa"]], 2),
     ("help", [["ajuda", "o que voce (sabe|responde|faz|consegue)", "quais (sao )?(os )?comandos", "que perguntas", "o que posso perguntar"]], 8),
+    ("praise", [["me elogi", "elogio", "fala algo bom", "me anima", "me motiva", "me incentiva", "me da uma forca", "me da um up"]], 9),
+    ("scold", [["bronca", "briga comigo", "me xinga", "me esculacha", "me da um sermao", "me da uma chamada", "me cobra"]], 9),
+    ("joke", [["piada", "me faz rir", "algo engracado", "conta uma", "fala uma graca", "brinca comigo"]], 9),
+    ("tip", [["dica", "conselho", "o que (eu )?(posso|devo) melhorar", "como (eu )?(posso )?melhorar", "como andar mais rapido", "me ajuda a (andar|ficar) mais rapido"]], 8),
+    ("how_am_i", [["como (eu )?(estou|to|tou) (indo|pilotando|me saindo|andando)", "como (esta|ta) (meu|o meu) desempenho", "estou indo bem", "to indo bem", "o que (voce )?acha (do meu|de mim)", "como (eu )?(estou|to) na sessao"]], 9),
     ("hello", [["oi", "ola", "engenheiro", "chefe", "e ai", "alo"]], 1),
     # --- eu: combustível --------------------------------------------------------------------------
     ("fuel_end", [["combust", "gasolina", "tanque", "abastec", "fuel"], ["(chega|da) (ate|pra|para) (o )?(fim|final|bandeira)", "terminar", "fim da (corrida|prova)", "ate o final", "ate o fim", "preciso (abastecer|parar|economizar)", "devo (abastecer|economizar)", "economiz", "suficiente"]], 8),

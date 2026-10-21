@@ -76,6 +76,13 @@ async function renderVoiceEngineer() {
         <div class="sub" id="eSttMsg"></div>
       </div>
 
+      <div class="set-card"><h2>Personalidade</h2>
+        ${setRow("Jeito do engenheiro", "Profissional só dá os avisos. Bem-humorado brinca com os erros e comemora os acertos. Bravo dá bronca e elogia de má vontade. Variável muda de humor conforme o seu desempenho: sobe com recordes e ultrapassagens, cai com rodadas, voltas invalidadas e posições perdidas. Sem palavrão.",
+          sel("ePers", [["profissional", "Profissional (só o essencial)"], ["humor", "Parceiro bem-humorado"], ["bravo", "Bravo (dá bronca)"], ["variavel", "Variável (muda com o seu desempenho)"]], S.eng_personality))}
+        ${setRow("Quanto comenta", "Frequência dos comentários de humor, dicas e broncas.", sel("eHumLv", [["pouco", "De vez em quando"], ["normal", "Normal"], ["muito", "Toda hora"]], S.eng_humor_level))}
+        ${setRow("Ouvir exemplo", "Fala três comentários no jeito escolhido (não precisa salvar nem estar no jogo).", `<div class="eng-inline"><button class="btn" id="ePersDemo">Ouvir exemplo</button><span class="sub" id="eMood"></span></div>`)}
+      </div>
+
       <div class="set-card"><h2>Avisos automáticos</h2>
         ${setRow("Quanto ele fala", "Controla a frequência dos avisos.", sel("eVerb", [["pouco", "Pouco (só o importante)"], ["normal", "Normal"], ["muito", "Muito"]], S.eng_verbosity))}
         <div class="eng-cats" id="eCats">${cat.categories.map((c) => `<label class="eng-cat"><input class="tgl" type="checkbox" data-cat="${c.id}" ${ev[c.id] === false ? "" : "checked"}><span>${esc(c.name)}</span></label>`).join("")}</div>
@@ -106,6 +113,8 @@ async function renderVoiceEngineer() {
   bindTgl("#eSwap", "eng_spotter_swap");
   bindSel("#eMode", "eng_voice_mode"); bindSel("#eOff", "eng_offline_engine"); bindSel("#ePiper", "eng_piper_voice");
   bindSel("#eWin", "eng_win_voice"); bindSel("#eEdge", "eng_edge_voice"); bindSel("#eMic", "eng_mic"); bindSel("#eOut", "eng_out");
+  bindSel("#ePers", "eng_personality"); bindSel("#eHumLv", "eng_humor_level");
+  $("#ePersDemo").onclick = () => post("/api/engineer/mood/demo", { personality: $("#ePers").value }).catch((e) => alert(e.message));
   bindSel("#ePttMode", "eng_ptt_mode"); bindSel("#eStt", "eng_stt_model"); bindSel("#eVerb", "eng_verbosity");
   $("#eWakeWord").addEventListener("change", (e) => put({ eng_wake_word: e.target.value.trim() || "engenheiro" }));
   $("#eRate").addEventListener("input", (e) => { $("#eRateV").textContent = e.target.value + "%"; });
@@ -225,6 +234,7 @@ async function renderVoiceEngineer() {
       $("#eAns").innerHTML = tst.error ? `<span class="status bad">${esc(tst.error)}</span>` :
         `<div class="eng-q">Você disse: ${esc(tst.heard)}</div><div class="eng-a">${esc(tst.answer)}</div><div class="sub">intenção: ${esc(tst.intent || "não entendi")}${tst.target ? " · alvo: " + esc(tst.target) : ""}</div>`;
     }
+    $("#eMood").textContent = S.eng_personality === "variavel" ? "Humor agora: " + st.mood.label : "";
     $("#ePttLbl").textContent = st.binding.label;
     $("#eLvl").style.width = Math.round(st.listener.level * 100) + "%";
     // downloads
