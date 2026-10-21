@@ -15,7 +15,7 @@ const FLAG_INFO = {
 };
 const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
   seconds: 8, steer: false, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
-  cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", fuel: true, predicted: true,
+  cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
 
 let cfg = { ...DEFAULT_CFG };
@@ -425,6 +425,8 @@ function pedalsOverlay() {
 const BRAND_FILE = { POR: "porsche", MER: "mercedes", FER: "ferrari", AUD: "audi", LAM: "lamborghini", MCL: "mclaren", NIS: "nissan", BMW: "bmw",
   BEN: "bentley", AMR: "astonmartin", JAG: "jaguar", HON: "honda", CHE: "chevrolet", KTM: "ktm", MAS: "maserati", FOR: "ford", TOY: "toyota",
   CAD: "cadillac", ACU: "acura", HYU: "hyundai", MAZ: "mazda", VW: "volkswagen" };
+// logotipos originais, coloridos e com fundo transparente (web/brands/color); sem arquivo, cai para a sigla
+const BRAND_COLOR_FILE = { ...BRAND_FILE, LEX: "lexus", ALP: "alpine", GIN: "ginetta" };
 const COLS = {
   pos: ["Pos", "pos", "c"], number: ["#", "dim r", ""], name: ["Piloto", "", ""], cls: ["Classe", "dim", ""],
   gap_leader: ["Líder", "r num", ""], interval: ["À frente", "r num", ""], vs_me: ["Δ eu", "r num", ""],
@@ -465,7 +467,7 @@ function standingsOverlay() {
     };
     const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || (rows.some((r) => r.cls) && !multi)) && (c !== "car" || rows.some((r) => r.brand)));
     const bestAll = Math.min(...rows.map((r) => r.best_ms || 1e12));
-    const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", car: cfg.carstyle === "logo" ? "46px" : cfg.carstyle === "text" ? "92px" : "118px" };
+    const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", car: cfg.carstyle === "logo" ? "58px" : cfg.carstyle === "text" ? "92px" : "118px" };
     const tpl = cols.map((c) => W[c] || "74px").join(" ");
     const clsPos = multi && cfg.classpos;
     const rowHtml = (r) => cols.map((c, ci) => {
@@ -474,11 +476,16 @@ function standingsOverlay() {
       else if (c === "number") v = r.number != null ? "#" + r.number : "";
       else if (c === "name") v = nameOf(r).replace(/</g, "&lt;");
       else if (c === "car") {
-        const f = BRAND_FILE[r.brand], mdl = r.model ? String(r.model).replace(/</g, "&lt;") : "";
-        const logo = f ? `<img class="carlogo" src="/static/brands/${f}.svg" alt="${esc(r.brand)}" title="${esc(r.brand + " " + (r.model || ""))}">` : "";
-        v = !r.brand ? "" : cfg.carstyle === "logo" ? `<span class="carchip ${f ? "sym" : ""}" title="${esc(r.brand + " " + (r.model || ""))}">${logo || `<b>${r.brand}</b>`}</span>`
-          : cfg.carstyle === "text" ? `<span class="carchip"><b>${r.brand}</b>${mdl ? `<i>${mdl}</i>` : ""}</span>`
-          : `<span class="carchip ${f ? "withsym" : ""}">${logo}<b>${r.brand}</b>${mdl ? `<i>${mdl}</i>` : ""}</span>`;
+        const mode = cfg.logomode || "color", mdl = r.model ? String(r.model).replace(/</g, "&lt;") : "", tip = esc(r.brand + " " + (r.model || ""));
+        // colorido: logotipo original sem fundo; branco: só o contorno em branco; etiqueta: preto numa etiqueta clara
+        const f = mode === "color" ? BRAND_COLOR_FILE[r.brand] : BRAND_FILE[r.brand];
+        const logo = !f ? "" : mode === "color" ? `<img class="carlogo color" src="/static/brands/color/${f}.png" alt="${esc(r.brand)}" title="${tip}">`
+          : mode === "mono" ? `<span class="logo" title="${tip}" style="--c:#fff;--u:url(/static/brands/${f}.svg)"></span>`
+          : `<img class="carlogo" src="/static/brands/${f}.svg" alt="${esc(r.brand)}" title="${tip}">`;
+        const wrap = mode === "chip" ? "" : " plain";
+        v = !r.brand ? "" : cfg.carstyle === "logo" ? (f ? `<span class="carchip sym${wrap}" title="${tip}">${logo}</span>` : `<span class="carchip${wrap}" title="${tip}"><b>${r.brand}</b></span>`)
+          : cfg.carstyle === "text" ? `<span class="carchip${wrap}"><b>${r.brand}</b>${mdl ? `<i>${mdl}</i>` : ""}</span>`
+          : `<span class="carchip ${f ? "withsym" : ""}${wrap}">${logo}<b>${r.brand}</b>${mdl ? `<i>${mdl}</i>` : ""}</span>`;
       }
       else if (c === "cls") v = r.cls || "";
       else if (c === "gap_leader") v = (clsPos ? r.cls_pos === 1 : r.pos === 1) ? "" : fmtGap(r.gap_leader);

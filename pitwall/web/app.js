@@ -3117,7 +3117,9 @@ function ovPanel(n, S) {
       ${ovChip(n, "classpos", "Posição na classe", c.classpos, "Com as classes separadas, mostra a posição dentro da classe")}</div>` +
       ovSlider(n, "others", "Linhas das outras classes", c.others, 1, 10, 1, ""));
     g += ovGroup("Carro (coluna Carro)", ovSeg(n, "carstyle", [["both", "Símbolo e texto"], ["logo", "Só o símbolo"], ["text", "Só o texto"]], c.carstyle),
-      "escolher um estilo liga a coluna Carro; marcas sem símbolo (Lexus, Alpine, Ginetta) aparecem em texto");
+      "escolher um estilo liga a coluna Carro; marcas sem símbolo aparecem em texto");
+    g += ovGroup("Aparência do símbolo", ovSeg(n, "logomode", [["color", "Colorido (logo original)"], ["mono", "Branco, sem cor"], ["chip", "Com etiqueta clara"]], c.logomode || "color"),
+      "colorido e branco ficam sem fundo; só a etiqueta clara tem fundo");
     g += ovGroup("Nome do piloto", ovSeg(n, "name", [["short", "Sigla"], ["last", "Sobrenome"], ["full", "Nome completo"]], c.name));
     g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => `<button type="button" class="ovchip ${c.cols.includes(k) ? "on" : ""}" data-col="${k}"><i></i>${t}</button>`).join("")}</div>
       <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um.</p>`);
