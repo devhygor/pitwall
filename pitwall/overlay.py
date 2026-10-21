@@ -44,6 +44,7 @@ class OverlayHub:
         self._prev_sector = None
         self._prev_pos = 0.0
         self._gh: dict = {}          # histórico da distância até cada carro (tendência: aproximando/afastando)
+        self._ih: dict = {}          # histórico do intervalo de cada carro para o da frente
 
     # ---- entrada -----------------------------------------------------------------
     def feed(self, f):
@@ -75,6 +76,7 @@ class OverlayHub:
         self._corners_try = 0.0
         self._prev_sector = None
         self._gh = {}
+        self._ih = {}
         if track and self.db is not None:
             threading.Thread(target=self._prefill, args=(track,), daemon=True).start()
             threading.Thread(target=self._load_corners, args=(track,), daemon=True).start()
@@ -190,6 +192,19 @@ class OverlayHub:
         return out
 
     # ---- participantes -----------------------------------------------------------
+    def _rate(self, store: dict, key, gap: float, ref_ms: float, now: float):
+        """Variação (ms por segundo) de `gap` nos últimos ~25 s; None sem histórico suficiente."""
+        h = store.setdefault(key, deque(maxlen=120))
+        if h and abs(gap - h[-1][1]) > 0.4 * ref_ms:             # pulo (volta, box, teleporte): recomeça
+            h.clear()
+        if not h or now - h[-1][0] >= 0.4:
+            h.append((now, gap))
+        while h and now - h[0][0] > 25:
+            h.popleft()
+        if len(h) < 4 or h[-1][0] - h[0][0] < 5:
+            return None
+        return (abs(h[-1][1]) - abs(h[0][1])) / (h[-1][0] - h[0][0])
+
     def _trend(self, c, me, ref_ms: float, now: float):
         """Estou me aproximando ou me afastando deste carro? (ms/s, positivo = bom para mim)
 
@@ -202,16 +217,9 @@ class OverlayHub:
             self._gh.pop(c.get("id"), None)
             return None
         gap = diff * ref_ms
-        h = self._gh.setdefault(c.get("id"), deque(maxlen=120))
-        if h and abs(gap - h[-1][1]) > 0.4 * ref_ms:             # pulo (volta, box, teleporte): recomeça
-            h.clear()
-        if not h or now - h[-1][0] >= 0.4:
-            h.append((now, gap))
-        while h and now - h[0][0] > 25:
-            h.popleft()
-        if len(h) < 4 or h[-1][0] - h[0][0] < 5:
+        rate = self._rate(self._gh, c.get("id"), gap, ref_ms, now)
+        if rate is None:
             return None
-        rate = (abs(h[-1][1]) - abs(h[0][1])) / (h[-1][0] - h[0][0])      # ms por segundo; < 0: a distância encolhe
         good = -rate if gap < 0 else rate
         return {"good": round(good, 2), "per_lap": round(good * ref_ms / 1e6, 3)}
 
@@ -244,6 +252,13 @@ class OverlayHub:
                    "best_ms": c.get("best_ms"), "last_ms": c.get("last_ms"), "pit": bool(c.get("pit")),
                    "me": c is me, "id": c.get("id"),
                    "trend": self._trend(c, me, ref_ms, now) if me and c is not me else None}
+            row["trend_int"] = None
+            if ahead is not None and me is not None and not c.get("pit") and not ahead.get("pit") and abs(ahead["_dist"] - c["_dist"]) < 1.0:
+                r = self._rate(self._ih, c.get("id"), (ahead["_dist"] - c["_dist"]) * ref_ms, ref_ms, now)
+                if r is not None:
+                    behind_me = c["_dist"] < me["_dist"] and c is not me
+                    # quem está atrás de mim chegando no da frente é ameaça (vermelho); eu chegando no da frente é bom (verde)
+                    row["trend_int"] = {"good": round(r if behind_me else -r, 2)}
             if race:
                 row["gap_leader"] = _gap(lead["_dist"] - c["_dist"], ref_ms) if i else None
                 row["interval"] = _gap(ahead["_dist"] - c["_dist"], ref_ms) if ahead else None

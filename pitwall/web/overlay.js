@@ -447,7 +447,7 @@ function standingsOverlay() {
     const rows = names.map((n, i) => { const gt4 = i >= 8, c = gt4 ? ["BMW", "M4 GT4"] : cars[i % cars.length];
       return { pos: i + 1, number: 10 + i * 7, first: n[0], last: n[1], short: n[1].slice(0, 3).toUpperCase(), cls: gt4 ? "GT4" : "GT3", cls_color: gt4 ? "#3d8bff" : "#e8505b",
         brand: c[0], model: c[1], cls_pos: gt4 ? i - 7 : i + 1, laps: 7, best_ms: 98500 + i * 410, last_ms: i === 0 || i === 2 || i === 8 ? 98500 + i * 410 : 98900 + i * 380, pit: i === 9, me: i === 5,
-        gap_leader: i ? { ms: i * 1300 } : null, interval: i ? { ms: 900 + i * 40 } : null, vs_me: i === 5 ? null : { ms: (i - 5) * 1100 },
+        gap_leader: i ? { ms: i * 1300 } : null, interval: i ? { ms: 900 + i * 40 } : null, trend_int: i ? { good: [0, 2.5, -3, 0.4, 4, -2, 3, -4, 1, -1, 0, 2][i] } : null, vs_me: i === 5 ? null : { ms: (i - 5) * 1100 },
         trend: i === 5 ? null : (() => { const ahead = i < 5, good = [4, -3, 0.5, -5, 6, 0, 2.5, -4, 3, 0, 1, -2][i]; return { good, per_lap: good * 0.09 }; })() }; });
     return { race: true, rows, classes: [{ name: "GT3", color: "#e8505b", n: 8 }, { name: "GT4", color: "#3d8bff", n: 4 }],
       header: { time_left: 1208000, total: 2700000, lap: 7, total_laps: 20, count: 36, type: "Race" } };
@@ -500,7 +500,11 @@ function standingsOverlay() {
       }
       else if (c === "cls") v = r.cls || "";
       else if (c === "gap_leader") v = (clsPos ? r.cls_pos === 1 : r.pos === 1) ? "" : fmtGap(r.gap_leader);
-      else if (c === "interval") v = r.interval ? fmtGap(r.interval) : "";
+      else if (c === "interval") {
+        v = r.interval ? fmtGap(r.interval) : "";
+        const t = r.trend_int;
+        if (v && cfg.trendcolor && t) cls += t.good > TR_MIN ? " tr-good" : t.good < -TR_MIN ? " tr-bad" : " tr-flat";
+      }
       else if (c === "vs_me") {
         v = r.me ? "" : fmtGap(r.vs_me); const g = r.vs_me;
         if (g && cfg.trendcolor && r.trend) cls += r.trend.good > TR_MIN ? " tr-good" : r.trend.good < -TR_MIN ? " tr-bad" : " tr-flat";
