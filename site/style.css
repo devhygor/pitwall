@@ -368,3 +368,16 @@ canvas.chart { width: 100%; display: block; }
 .rchip .av, .rchip img { width: 24px; height: 24px; }
 
 .stc .stcar { display: block; color: var(--muted); font-size: 11px; font-style: normal; margin-top: 1px; }
+
+/* acontecimentos das duas voltas */
+.an-tl { margin-bottom: 12px; padding: 12px 14px; }
+.tl-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.tl-fil { display: flex; gap: 6px; flex-wrap: wrap; }
+.tl-fil button { background: var(--asphalt-2); border: 1px solid var(--line); color: var(--fog); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tl-fil button small { opacity: .7; } .tl-fil button.on { border-color: var(--sodium); color: inherit; background: rgba(242,169,59,.1); }
+.tl-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.tl-who { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13.5px; } .tl-who small { color: var(--fog); }
+.tl-evs { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow: auto; }
+.tlev { background: var(--asphalt-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 13px; color: inherit; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+.tlev small { color: var(--fog); font-size: 11.5px; } .tlev:hover { background: rgba(255,255,255,.06); }
+.tlev.ev-lock { border-color: rgba(255,155,93,.5); } .tlev.ev-loss { border-color: rgba(255,90,95,.5); } .tlev.ev-invalid { border-color: rgba(255,210,63,.5); }

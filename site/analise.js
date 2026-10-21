@@ -173,7 +173,35 @@ function anCompare(telA, telB) {
 
 // ---------------------------------------------------------------- tela
 let AS = null;   // estado da análise no site
-const anState = { target: "a", cars: store.get("pitwall.site.anCars") || "all" };
+const anState = { evf: "all", target: "a", cars: store.get("pitwall.site.anCars") || "all" };
+// acontecimentos das duas voltas (a analisada e a referência): clicar leva gráficos, mapa e vídeo ao ponto
+function anTimeline(LA, LB, evsA, evsB, segs, nameOf) {
+  const box = $("#anTl");
+  if (!box) return;
+  const all = [...evsA.map((e) => ({ ...e, who: "a" })), ...evsB.map((e) => ({ ...e, who: "b" }))];
+  const cnt = (t) => all.filter((e) => e.type === t).length;
+  const FIL = [["all", "Todos", all.length], ["loss", "Rodadas", cnt("loss")], ["lock", "Travadas", cnt("lock")], ["invalid", "Inválidas", cnt("invalid")]]
+    .filter((f) => f[0] === "all" || f[2]);
+  if (!FIL.some((f) => f[0] === anState.evf)) anState.evf = "all";
+  const col = (L, who, list) => {
+    const rows = list.filter((e) => anState.evf === "all" || e.type === anState.evf).sort((x, y) => (x.d || 0) - (y.d || 0));
+    return `<div class="tl-col"><div class="tl-who"><i class="dot ${who}"></i><b>${esc(nameOf(L))}</b><small class="num">${fmtLap(L.lap_time_ms)}</small></div>
+      <div class="tl-evs">${rows.length ? rows.map((e) => { const t = EVT[e.type] || ["•", e.type, ""];
+        return `<button class="tlev ev-${e.type}" data-i="${e.i}" data-seg="${e.seg}" title="${esc(t[2] + (e.drop ? ` (perdeu ${e.drop} km/h)` : ""))}">${t[0]} ${esc(t[1])}
+          ${e.seg >= 0 ? `<small>curva ${segs[e.seg].n}</small>` : ""}${e.t ? `<small class="num">${fmtLap(e.t)}</small>` : ""}</button>`; }).join("")
+        : `<span class="fnone ok">${all.length && anState.evf !== "all" ? "Nenhum deste tipo." : "Nenhum acontecimento marcado."}</span>`}</div></div>`;
+  };
+  const draw = () => {
+    box.innerHTML = `<div class="tl-head"><b>Acontecimentos</b><span class="sub">clique para ir direto ao momento (gráficos, mapa e vídeo)</span><span class="spacer"></span>
+        <div class="tl-fil">${FIL.map(([k, t, c]) => `<button class="${k === anState.evf ? "on" : ""}" data-f="${k}">${t}<small>${c}</small></button>`).join("")}</div></div>
+      <div class="tl-cols">${col(LA, "a", evsA)}${LB ? col(LB, "b", evsB) : ""}</div>
+      ${LB ? "" : `<div class="sub" style="margin-top:8px">Escolha uma referência na barra de voltas para ver também os acontecimentos dela.</div>`}`;
+    box.querySelectorAll("[data-f]").forEach((el) => el.onclick = () => { anState.evf = el.dataset.f; draw(); });
+    box.querySelectorAll(".tlev").forEach((el) => el.onclick = () => { const k = +el.dataset.seg; if (k >= 0) anSelect(k, true); anGoto(+el.dataset.i); window.scrollTo({ top: 0, behavior: "smooth" }); });
+  };
+  draw();
+}
+
 function stopAnalysis() {
   if (!AS) return;
   cancelAnimationFrame(AS.raf);
@@ -212,6 +240,10 @@ async function renderAnalysis(idA, idB) {
     const i = Math.max(0, Math.min(n - 1, Math.round((e.d || 0) * (n - 1))));
     return { ...e, i, seg: segs.findIndex((s) => i >= s.start && i <= s.end) };
   });
+  const evsB = LB ? (Array.isArray(LB.events) ? LB.events : []).map((e) => {
+    const i = Math.max(0, Math.min(n - 1, Math.round((e.d || 0) * (n - 1))));
+    return { ...e, i, seg: segs.findIndex((s) => i >= s.start && i <= s.end) };
+  }) : [];
   const clip = (L) => L && L.clip_path ? sb.storage.from("clips").getPublicUrl(L.clip_path).data.publicUrl : null;
   const cA = clip(LA), cB = clip(LB);
   const diff = hasB ? LA.lap_time_ms - LB.lap_time_ms : null;
@@ -259,6 +291,8 @@ async function renderAnalysis(idA, idB) {
       <div class="fg"><span class="fl">Problemas na volta</span>${evs.length ? evs.map((e, j) => `<button class="fchip ev-${e.type}" data-ev="${j}" title="${esc((EVT[e.type] || ["", "", ""])[2])}">${(EVT[e.type] || ["•"])[0]} ${esc((EVT[e.type] || ["", e.type])[1])}${e.seg >= 0 ? ` <small>curva ${segs[e.seg].n}</small>` : ""}</button>`).join("")
         : `<span class="fnone ok">Nenhuma travada, rodada ou saída de pista registrada.</span>`}</div>
     </section>
+
+    <section class="panel an-tl" id="anTl"></section>
 
     <div class="an-grid mode-${layout}">
       <aside class="an-side">
@@ -326,6 +360,7 @@ async function renderAnalysis(idA, idB) {
   // ---- achados
   view.querySelectorAll(".fchip[data-seg]").forEach((c) => c.onclick = () => anSelect(+c.dataset.seg));
   view.querySelectorAll(".fchip[data-ev]").forEach((c) => c.onclick = () => { const e = evs[+c.dataset.ev]; if (e.seg >= 0) anSelect(e.seg, true); anGoto(e.i); });
+  anTimeline(LA, LB, evs, evsB, segs, nameOf);
   $("#segPrev").onclick = () => anSelect(AS.seg - 1);
   $("#segNext").onclick = () => anSelect(AS.seg + 1);
   $("#focusBtn").onclick = () => {
