@@ -338,8 +338,7 @@ async function renderTeam(id) {
       sb.from("team_invites").select("id,email,created_at").eq("team_id", id).order("created_at", { ascending: false })]);
     requests = rq.data || []; invites = iv.data || [];
   }
-  const groups = {};
-  for (const r of laps) (groups[[r.track, r.car, r.game].join("|")] = groups[[r.track, r.car, r.game].join("|")] || []).push(r);
+  const R = rankingBlock(laps, me, "pitwall.teamF", () => renderTeam(id));
   const mine = laps.filter((l) => l.user_id === me).length;
   const link = inviteLink(team.invite_code);
   const order = { owner: 0, admin: 1, member: 2 };
@@ -347,18 +346,10 @@ async function renderTeam(id) {
   const mailto = (email) => `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent("Convite para a equipe " + team.name + " no Pitwall")}&body=${encodeURIComponent(`Oi! Te convidei para a equipe ${team.name} no Pitwall.\n\nAbra o link, entre com o Google e pronto:\n${link}`)}`;
   view.innerHTML = `<div class="wrap page">
     <div class="page-head"><div class="team-title">${teamLogo(team)}<div><a class="back" href="#/" id="allTeams">Suas equipes</a><h1>${esc(team.name)}</h1>
-      <div class="sub">${members.length} ${members.length === 1 ? "piloto" : "pilotos"}, ${Object.keys(groups).length} ${Object.keys(groups).length === 1 ? "combinação" : "combinações"} de carro e pista · ${(MODE_INFO[team.join_mode] || MODE_INFO.invite)[0]}${team.description ? " · " + esc(team.description) : ""}</div>
+      <div class="sub">${members.length} ${members.length === 1 ? "piloto" : "pilotos"}, ${R.tracks} ${R.tracks === 1 ? "pista" : "pistas"}, ${R.cars} ${R.cars === 1 ? "carro" : "carros"} · ${(MODE_INFO[team.join_mode] || MODE_INFO.invite)[0]}${team.description ? " · " + esc(team.description) : ""}</div>
       <div class="hint-an">📈 Clique em <b>Analisar</b> ou <b>Comparar</b> numa volta para abrir a análise completa: onde perde tempo em cada curva, dicas, gráficos, mapa e vídeo.</div></div></div></div>
     <div class="layout">
-      <div>${Object.keys(groups).length ? Object.values(groups).map((g) => {
-        return `<section class="combo"><div class="combo-head"><h3>${esc(pretty(g[0].track))}</h3>
-            <small>${esc(pretty(g[0].car))}${g[0].game !== "acc" ? ` · ${esc(g[0].game)}` : ""}</small></div>
-          <div class="rows">
-            <div class="row head"><span class="p">Pos</span><span>Piloto</span><span style="text-align:right">Tempo</span><span style="text-align:right">Diferença</span>
-              <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span></div>
-            ${rowsHtml(g, me)}
-          </div></section>`;
-      }).join("") : `<div class="panel empty"><b>Ninguém enviou voltas ainda</b><p>Os recordes sobem sozinhos quando os pilotos gravam no app do PC.</p></div>`}
+      <div>${laps.length ? `<div id="teamRank">${R.html}</div>` : `<div class="panel empty"><b>Ninguém enviou voltas ainda</b><p>Os recordes sobem sozinhos quando os pilotos gravam no app do PC.</p></div>`}
       ${mine ? "" : appPanel()}</div>
       <aside class="side">
         ${requests.length ? `<div class="panel"><h2>Pedidos para entrar <span class="role">${requests.length}</span></h2>
@@ -395,7 +386,7 @@ async function renderTeam(id) {
       </aside>
     </div></div>`;
   $("#allTeams").onclick = () => store.set("pitwall.stayHome", "1");
-  bindRows(view);
+  if ($("#teamRank")) R.bind($("#teamRank"));
   const run = async (b, fn) => { b.disabled = true; try { await fn(); renderTeam(id); } catch (e) { b.disabled = false; b.textContent = e.message; } };
   const lf = $("#logoFile");
   if (lf) lf.onchange = async () => {
@@ -518,19 +509,10 @@ async function allLaps() {
   }
   return { data: out };
 }
-const commF = () => { try { return Object.assign({ track: "", car: "", user: "", more: false }, JSON.parse(store.get("pitwall.commF") || "{}")); } catch (e) { return { track: "", car: "", user: "", more: false }; } };
-async function renderCommunity() {
-  view.innerHTML = `<div class="loading">Carregando o ranking…</div>`;
-  const { data, error } = await allLaps();
-  if (error) { view.innerHTML = `<div class="wrap page"><div class="panel">${esc(error.message)}</div></div>`; return; }
-  const rows = (data || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?", avatar_url: (r.profiles || {}).avatar_url }));
-  const me = session.user.id;
-  if (!rows.length) {
-    view.innerHTML = `<div class="wrap page"><div class="page-head"><div><h1>Comunidade</h1></div></div>
-      <div class="panel empty"><b>Ninguém no ranking ainda</b><p>Os recordes sobem sozinhos pelo app do PC.</p></div></div>`;
-    return;
-  }
-  const F = commF();
+const rankF = (key) => { const d = { track: "", car: "", user: "", more: false }; try { return Object.assign(d, JSON.parse(store.get(key) || "{}")); } catch (e) { return d; } };
+// ranking por pista (melhor volta de cada piloto) com filtros de pista, carro e piloto; serve à comunidade e à equipe
+function rankingBlock(rows, me, key, rerender) {
+  const F = rankF(key);
   const trackOf = (r) => r.track + "|" + r.game;
   const opts = { tracks: {}, cars: {}, users: {} };
   for (const r of rows) {
@@ -554,7 +536,6 @@ async function renderCommunity() {
   if (F.user) sections = sections.filter((x) => x.list.some((r) => r.user_id === F.user));
   const single = !!F.track, total = sections.length;
   const shown = single || F.more ? sections : sections.slice(0, 12);
-  const pilots = new Set(rows.map((r) => r.user_id));
   const sectionHtml = (x) => {
     const lead = x.list[0].lap_time_ms, cap = single ? 100 : 10;
     const withPos = x.list.map((r, i) => ({ ...r, _pos: i + 1, _lead: lead }));
@@ -568,24 +549,41 @@ async function renderCommunity() {
         <span class="sec">S1</span><span class="sec">S2</span><span class="sec">S3</span><span></span></div>${rowsHtml(v, me, !F.car)}</div>
       ${!single && !F.user && x.list.length > cap ? `<div class="help" style="padding:8px 14px">+ ${x.list.length - cap} pilotos · <a href="#" data-only="${esc(x.k)}">ver todos</a></div>` : ""}</section>`;
   };
-  const sel = (id, label, h) => `<label class="help" style="margin:0">${label}<br><select class="field" id="${id}" style="min-width:230px">${h}</select></label>`;
-  view.innerHTML = `<div class="wrap page">
-    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">${pilots.size} ${pilots.size === 1 ? "piloto" : "pilotos"} · ${Object.keys(opts.tracks).length} pistas · ${Object.keys(opts.cars).length} carros · ${rows.length} recordes. A melhor volta de cada um; filtre por pista, carro ou piloto.</div></div></div>
-    <div class="inline" style="align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+  const sel = (id, label, h) => `<label class="help" style="margin:0">${label}<br><select class="field" id="${id}" style="min-width:200px;max-width:100%">${h}</select></label>`;
+  const html = `<div class="inline" style="align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;gap:12px">
       ${sel("fTrack", "Pista", `<option value="">Todas as pistas</option>` + Object.entries(opts.tracks).sort((a, b) => b[1].u.size - a[1].u.size || pretty(a[1].track).localeCompare(pretty(b[1].track))).map(([k, t]) => `<option value="${esc(k)}" ${k === F.track ? "selected" : ""}>${esc(pretty(t.track))}${t.game !== "acc" ? " · " + esc(t.game) : ""} (${t.u.size})</option>`).join(""))}
       ${sel("fCar", "Carro", `<option value="">Todos os carros</option>` + Object.entries(opts.cars).sort((a, b) => b[1].size - a[1].size || pretty(a[0]).localeCompare(pretty(b[0]))).map(([c, u]) => `<option value="${esc(c)}" ${c === F.car ? "selected" : ""}>${esc(pretty(c))} (${u.size})</option>`).join(""))}
       ${sel("fUser", "Piloto", `<option value="">Todos os pilotos</option>` + Object.entries(opts.users).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, u]) => `<option value="${esc(id)}" ${id === F.user ? "selected" : ""}>${esc(u.name)} (${u.n})</option>`).join(""))}
       ${F.track || F.car || F.user ? `<button class="btn small" id="fClear">Limpar filtros</button>` : ""}</div>
     ${shown.length ? shown.map(sectionHtml).join("") : `<div class="panel empty"><b>Nenhum tempo com esses filtros</b></div>`}
-    ${!single && !F.more && total > shown.length ? `<div style="text-align:center;margin-top:12px"><button class="btn" id="fMore">Mostrar as outras ${total - shown.length} pistas</button></div>` : ""}</div>`;
-  const set = (v) => { store.set("pitwall.commF", JSON.stringify(Object.assign({}, F, v))); renderCommunity(); };
-  $("#fTrack").onchange = (e) => set({ track: e.target.value, more: false });
-  $("#fCar").onchange = (e) => set({ car: e.target.value });
-  $("#fUser").onchange = (e) => set({ user: e.target.value });
-  if ($("#fClear")) $("#fClear").onclick = () => set({ track: "", car: "", user: "", more: false });
-  if ($("#fMore")) $("#fMore").onclick = () => set({ more: true });
-  view.querySelectorAll("[data-only]").forEach((b) => b.onclick = (e) => { e.preventDefault(); set({ track: b.dataset.only }); });
-  bindRows(view);
+    ${!single && !F.more && total > shown.length ? `<div style="text-align:center;margin-top:12px"><button class="btn" id="fMore">Mostrar as outras ${total - shown.length} pistas</button></div>` : ""}`;
+  const bind = (root) => {
+    const set = (v) => { store.set(key, JSON.stringify(Object.assign({}, F, v))); rerender(); };
+    $("#fTrack", root).onchange = (e) => set({ track: e.target.value, more: false });
+    $("#fCar", root).onchange = (e) => set({ car: e.target.value });
+    $("#fUser", root).onchange = (e) => set({ user: e.target.value });
+    if ($("#fClear", root)) $("#fClear", root).onclick = () => set({ track: "", car: "", user: "", more: false });
+    if ($("#fMore", root)) $("#fMore", root).onclick = () => set({ more: true });
+    root.querySelectorAll("[data-only]").forEach((b) => b.onclick = (e) => { e.preventDefault(); set({ track: b.dataset.only }); });
+    bindRows(root);
+  };
+  return { html, bind, pilots: new Set(rows.map((r) => r.user_id)).size, tracks: Object.keys(opts.tracks).length, cars: Object.keys(opts.cars).length };
+}
+async function renderCommunity() {
+  view.innerHTML = `<div class="loading">Carregando o ranking…</div>`;
+  const { data, error } = await allLaps();
+  if (error) { view.innerHTML = `<div class="wrap page"><div class="panel">${esc(error.message)}</div></div>`; return; }
+  const rows = (data || []).map((r) => ({ ...r, driver: (r.profiles || {}).name || "?", avatar_url: (r.profiles || {}).avatar_url }));
+  if (!rows.length) {
+    view.innerHTML = `<div class="wrap page"><div class="page-head"><div><h1>Comunidade</h1></div></div>
+      <div class="panel empty"><b>Ninguém no ranking ainda</b><p>Os recordes sobem sozinhos pelo app do PC.</p></div></div>`;
+    return;
+  }
+  const R = rankingBlock(rows, session.user.id, "pitwall.commF", renderCommunity);
+  view.innerHTML = `<div class="wrap page">
+    <div class="page-head"><div><h1>Comunidade</h1><div class="sub">${R.pilots} ${R.pilots === 1 ? "piloto" : "pilotos"} · ${R.tracks} pistas · ${R.cars} carros · ${rows.length} recordes. A melhor volta de cada um; filtre por pista, carro ou piloto.</div></div></div>
+    ${R.html}</div>`;
+  R.bind(view);
 }
 
 // ---------------------------------------------------------------- comparar duas voltas (site)
