@@ -10,7 +10,7 @@ do ACC, a mesma interface pública que qualquer app de telemetria usa.
 ## Instalar (amigos)
 
 Baixe o **Pitwall-Setup.exe** em
-[Releases](https://github.com/devhygor/pitwall/releases/latest) (ou no site
+[Releases](https://github.com/devhygor/pitwall-releases/releases/latest) (ou no site
 https://pitwall.hygor.com.br/), abra e siga o instalador. Não precisa de
 Python nem de administrador. Se o Windows avisar "O Windows protegeu o
 computador", clique em **Mais informações → Executar assim mesmo** (o app não é

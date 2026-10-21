@@ -3392,9 +3392,8 @@ function aboutCard(ver) {
       </div>
       <div class="about-links">
         <a class="btn" href="https://github.com/devhygor" target="_blank" rel="noopener">GitHub · devhygor</a>
-        <a class="btn" href="https://github.com/devhygor/pitwall" target="_blank" rel="noopener">Código do projeto</a>
         <a class="btn" href="https://pitwall.hygor.com.br/" target="_blank" rel="noopener">Site da equipe</a>
-        <a class="btn" href="https://github.com/devhygor/pitwall/issues" target="_blank" rel="noopener">Reportar um problema</a>
+        <a class="btn" href="https://pitwall.hygor.com.br/#/planos" target="_blank" rel="noopener">Planos e conta</a>
       </div>
     </div>
     <div class="set-card"><h2>Seus dados</h2>
