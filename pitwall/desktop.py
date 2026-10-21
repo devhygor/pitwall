@@ -146,6 +146,9 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
                     _fields_ = [("a", ctypes.c_int), ("b", ctypes.c_int), ("c", ctypes.c_int), ("d", ctypes.c_int)]
                 v = ctypes.c_int(1)
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(v), 4)      # sem Mica
+                none = ctypes.c_uint(0xFFFFFFFE)                                              # DWMWA_COLOR_NONE
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 34, ctypes.byref(none), 4)   # sem cor de borda
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(v), 4)      # cantos retos (sem arredondar)
                 ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(M(-1, -1, -1, -1)))
                 u = ctypes.windll.user32
                 ex = u.GetWindowLongW(hwnd, -20) | 0x80000 | 0x80               # LAYERED + TOOLWINDOW (fora do Alt+Tab)

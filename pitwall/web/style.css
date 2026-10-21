@@ -887,13 +887,15 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
   background: radial-gradient(120% 120% at 70% 20%, #1c2432 0%, #0d1119 70%); }
 .ov-stage::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 10% 10%; }
 .ov-stagelbl { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--muted); opacity: .8; }
-.ovbox { position: absolute; outline: 1px solid rgba(255,255,255,.14); cursor: move; touch-action: none; transition: opacity .2s; }
-.ovbox.drag, .ovbox.sel { outline-color: var(--accent, #f2a93b); }
+.ovbox { position: absolute; background: rgba(255,255,255,.04); cursor: move; touch-action: none; transition: opacity .2s; }
+.ovbox.drag, .ovbox.sel { background: rgba(242,169,59,.10); }
+.ovbox.sel .ovtag { opacity: 1; }
 .ovbox iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; pointer-events: none; background: transparent; }
 .ovtag { position: absolute; left: 0; top: 0; transform: translateY(-100%); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   background: var(--accent, #f2a93b); color: #0b0d10; padding: 1px 7px; border-radius: 5px 5px 0 0; opacity: 0; transition: opacity .15s; }
 .ovbox:hover .ovtag, .ovbox.drag .ovtag { opacity: 1; }
 .ovbox .rz { position: absolute; background: var(--accent, #f2a93b); opacity: 0; transition: opacity .15s; }
+.ovbox .rz-n, .ovbox .rz-s, .ovbox .rz-e, .ovbox .rz-w { background: transparent; }
 .ovbox:hover .rz, .ovbox.drag .rz { opacity: .9; }
 .rz-nw, .rz-ne, .rz-sw, .rz-se { width: 11px; height: 11px; border-radius: 3px; }
 .rz-nw { left: -6px; top: -6px; cursor: nwse-resize; } .rz-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
