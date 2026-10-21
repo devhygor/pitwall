@@ -460,10 +460,16 @@ function standingsOverlay() {
     // quais linhas mostrar de uma lista (a minha classe: em volta de mim / os primeiros; as outras: só os primeiros)
     const pick = (list, n) => {
       const meI = list.findIndex((r) => r.me);
-      if (cfg.view === "around" && meI >= 0) { const a = clamp(meI - Math.floor(n / 2), 0, Math.max(0, list.length - n)); return list.slice(a, a + n); }
-      let show = list.slice(0, n);
-      if (meI >= n) { show = show.slice(0, n - 1); show.push(null, list[meI]); }
-      return show;
+      let show;
+      if (cfg.view === "around" && meI >= 0) { const a = clamp(meI - Math.floor(n / 2), 0, Math.max(0, list.length - n)); show = list.slice(a, a + n); }
+      else { show = list.slice(0, n); if (meI >= n) { show = show.slice(0, n - 1); show.push(list[meI]); } }
+      // o líder da classe e quem tem a melhor volta (o roxo) aparecem sempre, mesmo fora da janela em volta de você
+      const idx = new Set(show.map((r) => list.indexOf(r)));
+      idx.add(0);
+      const bi = list.findIndex((r) => isBest(r)); if (bi >= 0) idx.add(bi);
+      const out = []; let prev = -1;
+      for (const i of [...idx].sort((x, y) => x - y)) { if (prev >= 0 && i - prev > 1) out.push(null); out.push(list[i]); prev = i; }
+      return out;
     };
     const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || (rows.some((r) => r.cls) && !multi)) && (c !== "car" || rows.some((r) => r.brand)));
     const bestAll = Math.min(...rows.map((r) => r.best_ms || 1e12));
