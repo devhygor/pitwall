@@ -25,9 +25,18 @@ def available() -> bool:
 
 def icon_path() -> Path:
     p = data_dir() / "pitwall.ico"
-    if not p.exists():
-        from . import tray
+    from . import tray
+    marker = data_dir() / "pitwall.ico.v"
+    try:
+        current = marker.read_text().strip()
+    except OSError:
+        current = ""
+    if not p.exists() or current != str(tray.ICON_VERSION):      # logo nova: refaz o arquivo antigo
         tray.save_ico(p)
+        try:
+            marker.write_text(str(tray.ICON_VERSION))
+        except OSError:
+            pass
     return p
 
 

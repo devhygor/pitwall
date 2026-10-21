@@ -52,6 +52,11 @@ function validDoc(d: string) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  // diagnóstico sem login: em qual ambiente do Asaas esta função está (não revela nenhum segredo)
+  if (req.method === "GET") {
+    return json({ ok: true, env: Deno.env.get("ASAAS_ENV") === "sandbox" ? "sandbox" : "production", key_configured: !!Deno.env.get("ASAAS_API_KEY"),
+      key_kind: (Deno.env.get("ASAAS_API_KEY") || "").includes("_hmlg_") ? "sandbox" : (Deno.env.get("ASAAS_API_KEY") ? "production" : "none") });
+  }
   if (req.method !== "POST") return json({ error: "method" }, 405);
   if (!Deno.env.get("ASAAS_API_KEY")) return json({ error: "payments_not_configured" }, 503);
 

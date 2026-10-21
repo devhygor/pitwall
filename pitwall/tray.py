@@ -11,6 +11,9 @@ import time
 import webbrowser
 
 
+ICON_VERSION = 2          # sobe quando a logo muda: o arquivo .ico salvo no PC é refeito sozinho
+
+
 def available() -> bool:
     import importlib.util
     return all(importlib.util.find_spec(m) is not None for m in ("pystray", "PIL"))
