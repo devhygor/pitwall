@@ -589,6 +589,9 @@ const EVENT_TXT = {
   lock: ["Travou a roda", "a roda travou na freada: alivie um pouco o pedal ou freie em linha reta antes de virar"],
   loss: ["Perdeu o carro", "o carro escapou (rodada ou saída de traseira): entrada rápida demais ou acelerador cedo demais"],
   invalid: ["Volta invalidada", "passou dos limites da pista aqui"],
+  pit_out: ["Saída dos boxes", "volta de saída: pneus e freios ainda frios"],
+  pit_in: ["Entrada nos boxes", "volta de entrada nos boxes"],
+  best: ["Melhor volta da sessão", "a volta mais rápida e válida desta sessão"],
 };
 
 async function renderCompare(params) {
@@ -665,6 +668,8 @@ async function renderCompare(params) {
           : `<span class="fnone ok">Nenhuma travada, rodada ou saída de pista.</span>`}</div>
     </section>
 
+    ${LA.session_id && LA.kind !== "ideal" && LA.kind !== "team" ? `<section class="an2-tl panel" id="tl"><div class="sub">Carregando os acontecimentos…</div></section>` : ""}
+
     <div class="an2-grid">
       <section class="an2-media panel pad0" id="media">
         <div class="vids3 ${localStorage.getItem("pitwall.anSolo") === "b" ? "solo-b" : "solo-a"}" id="vids">${vid(LA, "a", "Sua volta")}${vid(LB, "b", "Referência")}</div>
@@ -737,6 +742,62 @@ async function renderCompare(params) {
   const want = +params.get("seg");
   const k0 = want ? segs.findIndex((s) => s.n === want) : -1;
   selectSegment(k0 >= 0 ? k0 : worst.length ? worst[0].k : 0);
+  const at = params.get("at");
+  if (at != null && at !== "") {                     // veio de um acontecimento de outra volta: vai direto ao momento
+    const i = Math.max(0, Math.min(n - 1, Math.round(+at * (n - 1))));
+    selectSegment(segFor(i), { keepCursor: true });
+    gotoIndex(i);
+  }
+  if ($("#tl")) sessionTimeline(LA, a, b, segs, n);
+}
+
+// ---------------------------------------------------------------- acontecimentos da sessão
+let tlFilter = "all";
+async function sessionTimeline(LA, a, b, segs, n) {
+  const box = $("#tl");
+  let tl;
+  try { tl = await api(`/api/sessions/${LA.session_id}/timeline`); } catch (e) { box.remove(); return; }
+  if (!$("#tl")) return;
+  const evs = tl.events;
+  if (!evs.length) { box.innerHTML = `<div class="tl-head"><b>Acontecimentos da sessão</b></div><div class="fnone ok">Nenhum acontecimento marcado nesta sessão.</div>`; return; }
+  const hasB = !!b;                                          // com referência, as curvas são as da tela; sem ela, as da melhor volta da sessão
+  const cornerOf = (e) => hasB ? cornerAt(e.d) : e.corner;
+  const cornerAt = (d) => { const i = Math.max(0, Math.min(n - 1, Math.round(d * (n - 1)))); const k = segs.findIndex((s) => i >= s.start && i <= s.end); return k >= 0 ? segs[k].n : null; };
+  const count = (t) => evs.filter((e) => e.type === t).length;
+  const FIL = [["all", "Todos", evs.length], ["loss", "Rodadas", count("loss")], ["lock", "Travadas", count("lock")], ["invalid", "Inválidas", count("invalid")],
+    ["pit", "Boxes", count("pit_in") + count("pit_out")], ["best", "Melhor volta", count("best")]].filter((f) => f[0] === "all" || f[2]);
+  if (!FIL.some((f) => f[0] === tlFilter)) tlFilter = "all";
+  const match = (e) => tlFilter === "all" || (tlFilter === "pit" ? e.type.startsWith("pit_") : e.type === tlFilter);
+  const lapLabel = (l) => `Volta ${l.n}${l.out ? " · saída" : l.inn ? " · entrada" : ""}`;
+  const draw = () => {
+    const shown = evs.filter(match);
+    const byLap = new Map();
+    for (const e of shown) { if (!byLap.has(e.lap)) byLap.set(e.lap, []); byLap.get(e.lap).push(e); }
+    box.innerHTML = `<div class="tl-head"><b>Acontecimentos da sessão</b><span class="sub">clique para ir direto ao momento (gráficos, mapa e vídeo)</span><span class="spacer"></span>
+        <div class="tl-fil">${FIL.map(([k, t, c]) => `<button class="tchip ${k === tlFilter ? "on" : ""}" data-f="${k}">${t}<small>${c}</small></button>`).join("")}</div></div>
+      <div class="tl-list">${[...byLap.entries()].map(([lap, list]) => { const L = tl.laps.find((x) => x.n === lap) || { n: lap };
+        return `<div class="tl-lap ${L.id === LA.id ? "cur" : ""}"><div class="tl-lapname"><b>${lapLabel(L)}</b><small class="num">${L.ms ? fmtLap(L.ms) : ""}</small></div>
+          <div class="tl-evs">${list.map((e) => { const c = e.type === "pit_in" || e.type === "pit_out" || e.type === "best" ? null : cornerOf(e), meta = EV[e.type] || { icon: "•", cls: "" };
+            const tip = (EVENT_TXT[e.type] || [e.type, ""])[1] + (e.drop ? ` (perdeu ${e.drop} km/h)` : "");
+            return `<button class="tlev ev-${e.type}" data-lap="${e.lap_id}" data-d="${e.d}" title="${esc(tip)}">${meta.icon} ${esc((EVENT_TXT[e.type] || [e.type])[0])}
+              ${c ? `<small>curva ${c}</small>` : ""}${e.t && e.type !== "pit_in" ? `<small class="num">${fmtLap(e.t)}</small>` : ""}</button>`; }).join("")}</div></div>`; }).join("")
+        || `<div class="fnone">Nenhum acontecimento deste tipo.</div>`}</div>`;
+    box.querySelectorAll("[data-f]").forEach((el) => el.onclick = () => { tlFilter = el.dataset.f; draw(); });
+    box.querySelectorAll(".tlev").forEach((el) => el.onclick = () => {
+      const lapId = +el.dataset.lap, d = +el.dataset.d;
+      // sem referência, abre com a melhor volta da sessão como referência: assim a numeração das curvas bate com a da lista
+      const ref = b || (tl.best_id && lapId !== tl.best_id ? tl.best_id : null);
+      if (lapId === LA.id && (b || LA.id === tl.best_id || !tl.best_id)) {   // mesma volta: só move o cursor
+        const i = Math.max(0, Math.min(n - 1, Math.round(d * (n - 1))));
+        selectSegment(segFor(i), { keepCursor: true });
+        gotoIndex(i);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {                                                // outra volta: abre ela (mantendo a referência) e vai ao momento
+        location.hash = `#/compare?a=${lapId}${ref ? "&b=" + ref : ""}&at=${d}`;
+      }
+    });
+  };
+  draw();
 }
 
 function applyMediaHeight() {
@@ -2194,6 +2255,9 @@ async function renderSettings() {
 // ---------------------------------------------------------------- incidentes
 const EV = {
   invalid: { icon: "⚠", name: "Volta invalidada (limite de pista)", cls: "inv" },
+  pit_out: { icon: "↗", name: "Saída dos boxes", cls: "pit" },
+  pit_in: { icon: "↘", name: "Entrada nos boxes", cls: "pit" },
+  best: { icon: "★", name: "Melhor volta da sessão", cls: "best" },
   loss: { icon: "↯", name: "Perda de controle / rodada", cls: "loss" },
   lock: { icon: "●", name: "Travou a roda na freada", cls: "lock" },
 };

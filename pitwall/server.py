@@ -93,6 +93,43 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             "fuel_plan": analysis.fuel_plan(summ["avg_ms"], summ["fuel_per_lap"], extra_laps=extra_laps),
         }
 
+    @app.get("/api/sessions/{sid}/timeline")
+    def session_timeline(sid: int):
+        """Tudo que aconteceu na sessão, volta a volta: travadas, rodadas, voltas invalidadas, boxes e a melhor volta."""
+        laps = db.laps(sid)
+        clean = [l for l in laps if l.get("valid") and not l.get("out_lap") and not l.get("in_lap") and l.get("lap_time_ms")]
+        best = min(clean, key=lambda l: l["lap_time_ms"]) if clean else None
+        events = []
+        for l in laps:
+            base = {"lap_id": l["id"], "lap": l["lap_number"], "lap_ms": l.get("lap_time_ms")}
+            if l.get("out_lap"):
+                events.append({**base, "type": "pit_out", "d": 0.0, "t": 0})
+            has_invalid = False
+            for e in l.get("events") or []:
+                has_invalid = has_invalid or e.get("type") == "invalid"
+                events.append({**base, "type": e.get("type"), "d": e.get("d", 0), "t": e.get("t"), "drop": e.get("drop")})
+            if not l.get("valid") and not has_invalid:
+                events.append({**base, "type": "invalid", "d": 0.0, "t": 0})
+            if best and l["id"] == best["id"]:
+                events.append({**base, "type": "best", "d": 0.0, "t": 0})
+            if l.get("in_lap"):
+                events.append({**base, "type": "pit_in", "d": 0.98, "t": l.get("lap_time_ms")})
+        events.sort(key=lambda e: (e["lap"], e["d"]))
+        # número da curva de cada acontecimento, pela melhor volta da sessão (a mesma numeração da Análise com ela de referência)
+        if best:
+            try:
+                import numpy as np
+                grid = np.linspace(0, 1, 2000)
+                R = analysis.resample_lap(db.lap(best["id"]), grid)
+                segs = analysis.detect_segments(grid * R["length"], R["speed"]) if R else []
+                for e in events:
+                    i = max(0, min(1999, round((e["d"] or 0) * 1999)))
+                    e["corner"] = next((sg["n"] for sg in segs if sg["start"] <= i <= sg["end"]), None)
+            except Exception:  # noqa: BLE001
+                pass
+        return {"best_id": best["id"] if best else None, "events": events, "laps": [{"id": l["id"], "n": l["lap_number"], "ms": l.get("lap_time_ms"),
+                                            "valid": bool(l.get("valid")), "out": bool(l.get("out_lap")), "inn": bool(l.get("in_lap"))} for l in laps]}
+
     @app.delete("/api/sessions/{sid}")
     def delete_session(sid: int):
         if sid in db.protected_session_ids():

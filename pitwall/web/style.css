@@ -941,3 +941,27 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
 .ovg.cnames summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .ovg.cnames[open] summary { color: var(--text); }
 @media (max-width: 760px) { .ov-tiles { grid-template-columns: repeat(2, 1fr); } }
+
+/* acontecimentos da sessão (Análise) */
+.an2-tl { margin: 0 0 12px; padding: 14px 16px; }
+.tl-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.tl-head > b { font-size: 15px; }
+.tl-fil { display: flex; gap: 6px; flex-wrap: wrap; }
+.tl-fil .tchip { border-style: solid; display: inline-flex; gap: 6px; align-items: center; }
+.tl-fil .tchip small { opacity: .7; font-size: 11px; }
+.tl-fil .tchip.on { border-color: var(--accent); color: var(--text); background: rgba(255, 176, 32, .1); }
+.tl-list { max-height: 230px; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+.tl-lap { display: flex; gap: 12px; align-items: flex-start; padding: 6px 8px; border-radius: 10px; }
+.tl-lap.cur { background: rgba(255, 176, 32, .07); }
+.tl-lapname { width: 150px; flex-shrink: 0; display: flex; flex-direction: column; font-size: 13px; padding-top: 4px; }
+.tl-lapname small { color: var(--muted); }
+.tl-evs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tlev { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 13px;
+  background: transparent; border: 1px solid var(--line); color: var(--text); }
+.tlev small { color: var(--muted); font-size: 11.5px; }
+.tlev:hover { background: rgba(255, 255, 255, .06); }
+.tlev.ev-lock { color: #ff9b5d; border-color: rgba(255, 155, 93, .4); }
+.tlev.ev-loss { color: var(--bad); border-color: rgba(255, 93, 93, .45); }
+.tlev.ev-invalid { color: #ffd23f; border-color: rgba(255, 210, 63, .4); }
+.tlev.ev-best { color: #d79bff; border-color: rgba(215, 155, 255, .45); }
+.tlev.ev-pit_in, .tlev.ev-pit_out { color: #7fb2ff; border-color: rgba(127, 178, 255, .4); }
