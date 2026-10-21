@@ -68,6 +68,29 @@ DEFAULTS = {
     "lfm_alert_at_zero": True,   # avisa no momento em que o contador zera (servidor abre)
     "lfm_alert_before_min": 5,   # aviso antes de abrir (0 = desligado)
     "games": "auto",            # auto | acc | iracing
+    # engenheiro de voz (ver pitwall/voice)
+    "eng_enabled": False,
+    "eng_voice_mode": "offline",        # offline | online (Edge TTS; cai para offline se não houver internet)
+    "eng_offline_engine": "piper",      # piper (neural, baixa ~60 MB) | windows (Maria, já instalada)
+    "eng_edge_voice": "pt-BR-AntonioNeural",
+    "eng_piper_voice": "pt_BR-faber-medium",
+    "eng_win_voice": "",                # vazio = a voz pt-BR do Windows
+    "eng_rate": 100,                    # velocidade da fala em % (50–200)
+    "eng_volume": 90,                   # 0–100
+    "eng_radio": True,                  # efeito de rádio de equipe
+    "eng_radio_level": 60,              # 0-100: quanto a voz fica "de rádio" (0 = voz limpa, sem bipes)
+    "eng_radio_noise": 30,              # 0-100: chiado de fundo (0 = sem chiado)
+    "eng_mic": "",                      # vazio = microfone padrão do Windows
+    "eng_out": "",                      # vazio = saída padrão do Windows
+    "eng_ptt": "",                      # tecla/botão de falar: "kb:70" ou "joy:0:5"
+    "eng_ptt_mode": "hold",             # hold (segurar) | toggle (apertar e falar) | open (microfone sempre aberto)
+    "eng_wake": False,                  # microfone aberto: exige dizer a palavra de ativação
+    "eng_wake_word": "engenheiro",
+    "eng_listen": True,                 # ouvir o piloto (desligue para só receber avisos)
+    "eng_stt_model": "base",            # tiny | base | small (Whisper)
+    "eng_verbosity": "normal",          # pouco | normal | muito
+    "eng_events": {},                   # categorias de aviso ligadas/desligadas (ver pitwall/voice/events.py)
+    "eng_spotter_swap": False,          # inverte esquerda/direita do observador
 }
 
 
@@ -111,6 +134,11 @@ class Settings:
                             cur[tr] = clean
                         else:
                             cur.pop(tr, None)
+                    v = cur
+                elif k == "eng_events":
+                    cur = dict(self._data.get("eng_events") or {})
+                    if isinstance(v, dict):
+                        cur.update({str(a): bool(b) for a, b in v.items()})
                     v = cur
                 elif isinstance(default, bool):
                     v = bool(v)

@@ -107,6 +107,14 @@ def main(argv=None):
     recorder.live_delta = LiveDelta(db, settings)
     from .overlay import OverlayHub
     recorder.hub = OverlayHub(db, recorder, settings)
+    try:
+        from .voice import Engineer
+        engineer = Engineer(settings, recorder)
+        recorder.engineer = engineer
+        engineer.apply()
+    except Exception as e:  # noqa: BLE001
+        print(f"Engenheiro de voz indisponível: {e}")
+        engineer = None
     from .team import Team
     team = Team(db, settings, args.port)
     recorder.on_lap_saved.append(team.upload_async_if_pb)
@@ -139,7 +147,7 @@ def main(argv=None):
     lfm = LFM(settings, _dd() / "lfm")
     alerts = Alerts(lfm, settings, _dd() / "lfm")
     alerts.start()
-    app = create_app(db, recorder, settings, video, team, lfm, alerts)
+    app = create_app(db, recorder, settings, video, team, lfm, alerts, engineer)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning"))
     from . import desktop
     use_window = desktop.available() and not args.browser
@@ -181,6 +189,8 @@ def main(argv=None):
             server.run()
     finally:
         recorder.stop()
+        if engineer:
+            engineer.shutdown()
         try:
             recorder.close()     # salva a volta pendente e fecha o vídeo da sessão
         except Exception:  # noqa: BLE001

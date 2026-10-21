@@ -22,7 +22,7 @@ jobs:
       - name: Dependências
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-app.txt -r requirements-iracing.txt pyinstaller
+          pip install -r requirements.txt -r requirements-app.txt -r requirements-iracing.txt -r requirements-voice.txt pyinstaller
 
       - name: Versão
         id: ver
@@ -45,6 +45,15 @@ jobs:
           --collect-submodules pitwall
           --hidden-import pystray._win32
           --hidden-import irsdk
+          --collect-all piper
+          --collect-all faster_whisper
+          --collect-all ctranslate2
+          --collect-all onnxruntime
+          --collect-all av
+          --collect-all sounddevice
+          --collect-all _sounddevice_data
+          --collect-all edge_tts
+          --collect-all certifi
           --hidden-import pyaccsharedmemory
           --paths .
 

@@ -176,6 +176,33 @@ os cliques atravessam para o jogo. Páginas: `pitwall/web/overlay.*`; dados: `pi
 No ACC, os outros pilotos vêm do broadcasting UDP do jogo (`pitwall/accudp.py`, porta e senha lidas de
 `Documentos\Assetto Corsa Competizione\Configroadcasting.json`; o padrão já funciona).
 
+## Engenheiro de voz
+
+Um engenheiro de rádio que **fala e entende português do Brasil**, sem precisar de outro programa
+(tipo o Crew Chief). Menu **Engenheiro**: liga e configura tudo.
+
+- **Pergunte** (segurando uma tecla, ou com o microfone aberto): combustível, pneus, freios, posição, voltas e
+  tempo restantes, clima, bandeiras, penalidades, delta... e dos outros pilotos: "quem está atrás?", "qual a
+  diferença para o da frente?", "qual a melhor volta do carro 23?", "o Fulano parou no box?", "quem está em P3?",
+  "ele está mais rápido que eu?" (lembra de quem você falou). As perguntas são entendidas por regras (palavras-chave,
+  gírias, número por extenso), sem IA na nuvem. A tela tem a lista de exemplos e uma caixa de teste por texto.
+- **Ele avisa sozinho**: observador ("carro à esquerda", "três de lado, você está no meio", "livre"),
+  limites da pista, bandeiras, penalidades, combustível, pneus e freios fora da janela, carro colado atrás ou
+  ao alcance na frente, ultrapassagens, recordes, tempo e voltas restantes, chuva chegando, box, rodadas.
+  Cada grupo liga e desliga; "silêncio" e "pode voltar a falar" funcionam por voz.
+- **Voz offline ou online**: *Piper* (neural, ~60 MB baixados uma vez) ou a voz do Windows (Maria): 100% offline.
+  Online: *Microsoft Edge TTS* (neural, grátis, sem chave, mas precisa de internet e envia o texto falado à
+  Microsoft; sem internet cai para a offline). O áudio de cada frase fica em cache no disco.
+- **Ouvir você**: Whisper local (`faster-whisper`, modelo baixado uma vez, depois sem internet).
+- **Microfone e fone** à escolha, **tecla de falar** definida clicando em "Definir" e apertando (teclado, mouse ou
+  botão do volante), modos segurar / apertar e falar / microfone aberto (com palavra de ativação opcional).
+- **Observador**: no iRacing vem do próprio jogo; no ACC é calculado pela posição dos carros (o Pitwall descobre o
+  sistema de coordenadas sozinho). Se esquerda e direita ficarem trocadas, há a opção de inverter.
+
+Código em `pitwall/voice/` (`state` leitura da corrida, `nlu`/`answers` perguntas, `events`/`spotter` avisos,
+`phrases` as frases, `tts`/`stt`/`audio`/`listener`/`inputs` voz, microfone e teclas). Dependências em
+`requirements-voice.txt` (opcionais: sem elas o resto do Pitwall funciona e a tela do Engenheiro mostra o que falta).
+
 ## Low Fuel Motorsport (LFM)
 
 Menu **LFM**: cole o link do seu perfil (ex.: `lowfuelmotorsport.com/profile/326481`) uma vez e o app mostra
@@ -231,6 +258,7 @@ pitwall/
   analysis.py   volta ideal, stints, combustível, consistência e delta entre voltas
   team.py       login com Google e equipe na nuvem (Supabase)
   live.py       delta ao vivo e combustível até o fim
+  voice/        engenheiro de voz (perguntas, avisos, voz, microfone, tecla de falar)
   backup.py     backup automático do banco
   server.py     API local (FastAPI); a documentação fica em /api/docs
   web/          interface (HTML/JS + uPlot para os gráficos)

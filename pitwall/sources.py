@@ -330,7 +330,17 @@ class IRacingSource:
             rain=(int(round(float(prec) * 5)),) if prec is not None else (),
             session_total_ms=float(tt) * 1000 if tt and 0 < tt < 1e7 else -1.0,
             total_laps=int(sl) if sl and 0 < sl < 10000 else 0,
+            extra={"car_lr": self._car_lr(ir)},
         )
+
+    @staticmethod
+    def _car_lr(ir):
+        """Carros ao lado, segundo o próprio iRacing (0 desligado, 1 livre, 2 esq, 3 dir, 4 ambos, 5 dois esq, 6 dois dir)."""
+        try:
+            v = ir["CarLeftRight"]
+            return int(v) if v is not None else None
+        except Exception:  # noqa: BLE001
+            return None
 
     @staticmethod
     def _tyres(ir) -> dict:

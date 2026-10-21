@@ -61,6 +61,7 @@ const routes = [
   [/^#\/community$/, () => renderCommunity()],
   [/^#\/overlay$/, () => renderOverlay()],
   [/^#\/overlays$/, () => renderOverlays()],
+  [/^#\/engineer$/, () => renderVoiceEngineer()],
 ];
 let current = { name: "", id: null };
 let plots = [];
@@ -80,7 +81,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;

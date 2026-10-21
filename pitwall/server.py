@@ -13,7 +13,7 @@ from .db import DB
 WEB = Path(__file__).parent / "web"
 
 
-def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None, alerts=None) -> FastAPI:
+def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=None, alerts=None, engineer=None) -> FastAPI:
     app = FastAPI(title="Pitwall", docs_url="/api/docs")
 
     @app.get("/api/live")
@@ -732,7 +732,113 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             video.probe_async()
         if app.state.ui_overlay_sync and any(before.get(k) != new.get(k) for k in ("overlays", "overlay_edit")):
             app.state.ui_overlay_sync()
+        if engineer and any(before.get(k) != new.get(k) for k in new if k.startswith("eng_")):
+            engineer.apply()
         return {"settings": new, "video": video.status if video else {}}
+
+    # --- engenheiro de voz --------------------------------------------------------------
+    def _eng():
+        if not engineer:
+            raise HTTPException(400, "O engenheiro de voz não está disponível.")
+        return engineer
+
+    @app.get("/api/engineer/status")
+    def eng_status():
+        return _eng().status()
+
+    @app.get("/api/engineer/devices")
+    def eng_devices():
+        return _eng().devices()
+
+    @app.get("/api/engineer/catalog")
+    def eng_catalog():
+        from .voice import CATEGORIES
+        from .voice.answers import EXAMPLES
+        return {"categories": [{"id": k, "name": n} for k, n in CATEGORIES], "examples": EXAMPLES}
+
+    @app.post("/api/engineer/apply")
+    def eng_apply():
+        _eng().apply()
+        return {"ok": True}
+
+    @app.post("/api/engineer/test")
+    def eng_test(text: str = Body("", embed=True)):
+        return {"text": _eng().test_voice(text)}
+
+    @app.post("/api/engineer/ask")
+    def eng_ask(text: str = Body(..., embed=True), speak: bool = Body(True, embed=True)):
+        return _eng().ask(text, speak=speak)
+
+    @app.post("/api/engineer/mute")
+    def eng_mute(muted: bool = Body(..., embed=True)):
+        _eng().set_muted(muted)
+        return {"muted": _eng().muted}
+
+    @app.post("/api/engineer/bind/start")
+    def eng_bind_start():
+        _eng().keys.capture()
+        return {"ok": True}
+
+    @app.post("/api/engineer/bind/cancel")
+    def eng_bind_cancel():
+        _eng().keys.cancel_capture()
+        return {"ok": True}
+
+    @app.post("/api/engineer/mic/probe")
+    def eng_mic_probe():
+        _eng().listener.probe()
+        return {"ok": True}
+
+    @app.post("/api/engineer/piper/download")
+    def eng_piper_download(name: str = Body(..., embed=True)):
+        import threading
+        e = _eng()
+
+        def run():
+            try:
+                e.tts.piper.download(name)
+            except Exception as ex:  # noqa: BLE001
+                e.errors.append(str(ex))
+        if e.tts.piper.progress.get("state") != "baixando":
+            threading.Thread(target=run, daemon=True).start()
+        return {"ok": True}
+
+    @app.post("/api/engineer/listen")
+    def eng_listen_test():
+        _eng().start_listen_test()
+        return {"ok": True}
+
+    @app.post("/api/engineer/listen/stop")
+    def eng_listen_stop():
+        _eng().stop_listen_test()
+        return {"ok": True}
+
+    @app.post("/api/engineer/stop")
+    def eng_stop():
+        _eng().stop_audio()
+        return {"ok": True}
+
+    @app.post("/api/engineer/piper/sample")
+    def eng_piper_sample(name: str = Body(..., embed=True)):
+        err = _eng().play_sample(name)
+        if err:
+            raise HTTPException(400, err)
+        return {"ok": True}
+
+    @app.post("/api/engineer/stt/download")
+    def eng_stt_download(name: str = Body("", embed=True)):
+        import threading
+        e = _eng()
+
+        def run():
+            try:
+                e.stt.download(name or None)
+                e.apply()
+            except Exception as ex:  # noqa: BLE001
+                e.errors.append(str(ex))
+        if e.stt.progress.get("state") != "baixando":
+            threading.Thread(target=run, daemon=True).start()
+        return {"ok": True}
 
     @app.get("/api/update")
     def get_update(force: bool = False):
