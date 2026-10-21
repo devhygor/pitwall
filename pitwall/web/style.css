@@ -863,3 +863,10 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
 .comm-sum b { color: var(--text); }
 .stack2 { display: grid; gap: 4px; }
 .stack2 select { min-width: 280px; }
+
+/* configurações dos overlays */
+.ovr { display: inline-flex; align-items: center; gap: 10px; }
+.ovr input[type=range] { width: 160px; accent-color: var(--accent, #ff3b4e); }
+.ovr output { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.ovcols { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 6px 18px; }
+.ovcols label { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }

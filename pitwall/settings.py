@@ -7,6 +7,28 @@ from pathlib import Path
 
 from .db import data_dir
 
+# Overlays transparentes sobre o jogo. mode: off | game (só na pista) | always
+#   scale = tamanho em %, bg = opacidade do fundo (0 = totalmente transparente), x/y = posição na tela
+_BASE = {"mode": "off", "scale": 100, "bg": 0, "x": None, "y": None}
+OVERLAY_DEFAULTS = {
+    "map": {**_BASE, "scale": 110, "bg": 0, "cars": True, "numbers": False, "rotate": 0, "width": 9, "banner": True,
+            "sectors": True},
+    "pedals": {**_BASE, "bg": 25, "seconds": 8, "steer": False, "gear": True, "coast": True, "bars": True, "speed": True},
+    "standings": {**_BASE, "bg": 25, "rows": 10, "view": "around", "name": "short",
+                  "cols": ["pos", "number", "name", "vs_me", "last", "best"]},
+    "delta": {**_BASE, "bg": 35, "fuel": True, "predicted": True},
+}
+
+
+def merged_overlays(cur) -> dict:
+    out = {}
+    cur = cur if isinstance(cur, dict) else {}
+    for name, d in OVERLAY_DEFAULTS.items():
+        v = cur.get(name) if isinstance(cur.get(name), dict) else {}
+        out[name] = {**d, **{k: x for k, x in v.items() if k in d}}
+    return out
+
+
 DEFAULTS = {
     "video_enabled": True,      # grava a tela durante as sessões
     "video_monitor": 0,         # índice do monitor (0 = principal)
@@ -25,6 +47,8 @@ DEFAULTS = {
     # delta ao vivo
     "overlay_enabled": False,
     "overlay_reference": "pb",  # pb = seu recorde; ideal = volta ideal
+    "overlays": OVERLAY_DEFAULTS,   # mapa, pedais, participantes e delta (ver OVERLAY_DEFAULTS)
+    "overlay_edit": False,      # modo de edição: overlays recebem cliques para mover/ver sem o jogo
     # equipe (nuvem do Pitwall, login com Google)
     "cloud_url": "",            # vazio = projeto padrão do Pitwall
     "cloud_key": "",
@@ -47,10 +71,17 @@ class Settings:
         self.path = Path(path) if path else data_dir() / "settings.json"
         self._lock = threading.Lock()
         self._data = dict(DEFAULTS)
+        saved = {}
         try:
-            self._data.update(json.loads(self.path.read_text(encoding="utf-8")))
+            saved = json.loads(self.path.read_text(encoding="utf-8"))
+            self._data.update(saved)
         except (FileNotFoundError, ValueError):
             pass
+        legacy = saved.get("overlay_enabled") and "overlays" not in saved
+        self._data["overlays"] = merged_overlays(self._data.get("overlays"))
+        if legacy:                                  # quem já abria o delta sozinho continua assim
+            self._data["overlays"]["delta"]["mode"] = "game"
+        self._data["overlay_edit"] = False
 
     def get(self, key):
         return self._data.get(key, DEFAULTS.get(key))
@@ -64,7 +95,10 @@ class Settings:
                 if k not in DEFAULTS:
                     continue
                 default = DEFAULTS[k]
-                if isinstance(default, bool):
+                if k == "overlays":
+                    cur = self._data.get("overlays") or {}
+                    v = merged_overlays({n: {**cur.get(n, {}), **(v.get(n) or {})} for n in OVERLAY_DEFAULTS})                         if isinstance(v, dict) else cur
+                elif isinstance(default, bool):
                     v = bool(v)
                 elif isinstance(default, int):
                     v = int(v)

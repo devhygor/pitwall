@@ -163,6 +163,19 @@ Os dados ficam em `%LOCALAPPDATA%\Pitwall\pitwall.db` (SQLite).
   porque o iRacing não informa o ângulo de deriva ao vivo. Le Mans Ultimate ainda
   não é suportado.
 
+## Overlays no jogo
+
+Janelas transparentes, sempre por cima do jogo (use o ACC/iRacing em "janela sem bordas"):
+**mapa da pista** (a pista muda de cor com as bandeiras: amarela só no setor, vermelha, azul, branca,
+verde), **pedais** (gráfico ao vivo de acelerador, freio e "sem pedal"), **participantes** (colunas à
+escolha: delta para você, intervalo, diferença para o líder, última e melhor volta...) e **delta**.
+Tudo em Configurações > Overlays: quando aparecem, tamanho, fundo (0% = transparente) e o que mostrar.
+"Mover / ver agora" (ou o ícone perto do relógio) liga o modo de edição: arraste cada um; ao concluir,
+os cliques atravessam para o jogo. Páginas: `pitwall/web/overlay.*`; dados: `pitwall/overlay.py`.
+
+No ACC, os outros pilotos vêm do broadcasting UDP do jogo (`pitwall/accudp.py`, porta e senha lidas de
+`Documentos\Assetto Corsa Competizione\Configroadcasting.json`; o padrão já funciona).
+
 ## Low Fuel Motorsport (LFM)
 
 Menu **LFM**: cole o link do seu perfil (ex.: `lowfuelmotorsport.com/profile/326481`) uma vez e o app mostra

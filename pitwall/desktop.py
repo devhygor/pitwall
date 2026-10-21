@@ -108,29 +108,143 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
     win.events.shown += lambda: _set_window_icon(title)
     app.state.ui_show = show          # a 2ª abertura do Pitwall só mostra esta janela
 
-    # janelinha do delta ao vivo (sempre por cima do jogo)
-    ov = {"win": None}
+    # overlays transparentes por cima do jogo (mapa, pedais, participantes e delta)
+    ov: dict = {}                      # nome -> {"win", "nat": (w, h) tamanho natural da página}
+    ov_lock = threading.RLock()
+    ov_save = {}
+    TITLES = {"map": "Pitwall Mapa", "pedals": "Pitwall Pedais", "standings": "Pitwall Participantes", "delta": "Pitwall Delta"}
 
-    def overlay(show_it: bool | None = None):
-        visible = ov["win"] is not None
-        want = (not visible) if show_it is None else show_it
-        if want and not visible:
+    def ov_cfg(name):
+        from .settings import merged_overlays
+        return merged_overlays(app.state.settings.get("overlays"))[name]
+
+    def ov_default_pos(name):
+        try:
+            sw, sh = webview.screens[0].width, webview.screens[0].height
+        except Exception:  # noqa: BLE001
+            sw, sh = 1920, 1080
+        return {"map": (sw - 460, 60), "pedals": (int(sw / 2 - 260), sh - 260), "standings": (24, 180),
+                "delta": (int(sw / 2 - 190), 36)}[name]
+
+    def ov_glass(name, win):
+        """Fundo realmente transparente (vidro do Windows) e, fora do modo de edição, cliques atravessam."""
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+
+            from System import Action
+            from System.Drawing import Color
+            form = win.native
+            editing = bool(app.state.settings.get("overlay_edit"))
+
+            def go():
+                hwnd = int(form.Handle.ToInt64())
+                form.BackColor = Color.Black
+
+                class M(ctypes.Structure):
+                    _fields_ = [("a", ctypes.c_int), ("b", ctypes.c_int), ("c", ctypes.c_int), ("d", ctypes.c_int)]
+                v = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(v), 4)      # sem Mica
+                ctypes.windll.dwmapi.DwmExtendFrameIntoClientArea(hwnd, ctypes.byref(M(-1, -1, -1, -1)))
+                u = ctypes.windll.user32
+                ex = u.GetWindowLongW(hwnd, -20) | 0x80000 | 0x80               # LAYERED + TOOLWINDOW (fora do Alt+Tab)
+                ex = (ex & ~0x20) if editing else (ex | 0x20)                  # TRANSPARENT = cliques atravessam
+                u.SetWindowLongW(hwnd, -20, ex)
+                u.SetLayeredWindowAttributes(hwnd, 0, 255, 2)
+            def safe():
+                try:
+                    go()
+                except Exception as e:  # noqa: BLE001
+                    print("overlay: não deu para aplicar o vidro:", repr(e), file=sys.stderr)
+            form.Invoke(Action(safe))
+        except Exception as e:  # noqa: BLE001
+            print("overlay: vidro indisponível:", repr(e), file=sys.stderr)
+
+    def ov_apply_size(name):
+        d = ov.get(name)
+        if not d or not d.get("nat"):
+            return
+        sc = ov_cfg(name)["scale"] / 100.0
+        w, h = int(d["nat"][0] * sc) + 2, int(d["nat"][1] * sc) + 2
+        if d.get("size") != (w, h):
+            d["size"] = (w, h)
             try:
-                sw = webview.screens[0].width if webview.screens else 1920
-            except Exception:  # noqa: BLE001
-                sw = 1920
-            ov["win"] = webview.create_window(
-                "Pitwall Delta", url + "/#/overlay", width=380, height=136, x=int(sw / 2 - 190), y=36,
-                on_top=True, frameless=True, easy_drag=True, resizable=False, background_color="#0b0d10")
-            ov["win"].events.closed += lambda: ov.update(win=None)
-        elif not want and visible:
-            try:
-                ov["win"].destroy()
+                d["win"].resize(w, h)
             except Exception:  # noqa: BLE001
                 pass
-            ov["win"] = None
-        return ov["win"] is not None
+
+    def ov_moved(name, x, y):
+        ov_save[name] = (x, y)
+
+        def flush():
+            xy = ov_save.pop(name, None)
+            if xy and app.state.settings:
+                app.state.settings.update({"overlays": {name: {"x": int(xy[0]), "y": int(xy[1])}}})
+        t = ov.get(name, {}).get("timer")
+        if t:
+            t.cancel()
+        if name in ov:
+            ov[name]["timer"] = threading.Timer(0.6, flush)
+            ov[name]["timer"].start()
+
+    def ov_open(name):
+        cfg = ov_cfg(name)
+        x, y = (cfg["x"], cfg["y"]) if cfg["x"] is not None and cfg["y"] is not None else ov_default_pos(name)
+        w = webview.create_window(TITLES[name], f"{url}/overlay/{name}", width=420, height=220, x=int(x), y=int(y),
+                                  frameless=True, easy_drag=True, resizable=False, on_top=True, transparent=True,
+                                  focus=False, shadow=False, background_color="#000000")
+        ov[name] = {"win": w, "nat": None, "size": None}
+        w.events.shown += lambda: ov_glass(name, w)
+        w.events.loaded += lambda: ov_glass(name, w)
+        w.events.moved += lambda x, y: ov_moved(name, x, y)
+        w.events.closed += lambda: ov.pop(name, None)
+
+    def ov_wanted(name):
+        cfg = ov_cfg(name)
+        if cfg["mode"] == "off":
+            return False
+        if app.state.settings.get("overlay_edit") or cfg["mode"] == "always":
+            return True
+        return (recorder.live or {}).get("state") == "recording"
+
+    def ov_sync():
+        with ov_lock:
+            for name in TITLES:
+                want, has = ov_wanted(name), name in ov
+                try:
+                    if want and not has:
+                        ov_open(name)
+                    elif has and not want:
+                        t = ov[name].get("timer")
+                        if t:
+                            t.cancel()
+                        ov.pop(name)["win"].destroy()
+                    elif has:
+                        ov_apply_size(name)
+                        ed = bool(app.state.settings.get("overlay_edit"))
+                        if ov[name].get("edit") != ed:
+                            ov[name]["edit"] = ed
+                            ov_glass(name, ov[name]["win"])
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def overlay(show_it: bool | None = None):
+        """Modo de edição: mostra todos os overlays ligados, com cliques, para posicionar e conferir."""
+        st = app.state.settings
+        want = (not st.get("overlay_edit")) if show_it is None else show_it
+        st.update({"overlay_edit": want})
+        ov_sync()
+        return want
+
+    def ov_size(name, w, h):
+        with ov_lock:
+            if name in ov:
+                ov[name]["nat"] = (w, h)
+                ov_apply_size(name)
     app.state.ui_overlay = overlay
+    app.state.ui_overlay_sync = ov_sync
+    app.state.ui_overlay_size = ov_size
 
     # janela do LFM dentro do Pitwall (o próprio site do LFM, com o seu login)
     lw = {"win": None}
@@ -177,20 +291,14 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
     app.state.ui_lfm = lfm_window
 
     def auto_overlay():
-        """Abre o delta sozinho ao entrar na pista (se ligado nas Configurações) e fecha ao sair."""
+        """Abre os overlays sozinhos ao entrar na pista (modo "só na pista") e fecha ao sair."""
         import time
-        was = False
         while not state["quitting"]:
             time.sleep(1.5)
-            rec = (recorder.live or {}).get("state") == "recording"
-            enabled = bool(app.state.settings and app.state.settings.get("overlay_enabled"))
-            if rec != was:
-                was = rec
-                if enabled:
-                    try:
-                        overlay(rec)
-                    except Exception:  # noqa: BLE001
-                        pass
+            try:
+                ov_sync()
+            except Exception:  # noqa: BLE001
+                pass
     threading.Thread(target=auto_overlay, daemon=True).start()
 
     if tray.available():

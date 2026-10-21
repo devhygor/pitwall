@@ -56,6 +56,12 @@ class Frame:
     session_time_left: float = -1.0            # ms até a bandeirada (-1 = desconhecido)
     game: str = "acc"
     cut_penalty: bool = False                  # o jogo deu penalidade por cortar a pista
+    # bandeiras em vigor: yellow = [S1, S2, S3]; os demais são bool (blue = para o jogador)
+    flags: dict = field(default_factory=dict)
+    # todos os carros da sessão (para o overlay de participantes e o mapa); ver pitwall/overlay.py
+    cars: list = field(default_factory=list)
+    player_id: int = -1                        # índice do carro do jogador dentro de `cars`
+    cars_status: str = ""                      # por que a lista de carros está vazia (ex.: sem conexão)
     extra: dict = field(default_factory=dict)
 
 
@@ -71,10 +77,15 @@ class ACCSource:
     def __init__(self, hz: float = 60.0):
         self.hz = hz
         self._asm = None
+        self.udp = None
 
     def _open(self):
         from pyaccsharedmemory import accSharedMemory  # import tardio: só existe no Windows
         self._asm = accSharedMemory()
+        if self.udp is None:
+            from .accudp import ACCBroadcast
+            self.udp = ACCBroadcast()
+            self.udp.start()
 
     def frames(self) -> Iterator[Optional[Frame]]:
         """Gera frames para sempre. Gera None quando não há dado novo (jogo
@@ -101,7 +112,12 @@ class ACCSource:
                 time.sleep(period if idle < 120 else 0.5)
                 continue
             idle = 0
-            yield self._to_frame(sm)
+            f = self._to_frame(sm)
+            if self.udp is not None:
+                f.cars = self.udp.snapshot()
+                f.cars_status = self.udp.status
+                f.player_id = getattr(sm.Graphics, "player_car_id", -1)
+            yield f
             time.sleep(period)
 
     @staticmethod
@@ -116,6 +132,15 @@ class ACCSource:
         except (ValueError, IndexError):
             pass
         w = lambda wh: (wh.front_left, wh.front_right, wh.rear_left, wh.rear_right)
+        fname = getattr(g.flag, "name", "")
+        ys = [bool(getattr(g, k, False)) for k in ("global_yellow_s1", "global_yellow_s2", "global_yellow_s3")]
+        if getattr(g, "global_yellow", False) and not any(ys):
+            ys = [True, True, True]
+        flags = {"yellow": ys, "red": bool(getattr(g, "global_red", False)),
+                 "green": bool(getattr(g, "global_green", False)), "white": bool(getattr(g, "global_white", False)),
+                 "chequered": bool(getattr(g, "global_chequered", False)),
+                 "blue": "BLUE" in fname, "black": "BLACK" in fname, "penalty": "PENALTY" in fname,
+                 "orange": "ORANGE" in fname}
         clean = lambda v: str(v or "").split("\x00")[0].strip()
         player = " ".join(n for n in (clean(s.player_name), clean(s.player_surname)) if n) or clean(s.player_nick)
         return Frame(
@@ -158,6 +183,7 @@ class ACCSource:
             road_temp=p.road_temp,
             grip=getattr(g.track_grip_status, "name", "").replace("ACC_", "").title(),
             session_time_left=float(g.session_time_left or -1),
+            flags=flags,
         )
 
 
@@ -185,6 +211,8 @@ class IRacingSource:
         self._incidents = None
         self._lap_incident = False
         self._lap_seen = None
+        self._n = 0
+        self._cars: list = []
 
     def _ensure(self) -> bool:
         if self.ir is None:
@@ -251,6 +279,14 @@ class IRacingSource:
         self._incidents = inc
         pct = max(0.0, min(1.0, ir["LapDistPct"] or 0.0))
         surf = ir["PlayerTrackSurface"]
+        self._n += 1
+        if self._n % 6 == 1:
+            self._cars = self._field(ir, drivers, me)
+        sf = int(ir["SessionFlags"] or 0)
+        yellow = bool(sf & (0x8 | 0x100 | 0x4000 | 0x8000))
+        flags = {"yellow": [yellow] * 3, "red": bool(sf & 0x10), "green": bool(sf & 0x4), "white": bool(sf & 0x2),
+                 "chequered": bool(sf & 0x1), "blue": bool(sf & 0x20), "black": bool(sf & (0x10000 | 0x20000)),
+                 "penalty": False, "orange": False}
         tl = ir["SessionTimeRemain"]
         return Frame(
             t=now, wall=time.time(), status="replay" if ir["IsReplayPlaying"] else "live",
@@ -267,7 +303,36 @@ class IRacingSource:
             air_temp=float(ir["AirTemp"] or 0), road_temp=float(ir["TrackTempCrew"] or ir["TrackTemp"] or 0),
             g_lat=float(ir["LatAccel"] or 0) / 9.81,
             session_time_left=float(tl) * 1000 if tl and tl > 0 else -1.0, game="iracing",
+            flags=flags, cars=self._cars, player_id=me,
         )
+
+    @staticmethod
+    def _field(ir, drivers, me) -> list:
+        """Todos os carros da pista (nome, número, classe, posição, voltas e tempos)."""
+        def arr(k):
+            try:
+                return ir[k] or []
+            except Exception:  # noqa: BLE001
+                return []
+        pct, lap, pos, cpos = arr("CarIdxLapDistPct"), arr("CarIdxLap"), arr("CarIdxPosition"), arr("CarIdxClassPosition")
+        last, best, pit, surf = arr("CarIdxLastLapTime"), arr("CarIdxBestLapTime"), arr("CarIdxOnPitRoad"), arr("CarIdxTrackSurface")
+        out = []
+        for d in drivers:
+            i = d.get("CarIdx")
+            if i is None or d.get("IsSpectator") or d.get("CarIsPaceCar") or i >= len(pct):
+                continue
+            if surf and i < len(surf) and surf[i] == -1:      # fora do mundo (desconectado/no box)
+                continue
+            name = str(d.get("UserName") or "")
+            ms = lambda v: int(v * 1000) if v and v > 0 else None
+            out.append({"id": i, "first": name.split(" ")[0], "last": " ".join(name.split(" ")[1:]) or name,
+                        "short": (name.split(" ")[-1] or name)[:3].upper(), "number": d.get("CarNumber"),
+                        "team": d.get("TeamName") or "", "cls": d.get("CarClassShortName") or "",
+                        "cls_color": d.get("CarClassColor"), "spline": max(0.0, float(pct[i])), "laps": max(0, int(lap[i]) - 1),
+                        "pos": int(pos[i]) if i < len(pos) else 0, "cup_pos": int(cpos[i]) if i < len(cpos) else 0,
+                        "best_ms": ms(best[i]) if i < len(best) else None, "last_ms": ms(last[i]) if i < len(last) else None,
+                        "pit": bool(pit[i]) if i < len(pit) else False})
+        return out
 
 
 class AutoSource:
@@ -378,6 +443,60 @@ class _DemoTrack:
         return x, z, lerp(self.speed[i], self.speed[j]), i
 
 
+def _demo_flags(t: float) -> dict:
+    """Bandeiras que se alternam a cada 2 minutos (só para testar os overlays)."""
+    c = t % 120
+    y = [False, False, False]
+    if 15 <= c < 32:
+        y[1] = True
+    elif 45 <= c < 58:
+        y[0] = y[1] = True
+    return {"yellow": y, "red": 90 <= c < 98, "green": c < 5, "white": 108 <= c < 118,
+            "chequered": False, "blue": 66 <= c < 74, "black": False, "penalty": False, "orange": False}
+
+
+class _DemoField:
+    """Pilotos de mentira ao redor do jogador, para testar o overlay de participantes e o mapa."""
+
+    NAMES = [("Lucas", "Almeida"), ("Marco", "Bianchi"), ("Tiago", "Ferreira"), ("Pedro", "Lima"), ("Rafa", "Moreira"),
+             ("Diego", "Santos"), ("Bruno", "Costa"), ("Ana", "Ribeiro"), ("Caio", "Nunes"), ("Felipe", "Duarte"),
+             ("Yuri", "Matos"), ("Gabriel", "Rocha")]
+
+    def __init__(self, rng, length):
+        self.rng = rng
+        self.length = length
+        self.cars = []
+        for i, (a, b) in enumerate(self.NAMES):
+            self.cars.append({"id": i + 1, "first": a, "last": b, "short": b[:3].upper(), "number": 10 + i * 7,
+                              "team": "", "cls": "GT3", "pace": rng.uniform(0.985, 1.045), "dist": -0.012 * (i + 1) + rng.uniform(-0.2, 0.9),
+                              "best_ms": None, "last_ms": None, "laps_done": 0, "pit": False, "lap_t": 0.0})
+        self.base = None
+
+    def step(self, dt, me_dist, my_best, my_last, my_cur_ms):
+        base_s = ((my_best or my_last or 95000) if my_best or my_last else 95000) / 1000.0
+        out = []
+        for c in self.cars:
+            c["dist"] += dt / (base_s * c["pace"])
+            c["lap_t"] += dt
+            if int(c["dist"]) > c["laps_done"] and c["dist"] > 0:
+                c["laps_done"] = int(c["dist"])
+                c["last_ms"] = int(c["lap_t"] * 1000 + self.rng.uniform(-300, 300))
+                c["best_ms"] = c["last_ms"] if not c["best_ms"] else min(c["best_ms"], c["last_ms"])
+                c["lap_t"] = 0.0
+            out.append({"id": c["id"], "first": c["first"], "last": c["last"], "short": c["short"], "number": c["number"],
+                        "team": c["team"], "cls": c["cls"], "spline": c["dist"] % 1.0 if c["dist"] > 0 else (c["dist"] % 1.0),
+                        "laps": max(0, int(c["dist"])), "pos": 0, "cup_pos": 0, "best_ms": c["best_ms"],
+                        "last_ms": c["last_ms"], "pit": c["pit"], "_dist": c["dist"]})
+        out.append({"id": 0, "first": "Piloto", "last": "Demo", "short": "DEM", "number": 99, "team": "", "cls": "GT3",
+                    "spline": me_dist % 1.0, "laps": int(me_dist), "pos": 0, "cup_pos": 0,
+                    "best_ms": my_best or None, "last_ms": my_last or None, "pit": False, "_dist": me_dist})
+        for i, c in enumerate(sorted(out, key=lambda c: -c["_dist"])):
+            c["pos"] = c["cup_pos"] = i + 1
+        for c in out:
+            c.pop("_dist", None)
+        return out
+
+
 class DemoSource:
     """Simula um piloto dando voltas, com variação entre voltas, consumo de
     combustível, um pit stop e uma volta inválida. `speed` acelera o tempo."""
@@ -435,6 +554,7 @@ class DemoSource:
         stint_laps = 0           # voltas no stint atual (o pneu esquenta aos poucos)
         tyre = [70.0] * 4
         wall0 = time.time()
+        field_ = _DemoField(self.rng, tr.length)
         while completed < self.laps:
             x, z, vt, i = tr.at(d)
             off = style["line"](i)
@@ -536,6 +656,7 @@ class DemoSource:
                 slip_angle=(saf, saf, sar, sar), slip_ratio=(srf, srf * 0.9, srr, srr),
                 g_lat=g_lat, brake_temp=(560, 555, 420, 418), susp=(0.04, 0.04, 0.05, 0.05),
                 session_time_left=max(0.0, 20 * 60_000 - t * 1000) if self.session_type == "Race" else -1.0,
+                flags=_demo_flags(t), cars=field_.step(dt, completed + d, best, last, lap_ms), player_id=0,
             )
             if self.realtime:
                 time.sleep(dt / self.speed)

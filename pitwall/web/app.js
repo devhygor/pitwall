@@ -2151,6 +2151,8 @@ async function renderSettings() {
 
       <section class="set-sec" data-sec="recursos">${extraSettings(s)}</section>
 
+      <section class="set-sec" data-sec="overlays">${overlaySettings(s)}</section>
+
       <section class="set-sec" data-sec="backup">${backupSettings(s)}</section>
 
       <section class="set-sec" data-sec="update"><div class="set-card" id="updCard"></div></section>
@@ -3001,15 +3003,89 @@ async function openOverlay() {
   if (!r.window) window.open("#/overlay", "pitwall-delta", "width=380,height=150");
 }
 
+// ---------------------------------------------------------------- overlays no jogo (janelas transparentes)
+const OV_MODES = [["off", "Desligado"], ["game", "Só quando estou na pista"], ["always", "Sempre aberto"]];
+const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
+  ["interval", "Intervalo p/ o da frente"], ["gap_leader", "Diferença p/ o líder"], ["last", "Última volta"], ["best", "Melhor volta"],
+  ["laps", "Voltas"], ["pit", "Box"]];
+function overlaySettings(s) {
+  const O = s.overlays || {};
+  const sel = (id, opts, val, attrs) => `<select ${attrs} id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${String(val) === String(k) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
+  const tg = (n, k, v) => `<input class="tgl" type="checkbox" data-ov="${n}" data-k="${k}" ${v ? "checked" : ""}>`;
+  const rng = (n, k, v, min, max, step, unit) => `<span class="ovr"><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}"><output data-unit="${unit}">${v}${unit}</output></span>`;
+  const mode = (n) => setRow("Quando mostrar", "“Só na pista” abre ao entrar numa sessão e fecha ao sair.", sel(`ov-${n}-mode`, OV_MODES, O[n].mode, `data-ov="${n}" data-k="mode"`));
+  const common = (n) => setRow("Tamanho", "", rng(n, "scale", O[n].scale, 50, 250, 5, "%")) + setRow("Fundo", "0% = totalmente transparente.", rng(n, "bg", O[n].bg, 0, 90, 5, "%"));
+  const m = O.map, p = O.pedals, st = O.standings, d = O.delta;
+  return `
+    <div class="set-card"><h2>Overlays no jogo</h2>
+      ${setRow("Posicionar e conferir", "Mostra todos os overlays ligados, com dados de exemplo se o jogo estiver fechado; arraste cada um para o lugar certo. Ao concluir, os cliques passam direto para o jogo. Também no ícone perto do relógio. Use o jogo em “janela sem bordas”.",
+        `<button class="btn ${s.overlay_edit ? "primary" : ""}" id="ovEdit">${s.overlay_edit ? "Concluir" : "Mover / ver agora"}</button>`)}
+    </div>
+    <div class="set-card"><h2>Mapa da pista</h2>
+      ${mode("map")}${common("map")}
+      <div class="sub" style="margin:2px 0 10px">A pista muda de cor em tempo real: amarela (só no setor da bandeira), vermelha, azul, branca ou verde.</div>
+      ${setRow("Mostrar o nome da bandeira", "", tg("map", "banner", m.banner))}
+      ${setRow("Outros carros", "Pontinhos no mapa. No ACC precisa do broadcasting ligado (padrão do jogo).", tg("map", "cars", m.cars))}
+      ${setRow("Números dos carros", "", tg("map", "numbers", m.numbers))}
+      ${setRow("Marcar os setores", "", tg("map", "sectors", m.sectors))}
+      ${setRow("Espessura da pista", "", rng("map", "width", m.width, 4, 16, 1, "px"))}
+      ${setRow("Girar o mapa", "", sel("ov-map-rot", [[0, "0°"], [90, "90°"], [180, "180°"], [270, "270°"]], m.rotate, 'data-ov="map" data-k="rotate" data-num="1"'))}
+    </div>
+    <div class="set-card"><h2>Pedais</h2>
+      ${mode("pedals")}${common("pedals")}
+      ${setRow("Janela de tempo", "Quantos segundos do histórico aparecem no gráfico.", rng("pedals", "seconds", p.seconds, 3, 20, 1, " s"))}
+      ${setRow("Marcar “sem pedal”", "Faixa âmbar quando você não pisa em nenhum dos dois, e a porcentagem do tempo.", tg("pedals", "coast", p.coast))}
+      ${setRow("Barras de acelerador e freio", "", tg("pedals", "bars", p.bars))}
+      ${setRow("Linha do volante", "", tg("pedals", "steer", p.steer))}
+      ${setRow("Marcha", "", tg("pedals", "gear", p.gear))}
+      ${setRow("Velocidade", "", tg("pedals", "speed", p.speed))}
+    </div>
+    <div class="set-card"><h2>Participantes</h2>
+      ${mode("standings")}${common("standings")}
+      ${setRow("Quais pilotos", "", sel("ov-st-view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], st.view, 'data-ov="standings" data-k="view"'))}
+      ${setRow("Quantas linhas", "", rng("standings", "rows", st.rows, 3, 30, 1, ""))}
+      ${setRow("Nome do piloto", "", sel("ov-st-name", [["short", "Sigla (3 letras)"], ["last", "Sobrenome"], ["full", "Nome completo"]], st.name, 'data-ov="standings" data-k="name"'))}
+      ${setRow("Colunas", "Escolha o que mostrar: delta para você, tempo de volta, intervalo, diferença para o líder…",
+        `<div class="ovcols">${OV_COLS.map(([k, t]) => `<label><input type="checkbox" data-col="${k}" ${st.cols.includes(k) ? "checked" : ""}> ${t}</label>`).join("")}</div>`)}
+      <div class="sub" style="margin-top:8px">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença é calculada pela distância na pista; no treino e na classificação, pela melhor volta de cada um.
+        No ACC os nomes e tempos dos outros pilotos vêm do broadcasting do jogo (ligado por padrão).</div>
+    </div>
+    <div class="set-card"><h2>Delta da volta</h2>
+      ${mode("delta")}${common("delta")}
+      ${setRow("Comparar contra", "Referência do delta.", sel("xOvRef", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], s.overlay_reference, ""))}
+      ${setRow("Tempo previsto da volta", "", tg("delta", "predicted", d.predicted))}
+      ${setRow("Combustível", "Voltas restantes e quanto falta/sobra até o fim.", tg("delta", "fuel", d.fuel))}
+    </div>`;
+}
+function bindOverlaySettings(put) {
+  const send = (n, k, v) => put({ overlays: { [n]: { [k]: v } } });
+  document.querySelectorAll("[data-ov]").forEach((el) => {
+    const n = el.dataset.ov, k = el.dataset.k;
+    if (el.type === "range") {
+      el.oninput = () => { el.nextElementSibling.textContent = el.value + el.nextElementSibling.dataset.unit; };
+      el.onchange = () => send(n, k, +el.value);
+    } else if (el.type === "checkbox") el.onchange = () => send(n, k, el.checked);
+    else el.onchange = () => send(n, k, el.dataset.num ? +el.value : el.value);
+  });
+  document.querySelectorAll("[data-col]").forEach((el) => el.onchange = () => {
+    const cols = OV_COLS.map(([k]) => k).filter((k) => document.querySelector(`[data-col="${k}"]`).checked);
+    send("standings", "cols", cols);
+  });
+  const ref = $("#xOvRef"); if (ref) ref.onchange = () => put({ overlay_reference: ref.value });
+  const ed = $("#ovEdit");
+  if (ed) ed.onclick = async () => {
+    const on = !ed.classList.contains("primary");
+    let r = null;
+    try { r = await api("/api/ui/overlay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ show: on }) }); } catch (e) { /* ok */ }
+    if (!r || !r.window) await put({ overlay_edit: on });
+    ed.classList.toggle("primary", on); ed.textContent = on ? "Concluir" : "Mover / ver agora";
+  };
+}
+
 // ---------------------------------------------------------------- configurações extras
 function extraSettings(s) {
   const sel = (id, opts, val) => `<select id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${String(val) === String(k) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
   return `
-    <div class="set-card"><h2>Delta ao vivo</h2>
-      ${setRow("Abrir sozinho quando começar a gravar", "Uma janelinha sempre por cima do jogo com o delta da volta, o tempo previsto e quantas voltas o combustível aguenta. Use o jogo em “janela sem bordas”.", `<input id="xOv" class="tgl" type="checkbox" ${s.overlay_enabled ? "checked" : ""}>`)}
-      ${setRow("Comparar contra", "Referência do delta.", sel("xOvRef", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], s.overlay_reference))}
-      ${setRow("Janela do delta", "Também dá para mostrar/esconder pelo ícone perto do relógio.", `<button class="btn" id="xOvOpen">Abrir agora</button>`)}
-    </div>
     <div class="set-card"><h2>Setup sugerido</h2>
       ${setRow("Escolher pela temperatura", "Ao começar a sessão, o Pitwall procura na sua biblioteca o setup do carro e da pista mais próximo da temperatura do momento e avisa na notificação.", sel("xBasis", [["air", "do ar"], ["track", "da pista"]], s.setup_temp_basis))}
       ${setRow("Variante preferida", "Vazio = qualquer.", `<input id="xVar" placeholder="ex.: Safe, Esport" value="${esc(s.setup_variant_pref)}">`)}
@@ -3033,6 +3109,7 @@ const SET_TABS = [
   ["geral", "Geral", SET_ICON('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>')],
   ["video", "Vídeo", SET_ICON('<rect x="2" y="5" width="14" height="14" rx="3"/><path d="M16 10l6-3v10l-6-3"/>')],
   ["recursos", "Recursos", SET_ICON('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>')],
+  ["overlays", "Overlays", SET_ICON('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M7 12l3-3 3 2 4-4"/>')],
   ["backup", "Backup", SET_ICON('<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>')],
   ["update", "Atualização", SET_ICON('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>')],
   ["about", "Sobre", SET_ICON('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>')],
@@ -3110,9 +3187,7 @@ async function drawUpdateCard(ver) {
 }
 function bindExtraSettings(draw) {
   const put = (v) => api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
-  $("#xOv").onchange = () => put({ overlay_enabled: $("#xOv").checked });
-  $("#xOvRef").onchange = () => put({ overlay_reference: $("#xOvRef").value });
-  $("#xOvOpen").onclick = openOverlay;
+  bindOverlaySettings(put);
   $("#xBasis").onchange = () => put({ setup_temp_basis: $("#xBasis").value });
   $("#xVar").onchange = () => put({ setup_variant_pref: $("#xVar").value.trim() });
   $("#xGames").onchange = () => put({ games: $("#xGames").value });

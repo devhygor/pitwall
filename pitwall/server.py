@@ -243,11 +243,36 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     app.state.ui_overlay = None
     app.state.settings = settings
 
+    app.state.ui_overlay_sync = None
+    app.state.ui_overlay_size = None
+
     @app.post("/api/ui/overlay")
     def ui_overlay(show: bool | None = Body(None, embed=True)):
+        """Liga/desliga o modo de edição dos overlays (mostra todos, com cliques, para posicionar)."""
         if app.state.ui_overlay:
             return {"window": True, "visible": app.state.ui_overlay(show)}
         return {"window": False}
+
+    @app.post("/api/ui/overlay-size")
+    def ui_overlay_size(name: str = Body(..., embed=True), w: int = Body(..., embed=True), h: int = Body(..., embed=True)):
+        """O próprio overlay informa o tamanho que ocupa; a janela se ajusta a ele."""
+        if app.state.ui_overlay_size:
+            app.state.ui_overlay_size(name, w, h)
+        return {"ok": True}
+
+    @app.get("/api/overlay/data")
+    def overlay_data(since: int = 0, parts: str = "all"):
+        hub = getattr(recorder, "hub", None) if recorder else None
+        return hub.snapshot(since, parts) if hub else {"status": "idle", "seq": 0, "samples": []}
+
+    @app.get("/api/overlay/map")
+    def overlay_map():
+        hub = getattr(recorder, "hub", None) if recorder else None
+        return hub.map() if hub else {"pts": [], "filled": 0, "sectors": [1 / 3, 2 / 3]}
+
+    @app.get("/overlay/{name}")
+    def overlay_page(name: str):
+        return FileResponse(WEB / "overlay.html")
 
     @app.post("/api/ui/show")
     def ui_show():
@@ -647,6 +672,8 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         keys = ("video_encoder", "video_monitor", "video_fps", "video_bitrate_mbps")
         if video and any(before.get(k) != new.get(k) for k in keys):
             video.probe_async()
+        if app.state.ui_overlay_sync and any(before.get(k) != new.get(k) for k in ("overlays", "overlay_edit")):
+            app.state.ui_overlay_sync()
         return {"settings": new, "video": video.status if video else {}}
 
     @app.get("/api/update")
@@ -673,7 +700,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     async def no_stale_ui(request: Request, call_next):
         """A janela do app guarda cache em disco: sem isso a interface nova não aparece depois de atualizar."""
         resp = await call_next(request)
-        if request.url.path == "/" or request.url.path.startswith("/static/"):
+        if request.url.path == "/" or request.url.path.startswith(("/static/", "/overlay/")):
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 

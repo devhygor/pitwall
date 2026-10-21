@@ -105,6 +105,8 @@ def main(argv=None):
     backup.start_scheduler(db.path, settings)
     from .live import LiveDelta
     recorder.live_delta = LiveDelta(db, settings)
+    from .overlay import OverlayHub
+    recorder.hub = OverlayHub(db, recorder)
     from .team import Team
     team = Team(db, settings, args.port)
     recorder.on_lap_saved.append(team.upload_async_if_pb)

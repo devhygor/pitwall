@@ -55,6 +55,7 @@ class Recorder:
         self.extra_live: dict = {}  # informações extras para o status ao vivo (ex.: setup sugerido)
         self._post = None           # conferência da última volta salva (ver _post_check)
         self.live_delta = None      # LiveDelta opcional (delta ao vivo contra o recorde)
+        self.hub = None             # OverlayHub opcional (dados em tempo real dos overlays)
         self.on_lap_saved = []      # funções chamadas com (lap_id, car, track) depois de gravar uma volta
         self.session_id: Optional[int] = None
         self._session_key = None
@@ -88,6 +89,8 @@ class Recorder:
 
     # --- processamento -----------------------------------------------------
     def feed(self, f: Optional[Frame]):
+        if self.hub is not None:
+            self.hub.feed(f)
         if f is None:
             # jogo fechado/no menu por mais de 60 s: encerra a sessão aberta
             if self.session_id is not None and time.monotonic() - self._last_frame_at > 60:

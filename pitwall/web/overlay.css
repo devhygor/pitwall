@@ -1,0 +1,73 @@
+/* Overlays do Pitwall: janelas transparentes por cima do jogo. Nada aqui pinta o fundo da página. */
+:root {
+  --s: 1; --bg: 0;
+  --text: #f4f6fa; --muted: rgba(235, 240, 248, .62);
+  --good: #3ee08f; --bad: #ff4d5e; --amber: #ffc233; --blue: #4da3ff; --accent: #ff3b4e;
+  --panel: rgba(9, 11, 15, calc(var(--bg) / 100));
+  --font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { background: transparent !important; overflow: hidden; width: 100%; height: 100%; }
+body { font-family: var(--font); color: var(--text); user-select: none; -webkit-user-select: none; cursor: default; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+#root { display: inline-block; transform: scale(var(--s)); transform-origin: 0 0; position: relative; }
+.card { position: relative; background: var(--panel); border-radius: 14px; padding: 10px 12px; }
+.shadow { text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 8px rgba(0, 0, 0, .55); }
+
+/* modo de edição: contorno + dica; o overlay inteiro vira alça de arrastar */
+body.edit #root { outline: 2px dashed rgba(255, 255, 255, .45); outline-offset: 0; border-radius: 14px; cursor: move; }
+body.edit #root::after { content: attr(data-title) " · arraste para mover"; position: absolute; left: 6px; top: -1px; transform: translateY(-100%);
+  font: 600 11px var(--font); letter-spacing: .04em; color: #fff; background: rgba(255, 59, 78, .9); padding: 2px 8px; border-radius: 6px 6px 0 0; white-space: nowrap; }
+.idle { padding: 8px 14px; font-size: 12px; color: var(--muted); background: var(--panel); border-radius: 10px; }
+
+/* ---- mapa ---- */
+.map { width: 340px; height: 300px; padding: 0; }
+.map canvas { width: 340px; height: 300px; display: block; }
+.map .banner { position: absolute; left: 10px; top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font: 700 12px var(--font); letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; color: #0b0d10; text-transform: uppercase; box-shadow: 0 2px 10px rgba(0, 0, 0, .45); }
+.chip.pulse { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.map .note { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 11px; color: var(--muted); }
+
+/* ---- pedais ---- */
+.pedals { display: flex; gap: 10px; align-items: stretch; padding: 10px; }
+.pedals canvas { width: 360px; height: 120px; display: block; border-radius: 8px; }
+.pedals .bars { display: flex; gap: 6px; align-items: stretch; }
+.vbar { width: 18px; border-radius: 6px; background: rgba(255, 255, 255, .09); position: relative; overflow: hidden; }
+.vbar i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-radius: 6px; }
+.vbar.b i { background: linear-gradient(0deg, #ff2f45, #ff7a86); }
+.vbar.t i { background: linear-gradient(0deg, #25c777, #7dffc0); }
+.pedals .info { width: 74px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
+.pedals .gear { font-size: 46px; font-weight: 800; line-height: 1; }
+.pedals .spd { font-size: 22px; font-weight: 700; line-height: 1; }
+.pedals .spd small { display: block; font-size: 10px; font-weight: 600; letter-spacing: .1em; color: var(--muted); margin-top: 2px; }
+.pedals .legend { font-size: 10px; letter-spacing: .08em; color: var(--muted); text-align: center; line-height: 1.5; }
+.pedals .legend b { font-weight: 700; }
+.legend .g { color: var(--good); } .legend .r { color: var(--bad); } .legend .a { color: var(--amber); }
+
+/* ---- participantes ---- */
+.stand { padding: 6px 6px 8px; min-width: 200px; }
+.stand .title { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 2px 8px 6px; }
+.stand .grid { display: grid; align-items: center; }
+.stand .cell { height: 26px; display: flex; align-items: center; padding: 0 8px; font-size: 14px; white-space: nowrap; }
+.stand .hd { height: 20px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stand .r { justify-content: flex-end; text-align: right; }
+.stand .row-me { background: linear-gradient(90deg, rgba(255, 59, 78, .32), rgba(255, 59, 78, .08)); font-weight: 700; }
+.stand .row-me.first { border-radius: 8px 0 0 8px; } .stand .row-me.last { border-radius: 0 8px 8px 0; }
+.stand .pos { font-weight: 800; justify-content: center; }
+.stand .ahead { color: #ff8a96; } .stand .behind { color: #7ff0b6; }
+.stand .dim { color: var(--muted); }
+.stand .pit { font-size: 10px; font-weight: 800; letter-spacing: .06em; color: #0b0d10; background: var(--amber); border-radius: 4px; padding: 1px 5px; }
+.stand .best-all { color: #d79bff; font-weight: 700; }
+.stand .sep { height: 6px; }
+.stand .msg { padding: 10px 12px; font-size: 12px; color: var(--muted); max-width: 300px; line-height: 1.4; }
+
+/* ---- delta ---- */
+.delta { width: 280px; padding: 10px 14px 12px; text-align: center; }
+.delta .big { font-size: 58px; font-weight: 800; line-height: 1; letter-spacing: -.02em; }
+.delta .big.fast { color: var(--good); } .delta .big.slow { color: var(--bad); }
+.delta .dbar { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .1); margin: 8px 0 6px; overflow: hidden; }
+.delta .dbar i { position: absolute; top: 0; bottom: 0; }
+.delta .dbar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, .5); }
+.delta .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 3px; }

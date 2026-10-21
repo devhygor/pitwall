@@ -61,7 +61,7 @@ def start(recorder, on_open, on_quit, detached: bool = True, on_overlay=None):
         menu=pystray.Menu(
             pystray.MenuItem(status_text, None, enabled=False),
             pystray.MenuItem("Abrir o Pitwall", lambda *_: on_open(), default=True),
-            *([pystray.MenuItem("Delta ao vivo (mostrar/esconder)", lambda *_: on_overlay())] if on_overlay else []),
+            *([pystray.MenuItem("Overlays: modo de edição (mover)", lambda *_: on_overlay())] if on_overlay else []),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Sair", quit_),
         ))
