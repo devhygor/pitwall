@@ -16,7 +16,7 @@ const FLAG_INFO = {
 const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
   seconds: 8, steer: false, wheel: true, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
-  temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
+  temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true };
 
 let cfg = { ...DEFAULT_CFG };
 let edit = false;
@@ -565,6 +565,80 @@ function standingsOverlay() {
   return { onData: render, onCfg: render };
 }
 
+// ---- estilo "ACC": vista de cima do carro, como o widget do próprio jogo
+function tyresACC() {
+  const WX = ["Agora", "10'", "30'"];
+  const wxIcon = (lv) => {                      // 0 sol, 1 nublado/garoa, 2-3 chuva, 4-5 chuva forte/tempestade
+    const st = 'fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"';
+    if (lv <= 0) return `<svg viewBox="0 0 32 32" width="30" height="30" ${st}><circle cx="16" cy="16" r="5.5" stroke="#ffc233"/><path stroke="#ffc233" d="M16 4v3M16 25v3M4 16h3M25 16h3M7.5 7.5l2 2M22.5 22.5l2 2M24.5 7.5l-2 2M9.5 22.5l-2 2"/></svg>`;
+    const cloud = `<path stroke="#c9d3e3" d="M9 20a5 5 0 0 1 .8-9.9A7 7 0 0 1 23 11.5a4.3 4.3 0 0 1-.5 8.5z"/>`;
+    if (lv === 1) return `<svg viewBox="0 0 32 32" width="30" height="30" ${st}>${cloud}<path stroke="#6fb4ff" d="M12 24l-1 2.5M18 24l-1 2.5"/></svg>`;
+    if (lv <= 3) return `<svg viewBox="0 0 32 32" width="30" height="30" ${st}>${cloud}<path stroke="#4da3ff" d="M11 23l-1.6 4M16 23l-1.6 4M21 23l-1.6 4"/></svg>`;
+    return `<svg viewBox="0 0 32 32" width="30" height="30" ${st}>${cloud}<path stroke="#3d8bff" d="M10 23l-1.8 4.5M15 23l-1.8 4.5M20 23l-1.8 4.5M24.5 23l-1.8 4.5"/>${lv >= 5 ? '<path stroke="#ffd21f" d="M17 11l-3 5h4l-3 5"/>' : ""}</svg>`;
+  };
+  const GRIP = { Green: "Pista verde", Fast: "Pista seca", Optimum: "Pista seca · ideal", Greasy: "Pista escorregadia", Damp: "Pista úmida", Wet: "Pista molhada", Flooded: "Pista alagada" };
+  const tyre = (i) => `<div class="ta-tyre" data-w="${i}"><div class="st"><i></i><i></i><i></i></div><b class="num"></b><div class="wr"><i></i></div></div>`;
+  const prs = (i) => `<div class="ta-p num" data-w="${i}">—</div>`;
+  const brk = (a, b) => `<div class="ta-brk"><div class="bk" data-w="${a}"><i></i></div><div class="bk" data-w="${b}"><i></i></div></div>`;
+  root.innerHTML = `<div class="card tyacc shadow"><div class="ta-wx" id="wx"></div><div class="ta-car">
+      ${prs(0)}<div></div>${prs(1)}
+      ${tyre(0)}${brk(0, 1)}${tyre(1)}
+      <div class="ta-mid" id="grip"></div>
+      ${tyre(2)}${brk(2, 3)}${tyre(3)}
+      ${prs(2)}<div></div>${prs(3)}</div><div class="ta-pads" id="pads"></div></div>`;
+  const q = (s, el = root) => el.querySelector(s);
+  const hsl = (h, l = 52) => `hsl(${Math.round(h)} 78% ${l}%)`;
+  const tcol = (t) => t <= 0 ? "#3a4352" : t < cfg.tmin ? hsl(205 - clamp((t - (cfg.tmin - 20)) / 20, 0, 1) * 65) : t <= cfg.tmax ? hsl(140) : hsl(140 - clamp((t - cfg.tmax) / 25, 0, 1) * 140);
+  const pcol = (p) => p <= 0 ? "var(--muted)" : p < cfg.pmin ? hsl(205, 66) : p > cfg.pmax ? hsl(8, 68) : "#fff";
+  const bcol = (b) => b <= 0 ? "#3a4352" : b < cfg.bmin ? hsl(205 - clamp((b - (cfg.bmin - 200)) / 200, 0, 1) * 65) : b <= cfg.bmax ? hsl(172, 60) : hsl(140 - clamp((b - cfg.bmax) / 200, 0, 1) * 140);
+  const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
+  const preview = () => { const t = performance.now() / 1000;
+    return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [26.8, 26.1, 26.8, 26.3], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)),
+      wear: [0.12, 0.14, 0.1, 0.1], pad: [24, 24, 22.5, 22.5], rain: [0, 1, 3], grip: "Optimum", compound: "dry_compound" }; };
+  function render() {
+    const T = live() ? data.tyres : previewing ? preview() : null;
+    const car = q(".ta-car");
+    if (!T) { car.style.opacity = .35; return; }
+    car.style.opacity = 1;
+    const wx = q("#wx");
+    const rain = T.rain && T.rain.length ? T.rain : null;
+    wx.style.display = cfg.weather && rain ? "" : "none";
+    if (rain) wx.innerHTML = rain.slice(0, 3).map((lv, i) => `<div class="wxc">${wxIcon(lv)}<small>${WX[i]}</small></div>`).join("");
+    const gp = q("#grip");
+    gp.style.display = cfg.weather && T.grip ? "" : "none";
+    gp.textContent = (GRIP[T.grip] || T.grip || "").toUpperCase();
+    for (let i = 0; i < 4; i++) {
+      const el = q(`.ta-tyre[data-w="${i}"]`), t = T.temp[i], w = T.wear ? T.wear[i] : null;
+      const c = tcol(t);
+      const st = el.querySelectorAll(".st i");
+      st.forEach((s, k) => { s.style.background = `linear-gradient(180deg, ${c}, color-mix(in srgb, ${c} ${k === 1 ? 70 : 58}%, #0b0d10))`; });
+      const nb = el.querySelector("b"); nb.style.display = cfg.temp ? "" : "none"; nb.textContent = t > 0 ? Math.round(t) + "°" : "—";
+      const wr = el.querySelector(".wr");
+      wr.style.display = cfg.wear && w != null ? "" : "none";
+      if (w != null) { const left = 1 - w; wr.firstChild.style.width = clamp(left, 0, 1) * 100 + "%"; wr.firstChild.style.background = wcol(left * 1.3 - 0.1); }
+      const pe = q(`.ta-p[data-w="${i}"]`), bar = cfg.punit === "bar", p = T.press[i], pv = bar ? p * 0.0689476 : p;
+      pe.style.display = cfg.press ? "" : "none";
+      pe.textContent = p > 0 ? pv.toFixed(bar ? 2 : 1) + (bar ? " bar" : " psi") : "—"; pe.style.color = pcol(p);
+      const bk = q(`.bk[data-w="${i}"]`), b = T.brake[i];
+      bk.style.display = cfg.brake ? "" : "none";
+      bk.title = `Freio ${Math.round(b)} °C`;
+      bk.firstChild.style.height = clamp((b - 100) / (cfg.bmax + 250 - 100), 0.04, 1) * 100 + "%"; bk.firstChild.style.background = bcol(b);
+    }
+    const pd = q("#pads");
+    pd.style.display = cfg.pads && T.pad ? "" : "none";
+    if (T.pad) pd.textContent = "pastilhas " + T.pad.map((v) => v.toFixed(0)).join(" · ") + " mm";
+  }
+  return { onData: render, onCfg: render };
+}
+
+// escolhe o estilo (ACC ou cartões) e refaz a janela se ele mudar
+function tyresOverlay() {
+  let style = null, impl = null;
+  const pick = () => { const s = cfg.tystyle === "cards" ? "cards" : "acc"; if (s !== style) { style = s; impl = s === "cards" ? tyresCards() : tyresACC(); lastSize = ""; } return impl; };
+  pick();
+  return { onData() { pick().onData(); }, onCfg() { pick().onCfg(); } };
+}
+
 // ------------------------------------------------------------------ DELTA
 function deltaOverlay() {
   root.innerHTML = `<div class="card delta shadow"><div class="big num" id="big">—</div><div class="dbar"><i id="bar"></i></div>
@@ -592,23 +666,26 @@ function deltaOverlay() {
 }
 
 // ------------------------------------------------------------------ PNEUS
-function tyresOverlay() {
+function tyresCards() {
   const NAMES = ["FL", "FR", "RL", "RR"], LBL = ["Diant. esq.", "Diant. dir.", "Tras. esq.", "Tras. dir."];
   root.innerHTML = `<div class="card tyres shadow"><div class="ty-comp" id="tc"></div><div class="ty-grid" id="tg"></div></div>`;
   const tg = root.querySelector("#tg"), tc = root.querySelector("#tc");
   tg.innerHTML = NAMES.map((n, i) => `<div class="ty" id="ty${i}">
-      <div class="ty-main"><div class="ty-brake" title="Temperatura do disco de freio"><i></i></div>
-        <div class="ty-tyre"><b class="num ty-t">—</b><small>${LBL[i]}</small></div></div>
-      <div class="ty-p num">—</div><div class="ty-wear"><i></i><span class="num"></span></div></div>`).join("");
+      <div class="ty-main"><div class="ty-tyre"><b class="num ty-t">—</b><small>${LBL[i]}</small></div></div>
+      <div class="ty-p num">—</div><div class="ty-wear"><i></i><span class="num"></span></div>
+      <div class="ty-br" title="Temperatura do disco de freio"><small>FREIO</small><b class="num">—</b><div class="bar"><i></i></div></div>
+      <div class="ty-pad num" title="Vida restante da pastilha"></div></div>`).join("");
   const hsl = (h, l = 52) => `hsl(${Math.round(h)} 78% ${l}%)`;
   const tcol = (t) => t <= 0 ? "#3a4352" : t < cfg.tmin ? hsl(205 - clamp((t - (cfg.tmin - 20)) / 20, 0, 1) * 65)
     : t <= cfg.tmax ? hsl(140) : hsl(140 - clamp((t - cfg.tmax) / 25, 0, 1) * 140);
   const pcol = (p) => p <= 0 ? "var(--muted)" : p < cfg.pmin ? hsl(205, 66) : p > cfg.pmax ? hsl(8, 68) : hsl(140, 62);
-  const bcol = (b) => hsl(205 - clamp((b - 150) / 750, 0, 1) * 205);
+  // freio: abaixo da faixa = azul (frio), dentro = verde, acima = laranja e depois vermelho (risco de fade)
+  const bcol = (b) => b <= 0 ? "#3a4352" : b < cfg.bmin ? hsl(205 - clamp((b - (cfg.bmin - 200)) / 200, 0, 1) * 65)
+    : b <= cfg.bmax ? hsl(140) : hsl(140 - clamp((b - cfg.bmax) / 200, 0, 1) * 140);
   const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
   const preview = () => { const t = performance.now() / 1000;
     return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [27.2, 27.4, 26.9, 27.1], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)),
-      wear: [0.12, 0.14, 0.1, 0.1], compound: "dry_compound" }; };
+      wear: [0.12, 0.14, 0.1, 0.1], pad: [24, 24, 22.5, 22.5], compound: "dry_compound" }; };
   function render() {
     const T = live() ? data.tyres : previewing ? preview() : null;
     if (!T) { tg.style.opacity = .35; return; }
@@ -621,9 +698,13 @@ function tyresOverlay() {
       tyre.style.background = `linear-gradient(180deg, ${tcol(t)}, color-mix(in srgb, ${tcol(t)} 55%, #0b0d10))`;
       el.querySelector(".ty-t").textContent = cfg.temp ? (t > 0 ? Math.round(t) + "°" : "—") : "";
       el.querySelector(".ty-t").style.display = cfg.temp ? "" : "none";
-      const bk = el.querySelector(".ty-brake");
+      const bk = el.querySelector(".ty-br");
       bk.style.display = cfg.brake ? "" : "none";
-      bk.firstChild.style.height = clamp((b - 100) / 900, 0.03, 1) * 100 + "%"; bk.firstChild.style.background = bcol(b); bk.title = `Freio ${Math.round(b)}°C`;
+      bk.querySelector("b").textContent = b > 0 ? Math.round(b) + "°" : "—"; bk.querySelector("b").style.color = bcol(b);
+      const bi = bk.querySelector(".bar i"); bi.style.width = clamp((b - 100) / (cfg.bmax + 250 - 100), 0.03, 1) * 100 + "%"; bi.style.background = bcol(b);
+      const pd = el.querySelector(".ty-pad"), padv = T.pad ? T.pad[i] : null;
+      pd.style.display = cfg.pads && padv != null ? "" : "none";
+      if (padv != null) pd.textContent = "pastilha " + padv.toFixed(1).replace(".", ",") + " mm";
       const pe = el.querySelector(".ty-p");
       pe.style.display = cfg.press ? "" : "none";
       const bar = cfg.punit === "bar", pv = bar ? p * 0.0689476 : p;

@@ -3132,14 +3132,18 @@ function ovPanel(n, S) {
   } else if (n === "tyres") {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "temp", "Temperatura", c.temp, "Temperatura do núcleo do pneu; a cor mostra se está fria, ideal ou quente")}
       ${ovChip(n, "press", "Pressão", c.press, "A cor mostra se está abaixo, dentro ou acima da faixa ideal")}
-      ${ovChip(n, "brake", "Freio", c.brake, "Barra com a temperatura do disco de freio de cada roda")}
+      ${ovChip(n, "brake", "Freio (temperatura)", c.brake, "Temperatura do disco de freio de cada roda, com barra e cor de status")}
+      ${ovChip(n, "pads", "Pastilhas", c.pads, "Vida restante da pastilha em mm (só o ACC informa)")}
       ${ovChip(n, "wear", "Desgaste", c.wear, "Quanto resta de cada pneu (o ACC não informa o desgaste; o iRacing sim)")}
-      ${ovChip(n, "compound", "Composto", c.compound)}</div>`);
+      ${ovChip(n, "compound", "Composto", c.compound)}
+      ${ovChip(n, "weather", "Clima (agora, 10 e 30 min)", c.weather, "Previsão de chuva e estado da pista, como no widget do ACC (a previsão só o ACC informa)")}</div>`);
+    g += ovGroup("Estilo", ovSeg(n, "tystyle", [["acc", "Como o ACC (vista de cima)"], ["cards", "Cartões"]], c.tystyle || "acc"));
     g += ovGroup("Unidade da pressão", ovSeg(n, "punit", [["psi", "psi"], ["bar", "bar"]], c.punit));
     g += ovGroup("Faixa ideal", ovSlider(n, "tmin", "Temp. mínima", c.tmin, 40, 120, 1, " °C") + ovSlider(n, "tmax", "Temp. máxima", c.tmax, 50, 140, 1, " °C") +
-      ovSlider(n, "pmin", "Pressão mínima", c.pmin, 20, 35, 0.1, " psi") + ovSlider(n, "pmax", "Pressão máxima", c.pmax, 20, 35, 0.1, " psi"),
+      ovSlider(n, "pmin", "Pressão mínima", c.pmin, 20, 35, 0.1, " psi") + ovSlider(n, "pmax", "Pressão máxima", c.pmax, 20, 35, 0.1, " psi") +
+      ovSlider(n, "bmin", "Freio mínimo", c.bmin, 100, 700, 10, " °C") + ovSlider(n, "bmax", "Freio máximo", c.bmax, 400, 1100, 10, " °C"),
       "abaixo = azul, dentro = verde, acima = vermelho") .replace("</section>", `<div class="ovreset"><button type="button" class="btn sm" id="tyReset">Restaurar padrão</button>
-        <span class="sub">Padrão do ACC (1.9 em diante, todas as classes): 70–100 °C e 26,0–27,0 psi com o pneu quente. No iRacing a faixa muda de carro para carro: ajuste à mão.</span></div></section>`);
+        <span class="sub">Padrão do ACC (1.9 em diante, todas as classes): 70–100 °C e 26,0–27,0 psi com o pneu quente. No iRacing a faixa muda de carro para carro: ajuste à mão. A faixa do freio (350–800 °C) é uma estimativa minha, sem fonte oficial: ajuste ao seu carro.</span></div></section>`);
   } else if (n === "delta") {
     g += ovGroup("Comparar contra", ovSeg("", "ref", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], S.overlay_reference));
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "predicted", "Tempo previsto", c.predicted)}${ovChip(n, "fuel", "Combustível", c.fuel, "Voltas restantes e quanto falta/sobra até o fim")}</div>`);
@@ -3317,7 +3321,7 @@ function bindOverlayPanel(box, n, put, putModes) {
   });
   const rs = box.querySelector("#tyReset");
   if (rs) rs.onclick = async () => {
-    const def = { tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
+    const def = { tmin: 70, tmax: 100, pmin: 26, pmax: 27, bmin: 350, bmax: 800 };
     await put({ overlays: { tyres: def } });
     for (const [k2, v] of Object.entries(def)) {
       const el = box.querySelector(`[data-ov="tyres"][data-k="${k2}"]`);

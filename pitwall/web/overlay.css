@@ -137,3 +137,28 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .stand .tr-good { color: #4be58f; font-weight: 700; } .stand .tr-bad { color: #ff5a64; font-weight: 700; } .stand .tr-flat { color: var(--muted); }
 .stand .trd { display: inline-flex; align-items: baseline; gap: 4px; font-size: 13px; } .stand .trd b { font-weight: 700; font-size: 13px; }
 .stand .trd.tr-good, .stand .trd.tr-bad { font-weight: 700; }
+.ty-br { display: flex; align-items: center; gap: 5px; width: 92px; font-size: 11px; margin-top: 2px; }
+.ty-br small { font-size: 8px; font-weight: 800; letter-spacing: .08em; color: var(--muted); }
+.ty-br b { font-size: 12px; font-weight: 800; min-width: 32px; }
+.ty-br .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .14); position: relative; overflow: hidden; }
+.ty-br .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.ty-pad { font-size: 10px; color: var(--muted); }
+.ty { width: 108px; }
+
+/* ---- pneus no estilo do ACC ---- */
+.tyacc { padding: 8px 12px 10px; min-width: 250px; }
+.ta-wx { display: flex; justify-content: space-around; gap: 6px; padding: 2px 4px 8px; margin-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.wxc { display: flex; flex-direction: column; align-items: center; gap: 1px; } .wxc small { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--muted); }
+.ta-car { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; justify-items: center; row-gap: 3px; transition: opacity .2s; }
+.ta-p { font-size: 15px; font-weight: 800; padding: 1px 0; }
+.ta-tyre { position: relative; width: 84px; height: 58px; border-radius: 9px; padding: 3px; background: rgba(0, 0, 0, .35); box-shadow: 0 3px 10px rgba(0, 0, 0, .4); }
+.ta-tyre .st { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; height: 100%; }
+.ta-tyre .st i { border-radius: 5px; }
+.ta-tyre b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 6px rgba(0, 0, 0, .6); }
+.ta-tyre .wr { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 4px; border-radius: 2px; background: rgba(0, 0, 0, .45); overflow: hidden; }
+.ta-tyre .wr i { display: block; height: 100%; border-radius: 2px; }
+.ta-brk { display: flex; gap: 5px; align-items: stretch; height: 46px; }
+.bk { width: 9px; border-radius: 4px; background: rgba(255, 255, 255, .13); position: relative; overflow: hidden; }
+.bk i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px; }
+.ta-mid { grid-column: 1 / -1; font-size: 12px; font-weight: 800; letter-spacing: .1em; color: #fff; padding: 5px 0; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+.ta-pads { text-align: center; font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: .04em; }

@@ -65,6 +65,7 @@ class Frame:
     tyre_wear: tuple = ()                      # desgaste de cada pneu, 0 (novo) a 1 (gasto); vazio = o jogo não informa
     tyre_compound: str = ""
     pad_life: tuple = ()                       # vida restante das pastilhas (mm) no ACC
+    rain: tuple = ()                           # chuva agora, em 10 min e em 30 min (0 = sem chuva ... 5 = tempestade)
     session_total_ms: float = -1.0             # duração total da sessão (ms), -1 = desconhecida
     total_laps: int = 0                        # voltas da corrida (0 = sessão por tempo ou desconhecido)
     extra: dict = field(default_factory=dict)
@@ -193,6 +194,7 @@ class ACCSource:
             grip=getattr(g.track_grip_status, "name", "").replace("ACC_", "").title(),
             session_time_left=float(g.session_time_left or -1),
             flags=flags, tyre_compound=clean(getattr(g, "tyre_compound", "")), pad_life=w(p.pad_life),
+            rain=tuple(int(getattr(getattr(g, k, None), "value", 0) or 0) for k in ("rain_intensity", "rain_intensity_in_10min", "rain_intensity_in_30min")),
         )
 
 
@@ -291,6 +293,7 @@ class IRacingSource:
         self._n += 1
         if self._n % 6 == 1:
             self._cars = self._field(ir, drivers, me)
+        prec = ir["Precipitation"]
         tt = ir["SessionTimeTotal"]
         sl = ir["SessionLapsTotal"]
         sf = int(ir["SessionFlags"] or 0)
@@ -315,6 +318,7 @@ class IRacingSource:
             g_lat=float(ir["LatAccel"] or 0) / 9.81,
             session_time_left=float(tl) * 1000 if tl and tl > 0 else -1.0, game="iracing",
             flags=flags, cars=self._cars, player_id=me, **self._tyres(ir),
+            rain=(int(round(float(prec) * 5)),) if prec is not None else (),
             session_total_ms=float(tt) * 1000 if tt and 0 < tt < 1e7 else -1.0,
             total_laps=int(sl) if sl and 0 < sl < 10000 else 0,
         )
@@ -699,7 +703,7 @@ class DemoSource:
                 tyre_wear=tuple(min(0.9, 0.012 * (stint_laps + d) + (0.004 if k < 2 else 0)) for k in range(4)),
                 tyre_compound="dry_compound", pad_life=(24.0, 24.0, 22.0, 22.0),
                 session_time_left=max(0.0, 20 * 60_000 - t * 1000) if self.session_type == "Race" else -1.0,
-                flags=_demo_flags(t), cars=field_.step(dt, completed + d, best, last, lap_ms), player_id=0,
+                rain=(0, 1, 3) if (t % 240) < 120 else (1, 2, 2), flags=_demo_flags(t), cars=field_.step(dt, completed + d, best, last, lap_ms), player_id=0,
                 session_total_ms=20 * 60_000.0 if self.session_type == "Race" else -1.0, total_laps=self.laps if self.session_type == "Race" else 0,
             )
             if self.realtime:
