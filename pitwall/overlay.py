@@ -45,6 +45,7 @@ class OverlayHub:
         self._prev_pos = 0.0
         self._gh: dict = {}          # histórico da distância até cada carro (tendência: aproximando/afastando)
         self._ih: dict = {}          # histórico do intervalo de cada carro para o da frente
+        self._win = 25.0
 
     # ---- entrada -----------------------------------------------------------------
     def feed(self, f):
@@ -192,16 +193,25 @@ class OverlayHub:
         return out
 
     # ---- participantes -----------------------------------------------------------
+    def _window(self) -> float:
+        """Janela (s) da tendência do intervalo, ajustável nas opções do overlay de participantes."""
+        try:
+            v = float(((self.settings.get("overlays") or {}).get("standings") or {}).get("trend_secs", 25)) if self.settings else 25.0
+        except (TypeError, ValueError):
+            v = 25.0
+        return max(5.0, min(90.0, v))
+
     def _rate(self, store: dict, key, gap: float, ref_ms: float, now: float):
-        """Variação (ms por segundo) de `gap` nos últimos ~25 s; None sem histórico suficiente."""
-        h = store.setdefault(key, deque(maxlen=120))
+        """Variação (ms por segundo) de `gap` na janela da tendência; None sem histórico suficiente."""
+        win = self._win
+        h = store.setdefault(key, deque(maxlen=300))
         if h and abs(gap - h[-1][1]) > 0.4 * ref_ms:             # pulo (volta, box, teleporte): recomeça
             h.clear()
         if not h or now - h[-1][0] >= 0.4:
             h.append((now, gap))
-        while h and now - h[0][0] > 25:
+        while h and now - h[0][0] > win:
             h.popleft()
-        if len(h) < 4 or h[-1][0] - h[0][0] < 5:
+        if len(h) < 4 or h[-1][0] - h[0][0] < max(3.0, win * 0.25):       # espera juntar ~1/4 da janela
             return None
         return (abs(h[-1][1]) - abs(h[0][1])) / (h[-1][0] - h[0][0])
 
@@ -244,6 +254,7 @@ class OverlayHub:
         lead = order[0]
         rows = []
         now = time.monotonic()
+        self._win = self._window()
         for i, c in enumerate(order):
             ahead = order[i - 1] if i else None
             row = {"pos": c.get("pos") or i + 1, "number": c.get("number"), "first": c.get("first", ""), "last": c.get("last", ""),

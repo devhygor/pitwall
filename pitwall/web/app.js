@@ -3113,6 +3113,9 @@ function ovPanel(n, S) {
     g += ovGroup("Gráfico", ovSlider(n, "seconds", "Janela de tempo", c.seconds, 3, 20, 1, " s"));
   } else if (n === "standings") {
     g += ovGroup("Quais pilotos", ovSeg(n, "view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], c.view) + ovSlider(n, "rows", "Linhas", c.rows, 3, 30, 1, ""));
+    g += ovGroup("Velocidade da tendência", ovSeg(n, "trend_secs", [[8, "Rápida · 8 s"], [25, "Normal · 25 s"], [60, "Lenta · 60 s"]], c.trend_secs, true) +
+      ovSlider(n, "trend_secs", "Janela de cálculo", c.trend_secs, 5, 90, 1, " s"),
+      "menor = reage mais rápido (e oscila mais); maior = mais estável");
     g += ovGroup("Tendência do intervalo", `<div class="ovchips">${ovChip(n, "trendcolor", "Colorir as diferenças (Δ para mim e À frente)", c.trendcolor, "Verde: você está se aproximando de quem está à frente ou se afastando de quem está atrás. Vermelho: o contrário")}</div>
       <p class="sub" style="margin:8px 0 0">Compara a distância de cada carro até você nos últimos ~25 segundos. <b style="color:#4be58f">Verde</b>: você está chegando em quem está à frente, ou abrindo para quem está atrás. <b style="color:#ff5a64">Vermelho</b>: quem está à frente está abrindo, ou quem está atrás está chegando. Cinza: distância estável. Na coluna “À frente”: verde quando o carro está chegando no da frente dele (e você chegando no seu), vermelho quando ele abre; para quem está atrás de você é o contrário, vermelho quando ele está chegando no pelotão à frente (ameaça para você). Para ver o número (segundos por volta), ligue a coluna “Tendência”.</p>`);
     g += ovGroup("Cabeçalho e classes", `<div class="ovchips">${ovChip(n, "header", "Tempo e volta", c.header, "Tempo restante da sessão, volta atual e número de pilotos")}
@@ -3281,7 +3284,10 @@ function bindOverlayPanel(box, n, put, putModes) {
     const name = el.dataset.ov, key = el.dataset.k;
     if (el.type === "range") {
       el.oninput = () => { el.nextElementSibling.textContent = el.value + el.nextElementSibling.dataset.unit; };
-      el.onchange = () => send(name, key, +el.value);
+      el.onchange = () => {
+        send(name, key, +el.value);
+        if (key === "trend_secs") box.querySelectorAll('button[data-k="trend_secs"]').forEach((x) => x.classList.toggle("on", +x.dataset.val === +el.value));
+      };
     } else if (el.dataset.chip) {
       el.onclick = () => { el.classList.toggle("on"); send(name, key, el.classList.contains("on")); };
     } else if (el.dataset.val !== undefined) {
@@ -3300,6 +3306,7 @@ function bindOverlayPanel(box, n, put, putModes) {
         else await send(name, key, v);
         if (key === "mode") { const sub = box.querySelector(".ovp-head .sub"); if (sub) sub.textContent = OV_MODE_TXT[v]; }
         el.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
+        if (key === "trend_secs") { const sl = box.querySelector('input[data-k="trend_secs"]'); if (sl) { sl.value = v; sl.nextElementSibling.textContent = v + " s"; } }
       };
     }
   });
