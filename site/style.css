@@ -505,7 +505,7 @@ html { scroll-padding-top: 76px; }
 .bigd b { display: block; font: 800 46px/1 var(--display); color: var(--gain); }
 .bigd span { color: var(--fog); font-size: 13px; }
 .win-mid { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; background: var(--night); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 14px; color: var(--fog); }
-.win-mid .pill b { margin-left: 8px; color: var(--loss); border: 1px solid rgba(255,90,95,.5); border-radius: 99px; padding: 2px 12px; }
+.win-mid .mpill b { margin-left: 8px; color: var(--loss); border: 1px solid rgba(255,90,95,.5); border-radius: 99px; padding: 2px 12px; }
 .win-mid .ok { color: var(--gain); }
 .win-body { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 14px; }
 .tips, .chart { background: var(--night); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
@@ -530,5 +530,5 @@ html { scroll-padding-top: 76px; }
   .feats.mini { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 640px) { .feats.mini { grid-template-columns: 1fr; } .win { padding: 12px; } .lapc b { font-size: 28px; } }
-.win-mid .pill { white-space: nowrap; }
+.win-mid .mpill { white-space: nowrap; }
 #analise h2 { max-width: 26ch; }

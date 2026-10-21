@@ -198,7 +198,7 @@ function renderLanding(invite) {
             <div class="lapc b"><i class="av">J</i><div><small>REFERÊNCIA</small><b>1:52.590</b><span>Lucas · McLaren 720S GT3 Evo</span></div></div>
             <div class="bigd"><small>DIFERENÇA</small><b>−2,383 s</b><span>S1 −0,098 · S2 −1,432 · S3 −0,853</span></div>
           </div>
-          <div class="win-mid"><span class="pill">Onde perde tempo <b>Curva 4 +0,21 s</b></span><span class="ok">Nenhuma travada, rodada ou saída de pista registrada.</span></div>
+          <div class="win-mid"><span class="mpill">Onde perde tempo <b>Curva 4 +0,21 s</b></span><span class="ok">Nenhuma travada, rodada ou saída de pista registrada.</span></div>
           <div class="win-body">
             <div class="tips">
               <h4>Curva 4 <em>+0,213 s</em></h4>
