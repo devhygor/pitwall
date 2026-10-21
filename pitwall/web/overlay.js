@@ -17,7 +17,7 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   seconds: 8, steer: false, wheel: true, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true,
-  mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true };
+  mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full" };
 
 let cfg = { ...DEFAULT_CFG };
 let edit = false;
@@ -369,15 +369,15 @@ function mapOverlay() {
 
 // ------------------------------------------------------------------ PRÓXIMA CURVA E PONTO DE FRENAGEM
 function cornerOverlay() {
-  root.innerHTML = `<div class="card cnr shadow">
-    <div class="cn-top"><div class="cn-arrow" id="ca"></div>
-      <div class="cn-info"><b id="cnum">—</b><small id="cname"></small><span class="cn-dir" id="cdir"></span></div>
-      <div class="cn-dist num" id="cd"></div></div>
+  root.innerHTML = `<div class="card cnr shadow" id="cnr">
+    <div class="cn-arrow" id="ca"></div>
+    <div class="cn-info"><b id="cnum">—</b><small id="cname"></small><span class="cn-dir" id="cdir"></span></div>
+    <div class="cn-dist num" id="cd"></div>
     <div class="cn-brk" id="cb"><div class="lab"><span id="cbl">PONTO DE FRENAGEM</span><b class="num" id="cbd"></b></div><div class="bar"><i id="cbi"></i><u id="cbm"></u></div></div>
     <div class="cn-sub" id="cs"></div><div class="cn-next" id="cx"></div></div>`;
   const $ = (s) => root.querySelector(s);
   let plan = [], length = 0, planAt = 0, planTrack = null;
-  const ARROW = (dir) => `<svg viewBox="0 0 48 48" width="58" height="58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" style="${dir === "L" ? "transform:scaleX(-1)" : ""}"><path d="M14 42V24a10 10 0 0 1 10-10h14"/><path d="M31 5l9 9-9 9"/></svg>`;
+  const ARROW = (dir) => `<svg viewBox="0 0 48 48" width="58" height="58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" style="${dir === "L" ? "transform:scaleX(-1)" : ""}"><g transform="translate(-3 .5)"><path d="M14 42V24a10 10 0 0 1 10-10h14"/><path d="M31 5l9 9-9 9"/></g></svg>`;
   async function loadPlan() {
     try {
       const m = await getJSON("/api/overlay/map");
@@ -390,6 +390,8 @@ function cornerOverlay() {
     { n: 4, apex: 0.78, brake: 0.745, dir: "L", angle: 80, min_speed: 62, entry_speed: 190, name: "" }];
   const mod1 = (v) => ((v % 1) + 1) % 1;
   function render() {
+    $("#cnr").classList.toggle("compact", cfg.cstyle === "compact");
+    const compact = cfg.cstyle === "compact";
     const usePlan = plan.length ? plan : previewing ? prevPlan : [];
     const L = length || (previewing ? 5200 : 0);
     const sp = live() && data.me ? data.me.spline : previewing ? (performance.now() / 1000 / 40) % 1 : null;
@@ -407,7 +409,7 @@ function cornerOverlay() {
     $("#ca").innerHTML = ARROW(c.dir);
     $("#ca").className = "cn-arrow " + (c.angle > 55 ? "hard" : c.angle > 28 ? "mid" : "easy") + (zone ? " go" : "");
     $("#cnum").textContent = `Curva ${c.n}`;
-    $("#cname").textContent = cfg.name ? c.name || "" : "";
+    $("#cname").textContent = cfg.name && !compact ? c.name || "" : "";
     $("#cdir").textContent = (c.dir === "L" ? "ESQUERDA" : "DIREITA") + (c.angle > 60 ? " · GRAMPO" : c.angle > 40 ? " · FECHADA" : c.angle < 20 ? " · ABERTA" : "");
     $("#cd").style.display = cfg.dist ? "" : "none";
     $("#cd").innerHTML = dApex >= 1000 ? `${(dApex / 1000).toFixed(1).replace(".", ",")}<small>km</small>` : `${Math.round(dApex / 5) * 5}<small>m</small>`;

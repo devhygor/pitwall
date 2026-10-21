@@ -18,7 +18,7 @@ OVERLAY_DEFAULTS = {
                   "cols": ["pos", "number", "name", "car", "vs_me", "last", "best"],
                   "group": True, "classpos": True, "header": True, "others": 3, "carstyle": "both", "logomode": "color", "trendcolor": True, "trend_secs": 25},
     "delta": {**_BASE, "bg": 35, "fuel": True, "predicted": True},
-    "corner": {**_BASE, "bg": 30, "dist": True, "brakepoint": True, "speed": True, "next": True, "name": True, "lead": 250},
+    "corner": {**_BASE, "bg": 30, "dist": True, "brakepoint": True, "speed": True, "next": True, "name": True, "lead": 250, "cstyle": "full"},
     "tyres": {**_BASE, "bg": 25, "temp": True, "press": True, "brake": True, "wear": True, "compound": True, "punit": "psi",
               "tmin": 70, "tmax": 100, "pmin": 26.0, "pmax": 27.0, "pads": True, "bmin": 350, "bmax": 800, "tystyle": "acc", "weather": True, "tynum": True},   # faixas do ACC 1.9+ (todas as classes)
 }

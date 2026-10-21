@@ -164,9 +164,20 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .ta-pads { text-align: center; font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: .04em; }
 
 /* ---- próxima curva e ponto de frenagem ---- */
-.cnr { width: 330px; padding: 12px 14px 12px; }
-.cn-top { display: flex; align-items: center; gap: 12px; }
-.cn-arrow { width: 62px; height: 62px; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #0b0d10; background: #7fe0a7; flex-shrink: 0; }
+.cnr { width: 300px; padding: 12px 14px 12px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "arrow arrow" "info dist" "brk brk" "sub sub" "next next"; row-gap: 4px; }
+.cn-arrow { grid-area: arrow; justify-self: center; width: 76px; height: 76px; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: #0b0d10; background: #7fe0a7; margin-bottom: 6px; }
+.cn-arrow svg { display: block; }
+.cn-info { grid-area: info; display: flex; flex-direction: column; min-width: 0; align-self: end; }
+.cn-info b { font-size: 20px; font-weight: 800; line-height: 1.1; } .cn-info small { color: var(--muted); font-size: 12px; }
+.cn-dir { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--muted); margin-top: 2px; }
+.cn-dist { grid-area: dist; font-size: 32px; font-weight: 800; line-height: 1; text-align: right; align-self: end; } .cn-dist small { font-size: 13px; font-weight: 700; color: var(--muted); margin-left: 2px; }
+.cn-brk { grid-area: brk; } .cn-sub { grid-area: sub; } .cn-next { grid-area: next; }
+/* versão compacta: só a seta, com a distância ao lado */
+.cnr.compact { width: auto; grid-template-columns: auto auto; grid-template-areas: "arrow dist" "brk brk"; align-items: center; column-gap: 14px; padding: 10px 14px; }
+.cnr.compact .cn-arrow { margin: 0; width: 68px; height: 68px; }
+.cnr.compact .cn-dist { font-size: 40px; align-self: center; min-width: 96px; }
+.cnr.compact .cn-info, .cnr.compact .cn-sub, .cnr.compact .cn-next { display: none; }
+.cnr.compact .cn-brk { padding: 6px 8px; margin-top: 6px; } .cnr.compact .cn-brk .lab b { font-size: 16px; } .cnr.compact .cn-brk .lab span { font-size: 9px; }
 .cn-arrow.mid { background: #ffd24a; } .cn-arrow.hard { background: #ff8a5c; }
 .cn-arrow.go { background: #ff4d5e; animation: pulse .5s ease-in-out infinite; }
 .cn-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -174,7 +185,7 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .cn-dir { font-size: 10px; font-weight: 800; letter-spacing: .1em; color: var(--muted); margin-top: 2px; }
 .cn-dist { font-size: 34px; font-weight: 800; line-height: 1; text-align: right; } .cn-dist small { font-size: 13px; font-weight: 700; color: var(--muted); margin-left: 2px; }
 .cn-brk { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255, 255, 255, .07); }
-.cn-brk .lab { display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--muted); }
+.cn-brk .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; white-space: nowrap; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--muted); }
 .cn-brk .lab b { font-size: 20px; letter-spacing: 0; color: var(--text); }
 .cn-brk .bar { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .13); margin-top: 6px; overflow: hidden; }
 .cn-brk .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: linear-gradient(90deg, #4be58f, #ffd24a, #ff4d5e); }

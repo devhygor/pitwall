@@ -3115,6 +3115,8 @@ function ovPanel(n, S) {
         <div class="sub" style="margin:6px 0">O jogo não informa os nomes das curvas: escreva o que quiser (ex.: “Eau Rouge”). A numeração é a da Análise e pode diferir da oficial.</div>
         <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>`;
   } else if (n === "corner") {
+    g += ovGroup("Estilo", ovSeg(n, "cstyle", [["full", "Completo"], ["compact", "Compacto · seta e distância"]], c.cstyle || "full"),
+      "o compacto mostra só a seta, a distância ao lado e (se ligar) a barra de frenagem");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "dist", "Distância até a curva", c.dist)}
       ${ovChip(n, "brakepoint", "Ponto de frenagem", c.brakepoint, "Contagem regressiva até o ponto onde você começa a frear no seu melhor tempo desta pista")}
       ${ovChip(n, "speed", "Velocidades (mínima e entrada)", c.speed)}${ovChip(n, "next", "Curva seguinte", c.next)}${ovChip(n, "name", "Nome da curva", c.name, "Os nomes são os que você escreveu no mapa")}</div>`);
