@@ -62,20 +62,26 @@ begin
     return 'ok';
   end if;
 
+  select status into old_status from public.payments where provider = 'asaas' and provider_payment_id = pay ->> 'id';
   new_status := case
     when p_event in ('PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED') then 'paid'
     when p_event = 'PAYMENT_OVERDUE' then 'overdue'
     when p_event in ('PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED') then 'refunded'
+    -- reembolso parcial: se devolveu metade ou mais do valor, conta como reembolso (o Asaas só devolve o que há de saldo)
+    when p_event = 'PAYMENT_PARTIALLY_REFUNDED' then
+      case when coalesce((select sum((r ->> 'value')::numeric) from jsonb_array_elements(coalesce(pay -> 'refunds', '[]'::jsonb)) r
+                           where r ->> 'status' in ('DONE', 'PENDING')), 0) >= 0.5 * coalesce((pay ->> 'value')::numeric, 0)
+           then 'refunded' else coalesce(old_status, 'pending') end
+    when p_event = 'PAYMENT_DELETED' then 'failed'
     else 'pending' end;
 
-  select status into old_status from public.payments where provider = 'asaas' and provider_payment_id = pay ->> 'id';
   insert into public.payments (subscription_id, email, provider, provider_payment_id, amount_cents, status, method, due_date, paid_at, invoice_url, raw)
   values (s.id, s.email, 'asaas', pay ->> 'id', round(coalesce((pay ->> 'value')::numeric, 0) * 100), new_status,
           pay ->> 'billingType', nullif(pay ->> 'dueDate', '')::date,
           case when new_status = 'paid' then coalesce(nullif(pay ->> 'paymentDate', '')::timestamptz, now()) end,
           pay ->> 'invoiceUrl', p_payload)
   on conflict (provider, provider_payment_id) where provider_payment_id is not null do update set
-    status = case when public.payments.status = 'paid' and excluded.status in ('pending', 'overdue') then public.payments.status else excluded.status end,
+    status = case when public.payments.status in ('paid', 'refunded') and excluded.status in ('pending', 'overdue', 'failed') then public.payments.status else excluded.status end,
     method = coalesce(excluded.method, public.payments.method),
     paid_at = coalesce(public.payments.paid_at, excluded.paid_at),
     invoice_url = coalesce(excluded.invoice_url, public.payments.invoice_url),
