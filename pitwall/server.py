@@ -270,6 +270,19 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         hub = getattr(recorder, "hub", None) if recorder else None
         return hub.map() if hub else {"pts": [], "filled": 0, "sectors": [1 / 3, 2 / 3]}
 
+    @app.get("/api/overlay/corner-tracks")
+    def overlay_corner_tracks():
+        """Pistas com tempo gravado (as únicas em que dá para numerar as curvas)."""
+        return sorted({k[1] for k in db.personal_bests()})
+
+    @app.get("/api/overlay/corners")
+    def overlay_corners(track: str):
+        hub = getattr(recorder, "hub", None) if recorder else None
+        if not hub:
+            return {"corners": []}
+        names = ((settings.get("corner_names") or {}).get(track) or {}) if settings else {}
+        return {"corners": [{**c, "name": names.get(str(c["n"]), "")} for c in hub.corners_for(track)]}
+
     @app.get("/overlay/{name}")
     def overlay_page(name: str):
         return FileResponse(WEB / "overlay.html")

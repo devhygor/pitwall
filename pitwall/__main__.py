@@ -106,7 +106,7 @@ def main(argv=None):
     from .live import LiveDelta
     recorder.live_delta = LiveDelta(db, settings)
     from .overlay import OverlayHub
-    recorder.hub = OverlayHub(db, recorder)
+    recorder.hub = OverlayHub(db, recorder, settings)
     from .team import Team
     team = Team(db, settings, args.port)
     recorder.on_lap_saved.append(team.upload_async_if_pb)

@@ -87,16 +87,16 @@ const live = () => !previewing && data && data.status !== "idle";
 
 // ------------------------------------------------------------------ MAPA
 function mapOverlay() {
-  root.innerHTML = `<div class="card map"><canvas id="cv"></canvas><div class="banner" id="bn"></div><div class="note" id="nt"></div></div>`;
-  const cv = root.querySelector("#cv"), ctx = cv.getContext("2d"), bn = root.querySelector("#bn"), nt = root.querySelector("#nt");
+  root.innerHTML = `<div class="card map"><canvas id="cv"></canvas><div class="banner" id="bn"></div><div class="cornernow" id="cn"></div><div class="note" id="nt"></div></div>`;
+  const cv = root.querySelector("#cv"), ctx = cv.getContext("2d"), bn = root.querySelector("#bn"), nt = root.querySelector("#nt"), cn = root.querySelector("#cn");
   const W = 340, H = 300;
-  let track = null, pts = [], full = [], sectors = [1 / 3, 2 / 3], filled = 0, mapAt = 0, mapTrack = null, greenUntil = 0, lastGreen = false;
+  let track = null, pts = [], full = [], sectors = [1 / 3, 2 / 3], filled = 0, corners = [], mapAt = 0, mapTrack = null, greenUntil = 0, lastGreen = false;
   let bounds = null, bkey = "", prevTrack = null;
 
   async function loadMap() {
     try {
       const m = await getJSON("/api/overlay/map");
-      pts = m.pts; sectors = m.sectors; filled = m.filled; mapTrack = m.track; mapAt = performance.now();
+      pts = m.pts; sectors = m.sectors; corners = m.corners || []; filled = m.filled; mapTrack = m.track; mapAt = performance.now();
       rebuild();
     } catch (e) { /* ok */ }
   }
@@ -192,8 +192,31 @@ function mapOverlay() {
     };
     tick(0, "#ffffff", lw * 0.9 + 3);
     if (cfg.sectors) { tick(Math.round(sectors[0] * n), "rgba(0,0,0,.75)", lw * 0.7); tick(Math.round(sectors[1] * n), "rgba(0,0,0,.75)", lw * 0.7); }
-    // carros
+    // curvas: número (e nome) no mapa e a curva em que você está agora
+    const cs = corners.length ? corners : previewing ? previewCorners : [];
     const at = (sp) => P[Math.round((((sp % 1) + 1) % 1) * n) % n];
+    if (cfg.corners && cs.length) {
+      let cx = 0, cy = 0; for (const p of P) { cx += p[0]; cy += p[1]; } cx /= n; cy /= n;
+      ctx.font = "700 10px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const c of cs) {
+        const [x, y] = at(c.apex);
+        let dx = x - cx, dy = y - cy; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+        const lx = clamp(x + dx * (lw / 2 + 12), 10, W - 10), ly = clamp(y + dy * (lw / 2 + 12), 10, H - 10);
+        ctx.fillStyle = "rgba(8,10,14,.62)"; ctx.beginPath(); ctx.arc(lx, ly, 8.5, 0, 7); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.fillText(String(c.n), lx, ly + 0.5);
+      }
+      ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
+    }
+    let nowTxt = "";
+    if (cfg.corner_now && cs.length) {
+      const sp = live() && data.me ? data.me.spline : previewing ? (t / 14) % 1 : null;
+      if (sp != null) {
+        const c = cs.find((q) => (q.start <= q.end ? sp >= q.start && sp <= q.end : sp >= q.start || sp <= q.end)) || cs[0];
+        nowTxt = `<b>Curva ${c.n}</b>${c.name ? " · " + c.name.replace(/</g, "&lt;") : ""}`;
+      }
+    }
+    if (cn.dataset.h !== nowTxt) { cn.dataset.h = nowTxt; cn.innerHTML = nowTxt; cn.style.display = nowTxt ? "block" : "none"; }
+    // carros
     let cars = live() ? data.cars || [] : previewing ? previewCars(t) : [];
     const me = live() ? data.me : null;
     if (cfg.cars) {
@@ -238,6 +261,7 @@ function mapOverlay() {
     }
     return out;
   }
+  const previewCorners = [0.04, 0.14, 0.27, 0.38, 0.5, 0.63, 0.75, 0.88].map((a, i) => ({ n: i + 1, apex: a, start: a - 0.06, end: a + 0.06, name: i === 1 ? "Eau Rouge" : "" }));
   function previewCars(t) { return [0.1, 0.22, 0.4, 0.55, 0.7, 0.86].map((s, i) => ({ id: 100 + i, spline: (s + t / 40) % 1, number: 10 + i * 9, pit: false })); }
   loadMap();
   const loop = () => {

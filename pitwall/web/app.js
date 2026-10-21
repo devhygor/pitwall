@@ -3028,6 +3028,11 @@ function overlaySettings(s) {
       ${setRow("Outros carros", "Pontinhos no mapa. No ACC precisa do broadcasting ligado (padrão do jogo).", tg("map", "cars", m.cars))}
       ${setRow("Número do carro dentro da bolinha", "", tg("map", "numbers", m.numbers))}
       ${setRow("Marcar os setores", "", tg("map", "sectors", m.sectors))}
+      ${setRow("Número das curvas no mapa", "Numeradas como na Análise (precisa de ao menos uma volta gravada na pista).", tg("map", "corners", m.corners))}
+      ${setRow("Mostrar a curva em que estou", "Uma etiqueta com o número e o nome da curva atual.", tg("map", "corner_now", m.corner_now))}
+      <details class="cnames" id="cnBox"><summary class="sub" style="cursor:pointer">Dar nome às curvas</summary>
+        <div class="sub" style="margin:6px 0">O jogo não informa os nomes das curvas: escreva aqui o que quiser (ex.: “Eau Rouge”). A numeração é a da Análise do Pitwall e pode diferir da oficial da pista.</div>
+        <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>
       ${setRow("Espessura da pista", "", rng("map", "width", m.width, 4, 16, 1, "px"))}
       ${setRow("Girar o mapa", "", sel("ov-map-rot", [[0, "0°"], [90, "90°"], [180, "180°"], [270, "270°"]], m.rotate, 'data-ov="map" data-k="rotate" data-num="1"'))}
     </div>
@@ -3071,6 +3076,28 @@ function bindOverlaySettings(put) {
     const cols = OV_COLS.map(([k]) => k).filter((k) => document.querySelector(`[data-col="${k}"]`).checked);
     send("standings", "cols", cols);
   });
+  const cb = $("#cnBox");
+  if (cb) {
+    let loaded = false;
+    cb.ontoggle = async () => {
+      if (!cb.open || loaded) return;
+      loaded = true;
+      try { for (const t of await api("/api/overlay/corner-tracks")) $("#cnTrack").insertAdjacentHTML("beforeend", `<option value="${esc(t)}">${esc(pretty(t))}</option>`); } catch (e) { /* ok */ }
+    };
+    $("#cnTrack").onchange = async () => {
+      const t = $("#cnTrack").value, box = $("#cnList");
+      if (!t) { box.innerHTML = ""; return; }
+      box.innerHTML = `<span class="sub">Carregando…</span>`;
+      let r = { corners: [] };
+      try { r = await api("/api/overlay/corners?track=" + encodeURIComponent(t)); } catch (e) { /* ok */ }
+      box.innerHTML = r.corners.length ? r.corners.map((c) => `<label class="cnrow"><span>Curva ${c.n}</span><input data-cn="${c.n}" maxlength="40" placeholder="nome (opcional)" value="${esc(c.name)}"></label>`).join("")
+        : `<span class="sub">Nenhuma volta gravada nesta pista ainda.</span>`;
+      box.querySelectorAll("[data-cn]").forEach((inp) => inp.onchange = () => {
+        const names = {}; box.querySelectorAll("[data-cn]").forEach((i) => { if (i.value.trim()) names[i.dataset.cn] = i.value.trim(); });
+        put({ corner_names: { [t]: names } });
+      });
+    };
+  }
   const ref = $("#xOvRef"); if (ref) ref.onchange = () => put({ overlay_reference: ref.value });
   const ed = $("#ovEdit");
   if (ed) ed.onclick = async () => {

@@ -870,3 +870,7 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
 .ovr output { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 .ovcols { display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); gap: 6px 18px; }
 .ovcols label { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.cnames { margin-top: 8px; }
+.cnrow { display: flex; align-items: center; gap: 12px; margin: 4px 0; font-size: 13px; }
+.cnrow span { width: 64px; color: var(--muted); }
+.cnrow input { flex: 1; }

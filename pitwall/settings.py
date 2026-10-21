@@ -11,7 +11,7 @@ from .db import data_dir
 #   scale = tamanho em %, bg = opacidade do fundo (0 = totalmente transparente), x/y = posição na tela
 _BASE = {"mode": "off", "scale": 100, "bg": 0, "x": None, "y": None}
 OVERLAY_DEFAULTS = {
-    "map": {**_BASE, "scale": 110, "bg": 0, "cars": True, "numbers": True, "rotate": 0, "width": 9, "banner": True,
+    "map": {**_BASE, "scale": 110, "bg": 0, "cars": True, "numbers": True, "corners": True, "corner_now": True, "rotate": 0, "width": 9, "banner": True,
             "sectors": True},
     "pedals": {**_BASE, "bg": 25, "seconds": 8, "steer": False, "gear": True, "coast": True, "bars": True, "speed": True},
     "standings": {**_BASE, "bg": 25, "rows": 10, "view": "around", "name": "short",
@@ -48,6 +48,7 @@ DEFAULTS = {
     "overlay_enabled": False,
     "overlay_reference": "pb",  # pb = seu recorde; ideal = volta ideal
     "overlays": OVERLAY_DEFAULTS,   # mapa, pedais, participantes e delta (ver OVERLAY_DEFAULTS)
+    "corner_names": {},         # {pista: {"3": "Eau Rouge"}} - nomes das curvas (o jogo não informa)
     "overlay_edit": False,      # modo de edição: overlays recebem cliques para mover/ver sem o jogo
     # equipe (nuvem do Pitwall, login com Google)
     "cloud_url": "",            # vazio = projeto padrão do Pitwall
@@ -98,6 +99,15 @@ class Settings:
                 if k == "overlays":
                     cur = self._data.get("overlays") or {}
                     v = merged_overlays({n: {**cur.get(n, {}), **(v.get(n) or {})} for n in OVERLAY_DEFAULTS})                         if isinstance(v, dict) else cur
+                elif k == "corner_names":
+                    cur = dict(self._data.get("corner_names") or {})
+                    for tr, names in (v.items() if isinstance(v, dict) else []):
+                        clean = {str(n): str(t).strip() for n, t in (names or {}).items() if str(t).strip()}
+                        if clean:
+                            cur[tr] = clean
+                        else:
+                            cur.pop(tr, None)
+                    v = cur
                 elif isinstance(default, bool):
                     v = bool(v)
                 elif isinstance(default, int):

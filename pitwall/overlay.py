@@ -20,9 +20,12 @@ SAMPLES = 2400       # ~40 s de pedais a 60 Hz
 
 
 class OverlayHub:
-    def __init__(self, db=None, recorder=None):
+    def __init__(self, db=None, recorder=None, settings=None):
         self.db = db
         self.recorder = recorder
+        self.settings = settings
+        self._corners: list = []
+        self._corners_try = 0.0
         self._lock = threading.Lock()
         self._seq = 0
         self._samples: deque = deque(maxlen=SAMPLES)
@@ -67,9 +70,12 @@ class OverlayHub:
         self._xs = [None] * BINS
         self._zs = [None] * BINS
         self._prefilled = False
+        self._corners = []
+        self._corners_try = 0.0
         self._prev_sector = None
         if track and self.db is not None:
             threading.Thread(target=self._prefill, args=(track,), daemon=True).start()
+            threading.Thread(target=self._load_corners, args=(track,), daemon=True).start()
 
     def _prefill(self, track: str):
         """Contorno da pista a partir de uma volta já gravada (o mapa aparece completo desde o início)."""
@@ -93,6 +99,30 @@ class OverlayHub:
         except Exception:  # noqa: BLE001
             pass
 
+    def corners_for(self, track: str) -> list[dict]:
+        """Curvas da pista, numeradas como na Análise (mínimos de velocidade do melhor tempo)."""
+        from .analysis import detect_segments, resample_lap
+        pbs = [v for k, v in self.db.personal_bests().items() if k[1] == track]
+        if not pbs:
+            return []
+        lap = self.db.lap(pbs[0]["lap_id"])
+        grid = np.linspace(0, 1, 2000)
+        R = resample_lap(lap, grid) if lap else None
+        if R is None or not R["length"]:
+            return []
+        segs = detect_segments(grid * R["length"], R["speed"])
+        return [{"n": s["n"], "apex": round(float(grid[s["apex"]]), 4), "start": round(float(grid[s["start"]]), 4),
+                 "end": round(float(grid[s["end"]]), 4)} for s in segs]
+
+    def _load_corners(self, track: str):
+        try:
+            cs = self.corners_for(track)
+        except Exception:  # noqa: BLE001
+            cs = []
+        with self._lock:
+            if self.track == track:
+                self._corners = cs
+
     def _learn_sectors(self, f):
         """Descobre onde terminam o setor 1 e o setor 2 (pela virada do índice de setor)."""
         s = f.sector_index
@@ -114,8 +144,15 @@ class OverlayHub:
             pts = [[x, z] if x is not None else None for x, z in zip(self._xs, self._zs)]
             sec = self._sectors.get(self.track or "", [None, None])
             filled = sum(p is not None for p in pts) / BINS
-        return {"track": self.track, "pts": pts, "filled": round(filled, 3),
-                "sectors": [sec[0] or 1 / 3, sec[1] or 2 / 3]}
+            track, corners = self.track, list(self._corners)
+            retry = track and not corners and self.db is not None and time.monotonic() - self._corners_try > 20
+            if retry:
+                self._corners_try = time.monotonic()
+        if retry:                    # ainda sem curvas (pista nova): tenta de novo depois que uma volta for gravada
+            threading.Thread(target=self._load_corners, args=(track,), daemon=True).start()
+        names = ((self.settings.get("corner_names") or {}).get(track or "") or {}) if self.settings else {}
+        return {"track": track, "pts": pts, "filled": round(filled, 3), "sectors": [sec[0] or 1 / 3, sec[1] or 2 / 3],
+                "corners": [{**c, "name": names.get(str(c["n"]), "")} for c in corners]}
 
     def snapshot(self, since: int = 0, parts: str = "all") -> dict:
         want = set(parts.split(",")) if parts != "all" else {"pedals", "flags", "cars", "delta"}
