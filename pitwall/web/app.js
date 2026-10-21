@@ -3002,9 +3002,61 @@ async function openOverlay() {
   if (!r.window) window.open("#/overlay", "pitwall-delta", "width=380,height=150");
 }
 
-// ---------------------------------------------------------------- Overlays (ferramenta completa: palco + opções)
+// ---------------------------------------------------------------- Overlays (ferramenta completa: palco + um overlay por vez)
 const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["delta", "Delta"]];
-let ovStageTimer = null;
+const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", delta: "Delta da volta" };
+const OV_ICON = {
+  map: '<path d="M4 15c3-9 6 3 9-5s5 2 7-2"/><circle cx="19" cy="6" r="1.6"/>',
+  pedals: '<path d="M3 20V9M9 20V5M15 20v-8M21 20V8"/>',
+  standings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="7" cy="6" r=".6"/>',
+  delta: '<path d="M12 4l8 15H4z"/>',
+};
+const OV_MODE_TXT = { off: "Desligado", game: "Só na pista", always: "Sempre aberto" };
+const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
+  ["interval", "Intervalo p/ o da frente"], ["gap_leader", "Dif. p/ o líder"], ["last", "Última volta"], ["best", "Melhor volta"],
+  ["laps", "Voltas"], ["pit", "Box"]];
+
+// peças da tela de opções
+const ovChip = (n, k, label, v, tip) => `<button type="button" class="ovchip ${v ? "on" : ""}" data-ov="${n}" data-k="${k}" data-chip="1" title="${esc(tip || "")}"><i></i>${label}</button>`;
+const ovSeg = (n, k, opts, val, num) => `<div class="ovseg">${opts.map(([v, t]) => `<button type="button" class="${String(val) === String(v) ? "on" : ""}" data-ov="${n}" data-k="${k}" data-val="${v}" ${num ? 'data-num="1"' : ""}>${t}</button>`).join("")}</div>`;
+const ovSlider = (n, k, label, v, min, max, step, unit) => `<label class="ovslide"><span>${label}</span><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}"><output data-unit="${unit}">${v}${unit}</output></label>`;
+const ovGroup = (title, body, hint) => `<section class="ovg"><h3>${title}${hint ? `<small>${hint}</small>` : ""}</h3>${body}</section>`;
+
+function ovPanel(n, S) {
+  const c = S.overlays[n];
+  let g = "";
+  g += ovGroup("Quando aparece", ovSeg(n, "mode", [["off", "Desligado"], ["game", "Só na pista"], ["always", "Sempre aberto"]], c.mode),
+    c.mode === "game" ? "abre ao entrar numa sessão e fecha ao sair" : "");
+  g += ovGroup("Tamanho e fundo", ovSlider(n, "scale", "Tamanho", c.scale, 50, 250, 5, "%") + ovSlider(n, "bg", "Fundo", c.bg, 0, 90, 5, "%"), "fundo 0% = transparente");
+  if (n === "map") {
+    g += ovGroup("Mostrar no mapa", `<div class="ovchips">${ovChip(n, "banner", "Nome da bandeira", c.banner, "Etiqueta com a bandeira em vigor")}
+      ${ovChip(n, "cars", "Outros carros", c.cars, "No ACC precisa do broadcasting ligado (padrão do jogo)")}
+      ${ovChip(n, "numbers", "Nº dentro das bolinhas", c.numbers)}${ovChip(n, "sectors", "Setores", c.sectors)}
+      ${ovChip(n, "corners", "Nº das curvas", c.corners, "Numeradas como na Análise; precisa de ao menos uma volta gravada na pista")}
+      ${ovChip(n, "corner_now", "Curva atual", c.corner_now, "Etiqueta com o número e o nome da curva em que você está")}</div>`,
+      "a pista muda de cor com as bandeiras");
+    g += ovGroup("Ajustes", ovSlider(n, "width", "Espessura da pista", c.width, 4, 16, 1, " px") +
+      `<div class="ovslide"><span>Girar o mapa</span>${ovSeg(n, "rotate", [[0, "0°"], [90, "90°"], [180, "180°"], [270, "270°"]], c.rotate, true)}</div>`);
+    g += `<details class="ovg cnames" id="cnBox"><summary>Dar nome às curvas</summary>
+        <div class="sub" style="margin:6px 0">O jogo não informa os nomes das curvas: escreva o que quiser (ex.: “Eau Rouge”). A numeração é a da Análise e pode diferir da oficial.</div>
+        <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>`;
+  } else if (n === "pedals") {
+    g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "coast", "Sem pedal", c.coast, "Faixa âmbar quando você não pisa em nenhum dos dois, e a porcentagem do tempo")}
+      ${ovChip(n, "bars", "Barras", c.bars)}${ovChip(n, "steer", "Volante", c.steer)}${ovChip(n, "gear", "Marcha", c.gear)}${ovChip(n, "speed", "Velocidade", c.speed)}</div>`);
+    g += ovGroup("Gráfico", ovSlider(n, "seconds", "Janela de tempo", c.seconds, 3, 20, 1, " s"));
+  } else if (n === "standings") {
+    g += ovGroup("Quais pilotos", ovSeg(n, "view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], c.view) + ovSlider(n, "rows", "Linhas", c.rows, 3, 30, 1, ""));
+    g += ovGroup("Nome do piloto", ovSeg(n, "name", [["short", "Sigla"], ["last", "Sobrenome"], ["full", "Nome completo"]], c.name));
+    g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => `<button type="button" class="ovchip ${c.cols.includes(k) ? "on" : ""}" data-col="${k}"><i></i>${t}</button>`).join("")}</div>
+      <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um.</p>`);
+  } else if (n === "delta") {
+    g += ovGroup("Comparar contra", ovSeg("", "ref", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], S.overlay_reference));
+    g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "predicted", "Tempo previsto", c.predicted)}${ovChip(n, "fuel", "Combustível", c.fuel, "Voltas restantes e quanto falta/sobra até o fim")}</div>`);
+  }
+  return `<div class="ovp-head"><span class="ovp-ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${OV_ICON[n]}</svg></span>
+    <div><h2>${OV_TITLE[n]}</h2><div class="sub">${OV_MODE_TXT[c.mode]}</div></div></div>${g}`;
+}
+
 async function renderOverlays() {
   current = { name: "overlays" };
   view.classList.add("wide");
@@ -3015,16 +3067,17 @@ async function renderOverlays() {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const sw = screen.width || 1920, sh = screen.height || 1080;
   const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36] };
+  let sel = localStorage.getItem("pitwall.ovSel");
+  if (!OV_NAMES.some((x) => x[0] === sel)) sel = "map";
   view.innerHTML = `<div class="ovpage">
     <div class="ov-left">
-      <div class="ov-head"><div><h1>Overlays</h1><div class="sub">Mapa com bandeiras, pedais, participantes e delta, transparentes por cima do jogo.</div></div>
+      <div class="ov-head"><div><h1>Overlays</h1><div class="sub">Janelas transparentes por cima do jogo. Escolha um para configurar.</div></div>
         <button class="btn ${S.overlay_edit ? "primary" : ""}" id="ovEdit" title="Mostra os overlays ligados direto na tela, com dados de exemplo se o jogo estiver fechado. Arraste-os e puxe as bordas para redimensionar.">${S.overlay_edit ? "Concluir edição" : "Editar na tela do jogo"}</button></div>
-      <div class="ov-pills" id="ovPills"></div>
+      <div class="ov-tiles" id="ovTiles"></div>
       <div class="ov-stage" id="ovStage"><span class="ov-stagelbl">Sua tela · ${sw}×${sh}</span></div>
-      <div class="sub" style="margin-top:8px">Arraste um overlay para mover e puxe as bordas ou os cantos para mudar o tamanho. Os overlays abertos no jogo acompanham na hora.
-        Em “Editar na tela do jogo” você faz o mesmo direto sobre o jogo (use-o em “janela sem bordas”); ao concluir, os cliques atravessam o overlay.</div>
+      <div class="sub" style="margin-top:8px">Arraste para mover, puxe as bordas para redimensionar, clique para escolher qual configurar.</div>
     </div>
-    <div class="ov-right">${overlaySettings(S)}</div></div>`;
+    <div class="ov-right" id="ovPanel"></div></div>`;
   const stage = $("#ovStage"), boxes = {};
   const put = async (v) => {
     const r = await api("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) });
@@ -3039,18 +3092,35 @@ async function renderOverlays() {
     b.el.style.left = x * kk + "px"; b.el.style.top = y * kk + "px";
     if (b.w) { b.el.style.width = b.w * kk + "px"; b.el.style.height = b.h * kk + "px"; b.fr.style.transform = `scale(${kk})`; b.fr.style.width = b.w + "px"; b.fr.style.height = b.h + "px"; b.el.style.opacity = 1; }
   };
-  function paintStage() {
-    $("#ovPills").innerHTML = OV_NAMES.map(([n, t]) => `<button class="ovpill ${S.overlays[n].mode !== "off" ? "on" : ""}" data-pill="${n}">${t}</button>`).join("");
-    $("#ovPills").querySelectorAll("[data-pill]").forEach((b) => b.onclick = () => {
-      const n = b.dataset.pill, on = S.overlays[n].mode === "off";
-      put({ overlays: { [n]: { mode: on ? "game" : "off" } } }).then(() => { const sel = $(`[data-ov="${n}"][data-k="mode"]`); if (sel) sel.value = S.overlays[n].mode; });
+  function paintTiles() {
+    $("#ovTiles").innerHTML = OV_NAMES.map(([n, t]) => { const c = S.overlays[n], on = c.mode !== "off";
+      return `<div class="ovtile ${n === sel ? "sel" : ""} ${on ? "on" : ""}" data-sel="${n}" role="button" tabindex="0">
+        <div class="ovt-top"><span class="ovt-ic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${OV_ICON[n]}</svg></span>
+          <label class="ovsw" title="${on ? "Desligar" : "Ligar"}"><input type="checkbox" data-tile="${n}" ${on ? "checked" : ""}><i></i></label></div>
+        <b>${t}</b><small>${OV_MODE_TXT[c.mode]}</small></div>`; }).join("");
+    $("#ovTiles").querySelectorAll("[data-sel]").forEach((el) => el.onclick = (e) => { if (!e.target.closest(".ovsw")) select(el.dataset.sel); });
+    $("#ovTiles").querySelectorAll("[data-tile]").forEach((el) => el.onchange = async () => {
+      await put({ overlays: { [el.dataset.tile]: { mode: el.checked ? "game" : "off" } } });
+      paintTiles(); if (el.dataset.tile === sel) paintPanel();
     });
+  }
+  function paintStage() {
     for (const [n] of OV_NAMES) {
       const on = S.overlays[n].mode !== "off";
       if (on && !boxes[n]) makeBox(n);
       if (!on && boxes[n]) { boxes[n].el.remove(); delete boxes[n]; }
       place(n);
+      if (boxes[n]) boxes[n].el.classList.toggle("sel", n === sel);
     }
+  }
+  function select(n) {
+    sel = n; localStorage.setItem("pitwall.ovSel", n);
+    paintTiles(); paintPanel(); paintStage();
+  }
+  function paintPanel() {
+    const box = $("#ovPanel");
+    box.innerHTML = ovPanel(sel, S);
+    bindOverlayPanel(box, sel, put, async (v) => { await put(v); paintTiles(); });
   }
   function makeBox(name) {
     const el = document.createElement("div");
@@ -3063,13 +3133,14 @@ async function renderOverlays() {
     const begin = (e, dir) => {
       e.preventDefault(); e.stopPropagation();
       const c = S.overlays[name], kk = k();
-      drag = { dir, sx: e.clientX, sy: e.clientY, x0: c.x ?? defPos[name][0], y0: c.y ?? defPos[name][1], s0: c.scale, w0: b.w, h0: b.h, kk };
+      drag = { dir, sx: e.clientX, sy: e.clientY, x0: c.x ?? defPos[name][0], y0: c.y ?? defPos[name][1], s0: c.scale, w0: b.w, h0: b.h, kk, moved: false };
       b.busy = true; el.classList.add("drag"); el.setPointerCapture(e.pointerId);
     };
     el.onpointerdown = (e) => begin(e, e.target.dataset.d || "move");
     el.onpointermove = (e) => {
       if (!drag) return;
       const d = drag, dx = (e.clientX - d.sx) / d.kk, dy = (e.clientY - d.sy) / d.kk;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
       if (d.dir === "move") {
         d.x = clamp(d.x0 + dx, -d.w0 + 40, sw - 40); d.y = clamp(d.y0 + dy, -d.h0 + 40, sh - 40); d.r = 1;
         el.style.left = d.x * d.kk + "px"; el.style.top = d.y * d.kk + "px"; return;
@@ -3087,11 +3158,12 @@ async function renderOverlays() {
     el.onpointerup = el.onpointercancel = async () => {
       if (!drag) return;
       const d = drag; drag = null; el.classList.remove("drag");
+      b.busy = false;
+      if (!d.moved) { select(name); return; }                     // só um clique: escolhe este overlay
       const v = { x: Math.round(d.x ?? d.x0), y: Math.round(d.y ?? d.y0) };
       if (d.r && d.r !== 1) { v.scale = Math.round(d.s0 * d.r); b.w = d.w0 * d.r; b.h = d.h0 * d.r; b.fr.style.width = b.w + "px"; b.fr.style.height = b.h + "px"; b.fr.style.transform = `scale(${d.kk})`; }
-      b.busy = false;
       await put({ overlays: { [name]: v } });
-      const sc = $(`[data-ov="${name}"][data-k="scale"]`); if (sc) { sc.value = S.overlays[name].scale; sc.nextElementSibling.textContent = sc.value + "%"; }
+      if (name === sel) { const sc = $(`#ovPanel [data-k="scale"]`); if (sc) { sc.value = S.overlays[name].scale; sc.nextElementSibling.textContent = sc.value + "%"; } }
     };
   }
   // tamanho que cada overlay ocupa (a página dele avisa)
@@ -3105,8 +3177,7 @@ async function renderOverlays() {
   window.addEventListener("resize", onResize);
   const cleanup = () => { window.removeEventListener("message", onMsg); window.removeEventListener("resize", onResize); window.removeEventListener("hashchange", cleanup); };
   window.addEventListener("hashchange", cleanup);
-  paintStage();
-  bindOverlaySettings(put);
+  paintTiles(); paintStage(); paintPanel();
   $("#ovEdit").onclick = async () => {
     const ed = $("#ovEdit"), on = !ed.classList.contains("primary");
     let r = null;
@@ -3116,98 +3187,52 @@ async function renderOverlays() {
   };
 }
 
-// ---------------------------------------------------------------- overlays no jogo (janelas transparentes)
-const OV_MODES = [["off", "Desligado"], ["game", "Só quando estou na pista"], ["always", "Sempre aberto"]];
-const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
-  ["interval", "Intervalo p/ o da frente"], ["gap_leader", "Diferença p/ o líder"], ["last", "Última volta"], ["best", "Melhor volta"],
-  ["laps", "Voltas"], ["pit", "Box"]];
-function overlaySettings(s) {
-  const O = s.overlays || {};
-  const sel = (id, opts, val, attrs) => `<select ${attrs} id="${id}">${opts.map(([k, t]) => `<option value="${k}" ${String(val) === String(k) ? "selected" : ""}>${t}</option>`).join("")}</select>`;
-  const tg = (n, k, v) => `<input class="tgl" type="checkbox" data-ov="${n}" data-k="${k}" ${v ? "checked" : ""}>`;
-  const rng = (n, k, v, min, max, step, unit) => `<span class="ovr"><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}"><output data-unit="${unit}">${v}${unit}</output></span>`;
-  const mode = (n) => setRow("Quando mostrar", "“Só na pista” abre ao entrar numa sessão e fecha ao sair.", sel(`ov-${n}-mode`, OV_MODES, O[n].mode, `data-ov="${n}" data-k="mode"`));
-  const common = (n) => setRow("Tamanho", "", rng(n, "scale", O[n].scale, 50, 250, 5, "%")) + setRow("Fundo", "0% = totalmente transparente.", rng(n, "bg", O[n].bg, 0, 90, 5, "%"));
-  const m = O.map, p = O.pedals, st = O.standings, d = O.delta;
-  return `
-    <div class="set-card"><h2>Mapa da pista</h2>
-      ${mode("map")}${common("map")}
-      <div class="sub" style="margin:2px 0 10px">A pista muda de cor em tempo real: amarela (só no setor da bandeira), vermelha, azul, branca ou verde.</div>
-      ${setRow("Mostrar o nome da bandeira", "", tg("map", "banner", m.banner))}
-      ${setRow("Outros carros", "Pontinhos no mapa. No ACC precisa do broadcasting ligado (padrão do jogo).", tg("map", "cars", m.cars))}
-      ${setRow("Número do carro dentro da bolinha", "", tg("map", "numbers", m.numbers))}
-      ${setRow("Marcar os setores", "", tg("map", "sectors", m.sectors))}
-      ${setRow("Número das curvas no mapa", "Numeradas como na Análise (precisa de ao menos uma volta gravada na pista).", tg("map", "corners", m.corners))}
-      ${setRow("Mostrar a curva em que estou", "Uma etiqueta com o número e o nome da curva atual.", tg("map", "corner_now", m.corner_now))}
-      <details class="cnames" id="cnBox"><summary class="sub" style="cursor:pointer">Dar nome às curvas</summary>
-        <div class="sub" style="margin:6px 0">O jogo não informa os nomes das curvas: escreva aqui o que quiser (ex.: “Eau Rouge”). A numeração é a da Análise do Pitwall e pode diferir da oficial da pista.</div>
-        <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>
-      ${setRow("Espessura da pista", "", rng("map", "width", m.width, 4, 16, 1, "px"))}
-      ${setRow("Girar o mapa", "", sel("ov-map-rot", [[0, "0°"], [90, "90°"], [180, "180°"], [270, "270°"]], m.rotate, 'data-ov="map" data-k="rotate" data-num="1"'))}
-    </div>
-    <div class="set-card"><h2>Pedais</h2>
-      ${mode("pedals")}${common("pedals")}
-      ${setRow("Janela de tempo", "Quantos segundos do histórico aparecem no gráfico.", rng("pedals", "seconds", p.seconds, 3, 20, 1, " s"))}
-      ${setRow("Marcar “sem pedal”", "Faixa âmbar quando você não pisa em nenhum dos dois, e a porcentagem do tempo.", tg("pedals", "coast", p.coast))}
-      ${setRow("Barras de acelerador e freio", "", tg("pedals", "bars", p.bars))}
-      ${setRow("Linha do volante", "", tg("pedals", "steer", p.steer))}
-      ${setRow("Marcha", "", tg("pedals", "gear", p.gear))}
-      ${setRow("Velocidade", "", tg("pedals", "speed", p.speed))}
-    </div>
-    <div class="set-card"><h2>Participantes</h2>
-      ${mode("standings")}${common("standings")}
-      ${setRow("Quais pilotos", "", sel("ov-st-view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], st.view, 'data-ov="standings" data-k="view"'))}
-      ${setRow("Quantas linhas", "", rng("standings", "rows", st.rows, 3, 30, 1, ""))}
-      ${setRow("Nome do piloto", "", sel("ov-st-name", [["short", "Sigla (3 letras)"], ["last", "Sobrenome"], ["full", "Nome completo"]], st.name, 'data-ov="standings" data-k="name"'))}
-      ${setRow("Colunas", "Escolha o que mostrar: delta para você, tempo de volta, intervalo, diferença para o líder…",
-        `<div class="ovcols">${OV_COLS.map(([k, t]) => `<label><input type="checkbox" data-col="${k}" ${st.cols.includes(k) ? "checked" : ""}> ${t}</label>`).join("")}</div>`)}
-      <div class="sub" style="margin-top:8px">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença é calculada pela distância na pista; no treino e na classificação, pela melhor volta de cada um.
-        No ACC os nomes e tempos dos outros pilotos vêm do broadcasting do jogo (ligado por padrão).</div>
-    </div>
-    <div class="set-card"><h2>Delta da volta</h2>
-      ${mode("delta")}${common("delta")}
-      ${setRow("Comparar contra", "Referência do delta.", sel("xOvRef", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], s.overlay_reference, ""))}
-      ${setRow("Tempo previsto da volta", "", tg("delta", "predicted", d.predicted))}
-      ${setRow("Combustível", "Voltas restantes e quanto falta/sobra até o fim.", tg("delta", "fuel", d.fuel))}
-    </div>`;
-}
-function bindOverlaySettings(put) {
-  const send = (n, k, v) => put({ overlays: { [n]: { [k]: v } } });
-  document.querySelectorAll("[data-ov]").forEach((el) => {
-    const n = el.dataset.ov, k = el.dataset.k;
+function bindOverlayPanel(box, n, put, putModes) {
+  const send = (name, key, v) => (key === "mode" ? putModes : put)({ overlays: { [name]: { [key]: v } } });
+  box.querySelectorAll("[data-ov]").forEach((el) => {
+    const name = el.dataset.ov, key = el.dataset.k;
     if (el.type === "range") {
       el.oninput = () => { el.nextElementSibling.textContent = el.value + el.nextElementSibling.dataset.unit; };
-      el.onchange = () => send(n, k, +el.value);
-    } else if (el.type === "checkbox") el.onchange = () => send(n, k, el.checked);
-    else el.onchange = () => send(n, k, el.dataset.num ? +el.value : el.value);
+      el.onchange = () => send(name, key, +el.value);
+    } else if (el.dataset.chip) {
+      el.onclick = () => { el.classList.toggle("on"); send(name, key, el.classList.contains("on")); };
+    } else if (el.dataset.val !== undefined) {
+      el.onclick = async () => {
+        const v = el.dataset.num ? +el.dataset.val : el.dataset.val;
+        if (key === "ref") { await put({ overlay_reference: v }); }
+        else await send(name, key, v);
+        if (key === "mode") { const sub = box.querySelector(".ovp-head .sub"); if (sub) sub.textContent = OV_MODE_TXT[v]; }
+        el.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
+      };
+    }
   });
-  document.querySelectorAll("[data-col]").forEach((el) => el.onchange = () => {
-    const cols = OV_COLS.map(([k]) => k).filter((k) => document.querySelector(`[data-col="${k}"]`).checked);
-    send("standings", "cols", cols);
+  box.querySelectorAll("[data-col]").forEach((el) => el.onclick = () => {
+    el.classList.toggle("on");
+    const cols = OV_COLS.map(([k2]) => k2).filter((k2) => box.querySelector(`[data-col="${k2}"]`).classList.contains("on"));
+    put({ overlays: { standings: { cols } } });
   });
-  const cb = $("#cnBox");
+  const cb = box.querySelector("#cnBox");
   if (cb) {
     let loaded = false;
     cb.ontoggle = async () => {
       if (!cb.open || loaded) return;
       loaded = true;
-      try { for (const t of await api("/api/overlay/corner-tracks")) $("#cnTrack").insertAdjacentHTML("beforeend", `<option value="${esc(t)}">${esc(pretty(t))}</option>`); } catch (e) { /* ok */ }
+      try { for (const t of await api("/api/overlay/corner-tracks")) box.querySelector("#cnTrack").insertAdjacentHTML("beforeend", `<option value="${esc(t)}">${esc(pretty(t))}</option>`); } catch (e) { /* ok */ }
     };
-    $("#cnTrack").onchange = async () => {
-      const t = $("#cnTrack").value, box = $("#cnList");
-      if (!t) { box.innerHTML = ""; return; }
-      box.innerHTML = `<span class="sub">Carregando…</span>`;
+    box.querySelector("#cnTrack").onchange = async () => {
+      const t = box.querySelector("#cnTrack").value, list = box.querySelector("#cnList");
+      if (!t) { list.innerHTML = ""; return; }
+      list.innerHTML = `<span class="sub">Carregando…</span>`;
       let r = { corners: [] };
       try { r = await api("/api/overlay/corners?track=" + encodeURIComponent(t)); } catch (e) { /* ok */ }
-      box.innerHTML = r.corners.length ? r.corners.map((c) => `<label class="cnrow"><span>Curva ${c.n}</span><input data-cn="${c.n}" maxlength="40" placeholder="nome (opcional)" value="${esc(c.name)}"></label>`).join("")
+      list.innerHTML = r.corners.length ? r.corners.map((c) => `<label class="cnrow"><span>Curva ${c.n}</span><input data-cn="${c.n}" maxlength="40" placeholder="nome (opcional)" value="${esc(c.name)}"></label>`).join("")
         : `<span class="sub">Nenhuma volta gravada nesta pista ainda.</span>`;
-      box.querySelectorAll("[data-cn]").forEach((inp) => inp.onchange = () => {
-        const names = {}; box.querySelectorAll("[data-cn]").forEach((i) => { if (i.value.trim()) names[i.dataset.cn] = i.value.trim(); });
+      list.querySelectorAll("[data-cn]").forEach((inp) => inp.onchange = () => {
+        const names = {}; list.querySelectorAll("[data-cn]").forEach((i) => { if (i.value.trim()) names[i.dataset.cn] = i.value.trim(); });
         put({ corner_names: { [t]: names } });
       });
     };
   }
-  const ref = $("#xOvRef"); if (ref) ref.onchange = () => put({ overlay_reference: ref.value });
 }
 
 // ---------------------------------------------------------------- configurações extras

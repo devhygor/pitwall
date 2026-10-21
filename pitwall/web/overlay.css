@@ -16,7 +16,7 @@ body { font-family: var(--font); color: var(--text); user-select: none; -webkit-
 .shadow { text-shadow: 0 1px 3px rgba(0, 0, 0, .85), 0 0 8px rgba(0, 0, 0, .55); }
 
 /* modo de edição: contorno + dica; o overlay inteiro vira alça de arrastar */
-body.edit #root { outline: 2px dashed rgba(255, 255, 255, .45); outline-offset: 0; border-radius: 14px; cursor: move; }
+body.edit #root { outline: 1px solid rgba(255, 255, 255, .28); outline-offset: 0; border-radius: 14px; cursor: move; }
 body.edit #root::after { content: attr(data-title) " · arraste para mover"; position: absolute; left: 6px; top: -1px; transform: translateY(-100%);
   font: 600 11px var(--font); letter-spacing: .04em; color: #fff; background: rgba(255, 59, 78, .9); padding: 2px 8px; border-radius: 6px 6px 0 0; white-space: nowrap; }
 .idle { padding: 8px 14px; font-size: 12px; color: var(--muted); background: var(--panel); border-radius: 10px; }

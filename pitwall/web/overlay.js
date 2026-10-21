@@ -364,9 +364,8 @@ function pedalsOverlay() {
     const last = samples.length ? samples[samples.length - 1] : null;
     // grade
     ctx.fillStyle = "rgba(255,255,255,.05)"; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = "rgba(255,255,255,.12)"; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = "rgba(255,255,255,.09)"; ctx.lineWidth = 1;
     for (const f of [0.25, 0.5, 0.75]) { ctx.beginPath(); ctx.moveTo(0, H - f * (H - 10) - 4); ctx.lineTo(W, H - f * (H - 10) - 4); ctx.stroke(); }
-    ctx.setLineDash([]);
     if (!last) { lg.innerHTML = ""; return; }
     const age = previewing ? 0 : Math.min(0.15, (performance.now() - recvAt) / 1000);
     const tNow = last[0] + age;
