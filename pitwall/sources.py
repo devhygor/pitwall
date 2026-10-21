@@ -65,6 +65,7 @@ class Frame:
     tyre_wear: tuple = ()                      # desgaste de cada pneu, 0 (novo) a 1 (gasto); vazio = o jogo não informa
     tyre_compound: str = ""
     pad_life: tuple = ()                       # vida restante das pastilhas (mm) no ACC
+    tyre_zones: tuple = ()                     # ((internas FL FR RL RR), (do meio ...), (externas ...)) quando o jogo informa
     rain: tuple = ()                           # chuva agora, em 10 min e em 30 min (0 = sem chuva ... 5 = tempestade)
     session_total_ms: float = -1.0             # duração total da sessão (ms), -1 = desconhecida
     total_laps: int = 0                        # voltas da corrida (0 = sessão por tempo ou desconhecido)
@@ -119,6 +120,14 @@ class ACCSource:
                 continue
             idle = 0
             f = self._to_frame(sm)
+            try:                                   # temperatura interna/meio/externa de cada pneu (campos da shared memory que o ACC pode ou não preencher)
+                pm = self._asm.physicSM
+                pm.seek(368)
+                zi, zm, zo = pm.unpack_array("f", 4), pm.unpack_array("f", 4), pm.unpack_array("f", 4)
+                if any(v > 1.0 for v in (*zi, *zm, *zo)):
+                    f.tyre_zones = (zi, zm, zo)
+            except Exception:  # noqa: BLE001
+                pass
             if self.udp is not None:
                 f.cars = self.udp.snapshot()
                 f.cars_status = self.udp.status
@@ -638,6 +647,9 @@ class DemoSource:
             steer = max(-1, min(1, tr.curv[i] * tr.curv_sign[i] * 140))
             gear = 2 + min(5, int(v / 48))
             rpm = int(4000 + (v % 48) / 48 * 3400)
+            def off(k, z):                         # z: 0 interna, 1 meio, 2 externa; a lateral carregada esquenta mais
+                load = g_lat * (1 if k % 2 == 0 else -1)
+                return (6 + 10 * load, 0.0, -4 - 10 * load)[z]
             bt[0] += ((260 + 700 * brake) - bt[0]) * 0.02
             bt[1] += ((220 + 480 * brake) - bt[1]) * 0.02
             for k in range(4):
@@ -700,6 +712,7 @@ class DemoSource:
                 wall=time.time() if self.realtime else wall0 + t,
                 slip_angle=(saf, saf, sar, sar), slip_ratio=(srf, srf * 0.9, srr, srr),
                 g_lat=g_lat, brake_temp=(bt[0], bt[0] - 6, bt[1], bt[1] - 3), susp=(0.04, 0.04, 0.05, 0.05),
+                tyre_zones=tuple(tuple(round(tyre[k] + off(k, z), 1) for k in range(4)) for z in range(3)),
                 tyre_wear=tuple(min(0.9, 0.012 * (stint_laps + d) + (0.004 if k < 2 else 0)) for k in range(4)),
                 tyre_compound="dry_compound", pad_life=(24.0, 24.0, 22.0, 22.0),
                 session_time_left=max(0.0, 20 * 60_000 - t * 1000) if self.session_type == "Race" else -1.0,

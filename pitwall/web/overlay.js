@@ -594,7 +594,8 @@ function tyresACC() {
   const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
   const preview = () => { const t = performance.now() / 1000;
     return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [26.8, 26.1, 26.8, 26.3], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)),
-      wear: [0.12, 0.14, 0.1, 0.1], pad: [24, 24, 22.5, 22.5], rain: [0, 1, 3], grip: "Optimum", compound: "dry_compound" }; };
+      wear: [0.12, 0.14, 0.1, 0.1], pad: [24, 24, 22.5, 22.5], rain: [0, 1, 3], grip: "Optimum", compound: "dry_compound",
+      zones: [0, 1, 2].map((z) => [0, 1, 2, 3].map((k) => 88 + [9, 0, -9][z] + 5 * Math.sin(t / 2 + k)))  /* só o exemplo: interna mais quente */ }; };
   function render() {
     const T = live() ? data.tyres : previewing ? preview() : null;
     const car = q(".ta-car");
@@ -611,7 +612,14 @@ function tyresACC() {
       const el = q(`.ta-tyre[data-w="${i}"]`), t = T.temp[i], w = T.wear ? T.wear[i] : null;
       const c = tcol(t);
       const st = el.querySelectorAll(".st i");
-      st.forEach((s, k) => { s.style.background = `linear-gradient(180deg, ${c}, color-mix(in srgb, ${c} ${k === 1 ? 70 : 58}%, #0b0d10))`; });
+      // com as três temperaturas (interna, meio, externa) cada faixa tem a sua cor; sem elas, todas usam a do núcleo.
+      // Pneus da esquerda: externa | meio | interna; da direita: interna | meio | externa.
+      const Z = T.zones && T.zones.length === 3 ? T.zones : null;
+      st.forEach((s, k) => {
+        const zt = Z ? Z[(i % 2 === 0 ? [2, 1, 0] : [0, 1, 2])[k]][i] : t, cc = Z ? tcol(zt) : c;
+        s.style.background = `linear-gradient(180deg, ${cc}, color-mix(in srgb, ${cc} ${k === 1 ? 70 : 58}%, #0b0d10))`;
+        s.title = Z ? `${["Externa", "Meio", "Interna"][i % 2 === 0 ? k : 2 - k]}: ${Math.round(zt)} °C` : "";
+      });
       const nb = el.querySelector("b"); nb.style.display = cfg.temp ? "" : "none"; nb.textContent = t > 0 ? Math.round(t) + "°" : "—";
       const wr = el.querySelector(".wr");
       wr.style.display = cfg.wear && w != null ? "" : "none";

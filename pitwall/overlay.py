@@ -181,7 +181,8 @@ class OverlayHub:
                     out["tyres"] = {"temp": [round(v, 1) for v in f.tyre_temp], "press": [round(v, 2) for v in f.tyre_press],
                                     "brake": [round(v) for v in f.brake_temp], "wear": [round(v, 3) for v in f.tyre_wear] or None,
                                     "pad": [round(v, 1) for v in f.pad_life] or None, "compound": f.tyre_compound, "game": f.game,
-                                    "rain": list(f.rain), "grip": f.grip}
+                                    "rain": list(f.rain), "grip": f.grip,
+                                    "zones": [[round(v, 1) for v in z] for z in f.tyre_zones] or None}
                 if "cars" in want:
                     out["standings"] = self._standings(f)
                     out["me"] = {"spline": f.norm_pos, "x": f.x, "z": f.z, "id": f.player_id}
