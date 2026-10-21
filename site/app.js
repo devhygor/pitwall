@@ -28,6 +28,7 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let session = null, profile = null, stopCircuit = null;
+$("#dlTop").href = PITWALL.download;
 
 async function rpc(name, args) {
   const { data, error } = await sb.rpc(name, args);
@@ -60,7 +61,11 @@ function markTop() {
 
 function renderMe() {
   const el = $("#me");
-  if (!session) { el.innerHTML = `<a class="btn small quiet" href="#entrar" id="goLogin">Entrar</a>`; return; }
+  if (!session) {
+    el.innerHTML = `<nav class="topnav pub"><a href="#overlays" data-go="overlays">Overlays</a><a href="#recursos" data-go="recursos">Recursos</a></nav>
+      <a class="btn small quiet" href="#entrar" data-go="entrar" id="goLogin">Entrar</a>`;
+    return;
+  }
   const u = profile || {};
   el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a></nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
     <button class="btn small quiet" id="logout">Sair</button>`;
@@ -79,26 +84,61 @@ async function loadProfile() {
 const GOOGLE = `<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`;
 const TRACK = "M180 470 C118 470 88 418 110 368 L188 192 C210 140 262 122 312 142 L420 190 C462 208 500 200 522 164 L560 96 C586 54 642 50 682 76 L860 190 C906 220 914 276 880 310 L762 420 C730 450 736 490 772 505 L822 526 C862 546 850 592 804 592 L302 592 C250 592 228 540 262 510 L282 490 C292 478 272 470 254 470 Z";
 
+const DL_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg>`;
+const ico = (d) => `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const FEATURES = [
+  ["Grava sozinho", "Abre com o Windows e começa a gravar quando você entra na pista. Cada volta, setor e sessão fica guardada, sem apertar nada.", ico(`<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>`)],
+  ["Telemetria completa", "Velocidade, freio, acelerador, marcha, volante e pneus, volta a volta e curva a curva, em gráficos que você consegue ler.", ico(`<path d="M3 17l5-6 4 3 5-8 4 5"/><path d="M3 21h18"/>`)],
+  ["Análise de voltas", "O delta mostra em que ponto da pista você ganha e perde tempo. Acontecimentos como travadas e saídas aparecem marcados na volta.", ico(`<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/>`)],
+  ["Compare com os amigos", "Sua melhor volta contra a de um companheiro de equipe, mesmo em carros diferentes, lado a lado e com o replay dos dois na pista.", ico(`<circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20c.4-3.4 3-5.5 6-5.5s5.6 2.1 6 5.5M16 14.6c2.7 0 4.6 1.8 5 4.4"/>`)],
+  ["Vídeo sincronizado", "Grave a tela junto com a telemetria. Ao passar o mouse no gráfico, o vídeo vai exatamente para aquele ponto da volta.", ico(`<rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/>`)],
+  ["Engenheiro de setup", "Lê as suas voltas, identifica sub e sobresterço, travadas e patinagem, e sugere ajustes em cliques para o setup do ACC.", ico(`<path d="M14.5 6.5a4 4 0 0 0-5 5L3 18l3 3 6.5-6.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/>`)],
+];
+
+function overlayShots() {
+  const bar = (c, h) => `<i style="background:${c};height:${h}%"></i>`;
+  const tyre = (t, p, c) => `<div class="ty" style="--c:${c}"><b>${t}°</b><small>${p}</small></div>`;
+  const row = (p, n, g, cls = "") => `<div class="${cls}"><span class="p">${p}</span><span class="n">${n}</span><span class="g">${g}</span></div>`;
+  return `
+    <figure class="ov ov-map"><div class="screen">
+      <svg viewBox="70 40 860 590" aria-hidden="true">
+        <path d="${TRACK}" fill="none" stroke="#3a4560" stroke-width="40" stroke-linejoin="round"/>
+        <path d="${TRACK}" fill="none" stroke="#0e1420" stroke-width="30" stroke-linejoin="round"/>
+        <path d="M262 592 H600" fill="none" stroke="#ffd23f" stroke-width="30" opacity=".9"/>
+        <circle cx="822" cy="526" r="13" fill="#f2a93b"/><circle cx="522" cy="164" r="10" fill="#a77bff"/><circle cx="420" cy="190" r="10" fill="#8e9bb2"/>
+        <path d="M560 70v52l34-12-34-14" fill="#ffd23f"/><path d="M560 60v90" stroke="#eef2f7" stroke-width="5"/>
+      </svg>
+    </div><figcaption><b>Mapa com bandeiras</b><span>A pista com todos os carros. A bandeira amarela acende no trecho certo.</span></figcaption></figure>
+    <figure class="ov ov-part"><div class="screen"><div class="grid-part">
+      ${row(1, "Lucas", "1:47.112", "best")}${row(2, "Você", "+0.214", "you")}${row(3, "Rafa", "+0.903")}${row(4, "Bia", "+1.480")}
+    </div></div><figcaption><b>Participantes</b><span>Posições, intervalos e tendência. Roxo para a melhor volta, verde para a sua.</span></figcaption></figure>
+    <figure class="ov ov-ped"><div class="screen"><div class="pedals">
+      <div class="pbar">${bar("#39d98a", 86)}${bar("#ff5a5f", 28)}${bar("#4aa3ff", 6)}</div>
+      <div class="wheel"><svg viewBox="0 0 48 48" width="54" height="54" aria-hidden="true"><circle cx="24" cy="24" r="19" fill="none" stroke="#eef2f7" stroke-width="4" transform="rotate(-18 24 24)"/><path d="M5 24h13M30 24h13M24 30v13" stroke="#eef2f7" stroke-width="4" transform="rotate(-18 24 24)"/></svg><b>5</b><small>214 km/h</small></div>
+    </div></div><figcaption><b>Pedais e volante</b><span>Acelerador, freio e embreagem em tempo real, com marcha e velocidade.</span></figcaption></figure>
+    <figure class="ov ov-tyre"><div class="screen"><div class="tyres">
+      ${tyre(84, "27.4", "#f2a93b")}${tyre(86, "27.6", "#ff7a45")}${tyre(79, "27.1", "#39d98a")}${tyre(81, "27.2", "#39d98a")}
+    </div></div><figcaption><b>Pneus</b><span>Temperatura e pressão das quatro rodas, com a cor mostrando a janela ideal.</span></figcaption></figure>
+    <figure class="ov ov-delta"><div class="screen"><div class="dlt">
+      <small>contra a sua melhor</small><b>−0.214</b>
+      <div class="dbar"><i style="width:34%"></i></div>
+    </div></div><figcaption><b>Delta</b><span>Quanto você está ganhando ou perdendo, a cada metro da volta.</span></figcaption></figure>`;
+}
+
 function renderLanding(invite) {
   view.innerHTML = `
     <section class="hero">
       <div class="wrap">
         <div class="pitch">
-          <h1>Sua volta contra a volta deles.</h1>
-          <p>O Pitwall grava suas voltas no ACC e no iRacing e coloca você na mesma pista que os seus amigos:
-            ranking da equipe, telemetria lado a lado e replay para ver onde está a diferença.</p>
-          <div class="pitboard" id="entrar">
-            ${invite ? `<div class="invite-note">${avatar({ name: "+" })}<div>Você foi convidado para uma <b>equipe</b>. Entre para aceitar.</div></div>` : ""}
-            <button class="btn google" id="gLogin">${GOOGLE}Continuar com Google</button>
-            <div class="or">ou receba um link no e-mail</div>
-            <form class="mail" id="mailForm">
-              <label for="email" style="position:absolute;left:-9999px">E-mail</label>
-              <input class="field" id="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
-              <button class="btn go" type="submit" id="mailBtn">Enviar link</button>
-            </form>
-            <div class="msg" id="loginMsg" role="status"></div>
-            <p class="fine">Mesma conta no site e no app do PC. Só a sua equipe vê as suas voltas; setups nunca saem do seu PC.</p>
+          <span class="eyebrow">ACC · iRacing · Windows</span>
+          <h1>Seu engenheiro de corrida, <em>dentro do PC.</em></h1>
+          <p>O Pitwall grava cada volta, mostra onde você perde tempo e coloca você lado a lado com os seus amigos.
+            E ainda põe mapa, pedais, pneus e delta por cima do jogo.</p>
+          <div class="cta-row">
+            <a class="btn go xl" href="${esc(PITWALL.download)}">${DL_ICON}Baixar para Windows</a>
+            <button class="btn xl quiet" data-go="entrar" type="button">Entrar na minha conta</button>
           </div>
+          <ul class="trust"><li>Grátis</li><li>Instala em um minuto</li><li>Atualiza sozinho</li></ul>
         </div>
         <div class="circuit" aria-hidden="true">
           <svg viewBox="70 40 860 590">
@@ -117,9 +157,38 @@ function renderLanding(invite) {
       </div>
     </section>
 
+    <section class="how" id="como">
+      <div class="wrap">
+        <div class="step"><i>1</i><div><b>Baixe e instale</b><span>Um instalador só. Não precisa de Python nem de administrador.</span></div></div>
+        <div class="step"><i>2</i><div><b>Corra como sempre</b><span>O Pitwall percebe o jogo abrir e grava tudo em segundo plano.</span></div></div>
+        <div class="step"><i>3</i><div><b>Compare e evolua</b><span>Abra a análise, veja o delta e desafie a sua equipe.</span></div></div>
+      </div>
+    </section>
+
+    <section class="sect" id="overlays">
+      <div class="wrap">
+        <span class="eyebrow">Overlays transparentes</span>
+        <h2>As informações certas, por cima do jogo</h2>
+        <p class="lede">Janelas transparentes que ficam na frente do ACC e do iRacing sem atrapalhar. Você escolhe quais
+          mostrar, onde ficam e o tamanho. Os cliques passam direto para o jogo.</p>
+        <div class="ovgrid">${overlayShots()}</div>
+      </div>
+    </section>
+
+    <section class="sect alt" id="recursos">
+      <div class="wrap">
+        <span class="eyebrow">Recursos</span>
+        <h2>Tudo o que um engenheiro olharia</h2>
+        <div class="feats">
+          ${FEATURES.map(([t, d, i]) => `<article class="feat"><div class="fi">${i}</div><h3>${t}</h3><p>${d}</p></article>`).join("")}
+        </div>
+      </div>
+    </section>
+
     <section class="uses">
       <div class="wrap">
-        <h2>Feito para correr com os amigos</h2>
+        <span class="eyebrow">Para correr com os amigos</span>
+        <h2>Cada volta vira uma disputa</h2>
         <div class="use">
           <div class="copy"><h3>Ranking da equipe em cada pista</h3>
             <p>Cada recorde que você bate no app sobe sozinho. A equipe vê, por carro e por pista, quem está na frente
@@ -141,7 +210,7 @@ function renderLanding(invite) {
         </div>
         <div class="use">
           <div class="copy"><h3>Onde você perde o tempo</h3>
-            <p>No app, a volta do amigo vira referência: velocidade, freio e acelerador sobrepostos, o delta curva a
+            <p>A volta do amigo vira referência: velocidade, freio e acelerador sobrepostos, o delta curva a
               curva e o replay com os dois carros na pista.</p></div>
           <div class="shot">
             <svg viewBox="0 0 520 190" role="img" aria-label="Exemplo de gráfico de velocidade de duas voltas">
@@ -155,10 +224,33 @@ function renderLanding(invite) {
       </div>
     </section>
 
+    <section class="sect login" id="entrar">
+      <div class="wrap login-wrap">
+        <div>
+          <span class="eyebrow">Sua conta</span>
+          <h2>Entre para ver a sua equipe</h2>
+          <p class="lede">Depois de instalar o app, entre aqui com a mesma conta para ver o ranking, comparar voltas e
+            convidar os amigos. Só a sua equipe vê as suas voltas; setups nunca saem do seu PC.</p>
+        </div>
+        <div class="pitboard">
+          ${invite ? `<div class="invite-note">${avatar({ name: "+" })}<div>Você foi convidado para uma <b>equipe</b>. Entre para aceitar.</div></div>` : ""}
+          <button class="btn google" id="gLogin">${GOOGLE}Continuar com Google</button>
+          <div class="or">ou receba um link no e-mail</div>
+          <form class="mail" id="mailForm">
+            <label for="email" style="position:absolute;left:-9999px">E-mail</label>
+            <input class="field" id="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+            <button class="btn go" type="submit" id="mailBtn">Enviar link</button>
+          </form>
+          <div class="msg" id="loginMsg" role="status"></div>
+          <p class="fine">Mesma conta no site e no app do PC.</p>
+        </div>
+      </div>
+    </section>
+
     <section class="cta-band"><div class="wrap">
-      <div><h2>O app grava sozinho enquanto você corre</h2>
-        <p>Windows, ACC e iRacing. Abre junto com o Windows e só aparece quando você entra na pista.</p></div>
-      <a class="btn go" href="${esc(PITWALL.download)}">Baixar o Pitwall</a>
+      <div><h2>Pronto para encontrar os décimos que faltam?</h2>
+        <p>Windows 10 ou 11 · ACC e iRacing · Grátis. Abre junto com o Windows e só aparece quando você entra na pista.</p></div>
+      <a class="btn go xl" href="${esc(PITWALL.download)}">${DL_ICON}Baixar o Pitwall</a>
     </div></section>`;
 
   $("#gLogin").onclick = async () => {
@@ -174,9 +266,18 @@ function renderLanding(invite) {
     if (error) setMsg(/rate|limit/i.test(error.message) ? "Muitos pedidos seguidos. Espere alguns minutos e tente de novo." : error.message, "err");
     else setMsg(`Pronto. Abra o e-mail que mandamos para ${email} e clique no link para entrar.`, "ok");
   };
-  if (location.hash === "#entrar") $("#entrar").scrollIntoView();
+  if (location.hash === "#entrar" || invite) goTo("entrar");
   stopCircuit = animateCircuit();
 }
+// rola até uma seção da página inicial sem mexer na rota (#entrar/#overlays não são rotas)
+function goTo(id) { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }); }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-go]");
+  if (!b) return;
+  e.preventDefault();
+  if (!document.getElementById(b.dataset.go)) { location.hash = "#/"; setTimeout(() => goTo(b.dataset.go), 50); return; }
+  goTo(b.dataset.go);
+});
 function setMsg(t, cls) { const m = $("#loginMsg"); m.textContent = t; m.className = "msg " + (cls || ""); }
 
 // os dois carros na pista: você (âmbar) contra o recorde da equipe (roxo)
