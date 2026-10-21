@@ -41,6 +41,9 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .vbar i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-radius: 6px; }
 .vbar.b i { background: linear-gradient(0deg, #ff2f45, #ff7a86); }
 .vbar.t i { background: linear-gradient(0deg, #25c777, #7dffc0); }
+.pedals .wheelbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 64px; }
+.pedals .wheelbox svg { filter: drop-shadow(0 1px 3px rgba(0,0,0,.7)); }
+.pedals .wheelbox .ang { font-size: 12px; font-weight: 700; color: var(--muted); }
 .pedals .info { width: 74px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
 .pedals .gear { font-size: 46px; font-weight: 800; line-height: 1; }
 .pedals .spd { font-size: 22px; font-weight: 700; line-height: 1; }

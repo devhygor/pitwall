@@ -3109,7 +3109,7 @@ function ovPanel(n, S) {
         <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>`;
   } else if (n === "pedals") {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "coast", "Sem pedal", c.coast, "Faixa âmbar quando você não pisa em nenhum dos dois, e a porcentagem do tempo")}
-      ${ovChip(n, "bars", "Barras", c.bars)}${ovChip(n, "steer", "Volante", c.steer)}${ovChip(n, "gear", "Marcha", c.gear)}${ovChip(n, "speed", "Velocidade", c.speed)}</div>`);
+      ${ovChip(n, "bars", "Barras", c.bars)}${ovChip(n, "wheel", "Roda do volante", c.wheel, "Desenho do volante que gira junto com o seu")}${ovChip(n, "steer", "Volante no gráfico", c.steer)}${ovChip(n, "gear", "Marcha", c.gear)}${ovChip(n, "speed", "Velocidade", c.speed)}</div>`);
     g += ovGroup("Gráfico", ovSlider(n, "seconds", "Janela de tempo", c.seconds, 3, 20, 1, " s"));
   } else if (n === "standings") {
     g += ovGroup("Quais pilotos", ovSeg(n, "view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], c.view) + ovSlider(n, "rows", "Linhas", c.rows, 3, 30, 1, ""));

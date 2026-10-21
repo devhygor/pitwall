@@ -14,7 +14,7 @@ const FLAG_INFO = {
   black: ["Bandeira preta", "#9aa0aa"], penalty: ["Penalidade", "#ff9f1a"], orange: ["Bandeira laranja", "#ff9f1a"],
 };
 const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
-  seconds: 8, steer: false, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
+  seconds: 8, steer: false, wheel: true, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
 
@@ -222,16 +222,18 @@ function mapOverlay() {
     // base escura (contraste sobre qualquer fundo)
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const trace = (a, b) => { ctx.beginPath(); ctx.moveTo(P[a][0], P[a][1]); for (let i = a + 1; i <= b; i++) ctx.lineTo(P[i % n][0], P[i % n][1]); };
-    ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw + 5; trace(0, n); ctx.stroke();
+    ctx.strokeStyle = "rgba(150,165,196,.9)"; ctx.lineWidth = lw + 7; trace(0, n); ctx.stroke();      // borda clara
+    ctx.strokeStyle = "rgba(10,15,24,.95)"; ctx.lineWidth = lw + 2; trace(0, n); ctx.stroke();          // asfalto
     // cor por setor (a bandeira pinta só o trecho onde ela está)
     const sec = (i) => (i / n < sectors[0] ? 0 : i / n < sectors[1] ? 1 : 2);
     let a = 0;
     const pulse = 0.72 + 0.28 * Math.sin(t * 7);
     for (let i = 1; i <= n; i++) {
       if (i < n && sec(i) === sec(a)) continue;
-      const fl = sectorFlag(sec(a), flags), col = fl ? FLAG_INFO[fl][1] : "rgba(255,255,255,.88)";
+      const fl = sectorFlag(sec(a), flags);
       ctx.globalAlpha = fl === "yellow" || fl === "red" ? pulse : 1;
-      ctx.strokeStyle = col; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke();
+      if (fl) { ctx.strokeStyle = FLAG_INFO[fl][1]; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke(); }     // bandeira: pinta a pista toda
+      else { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = Math.max(1.5, lw * 0.14); ctx.setLineDash([6, 8]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
       if (fl === "chequered") { ctx.strokeStyle = "#111"; ctx.setLineDash([8, 8]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.globalAlpha = 1;
       a = i;
@@ -331,9 +333,15 @@ function mapOverlay() {
 function pedalsOverlay() {
   root.innerHTML = `<div class="card pedals"><canvas id="cv"></canvas><div class="bars" id="bars">
       <div class="vbar b"><i id="vb"></i></div><div class="vbar t"><i id="vt"></i></div></div>
+      <div class="wheelbox" id="wb"><svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><g id="wh">
+        <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,.92)" stroke-width="6"/>
+        <path d="M6 32h14M44 32h14M32 38v20" stroke="rgba(255,255,255,.92)" stroke-width="6" stroke-linecap="round"/>
+        <path d="M24 6h16" stroke="#ff3b4e" stroke-width="6" stroke-linecap="round"/></g></svg>
+        <div class="ang num" id="ang">0°</div></div>
       <div class="info" id="info"><div class="gear num" id="gear">N</div><div class="spd num" id="spd">0<small>KM/H</small></div>
       <div class="legend" id="lg"></div></div></div>`;
   const cv = root.querySelector("#cv"), ctx = cv.getContext("2d");
+  const wh = root.querySelector("#wh"), ang = root.querySelector("#ang");
   const vb = root.querySelector("#vb"), vt = root.querySelector("#vt"), gear = root.querySelector("#gear"), spd = root.querySelector("#spd"), lg = root.querySelector("#lg");
   const W = 360, H = 120;
   let pv = performance.now();
@@ -341,6 +349,7 @@ function pedalsOverlay() {
   function onCfg() {
     root.querySelector("#bars").style.display = cfg.bars ? "" : "none";
     root.querySelector("#info").style.display = cfg.gear || cfg.speed || cfg.coast ? "" : "none";
+    root.querySelector("#wb").style.display = cfg.wheel ? "" : "none";
     gear.style.display = cfg.gear ? "" : "none";
     spd.style.display = cfg.speed ? "" : "none";
   }
@@ -409,6 +418,9 @@ function pedalsOverlay() {
     }
     // valores atuais
     vb.style.height = (last[2] * 100).toFixed(0) + "%"; vt.style.height = (last[1] * 100).toFixed(0) + "%";
+    const st = clamp(last[3], -1, 1), deg = st * 200;          // ±1 = batente do volante (~±200° no desenho)
+    wh.setAttribute("transform", `rotate(${deg.toFixed(1)} 32 32)`);
+    ang.textContent = (deg > 0.5 ? "→ " : deg < -0.5 ? "← " : "") + Math.abs(Math.round(st * 100)) + "%";
     gear.textContent = gearTxt(last[5]); spd.firstChild.nodeValue = Math.round(last[4]);
     const none = last[1] < 0.03 && last[2] < 0.03 && last[4] > 30;
     lg.innerHTML = `<span class="g">ACEL <b class="num">${Math.round(last[1] * 100)}</b></span><br><span class="r">FREIO <b class="num">${Math.round(last[2] * 100)}</b></span>` +

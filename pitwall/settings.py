@@ -13,7 +13,7 @@ _BASE = {"mode": "off", "scale": 100, "bg": 0, "x": None, "y": None}
 OVERLAY_DEFAULTS = {
     "map": {**_BASE, "scale": 110, "bg": 0, "cars": True, "numbers": True, "corners": True, "corner_now": True, "rotate": 0, "width": 9, "banner": True,
             "sectors": True},
-    "pedals": {**_BASE, "bg": 25, "seconds": 8, "steer": False, "gear": True, "coast": True, "bars": True, "speed": True},
+    "pedals": {**_BASE, "bg": 25, "seconds": 8, "steer": False, "wheel": True, "gear": True, "coast": True, "bars": True, "speed": True},
     "standings": {**_BASE, "bg": 25, "rows": 10, "view": "around", "name": "short",
                   "cols": ["pos", "number", "name", "car", "vs_me", "last", "best"],
                   "group": True, "classpos": True, "header": True, "others": 3, "carstyle": "both", "logomode": "color", "trendcolor": True, "trend_secs": 25},
