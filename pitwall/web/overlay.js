@@ -3,7 +3,7 @@
 // Os dados vêm de /api/overlay/data; as opções, de /api/settings (overlays.<nome>), relidas a cada 1,5 s.
 
 const NAME = (location.pathname.split("/").pop() || "map").replace(/[^a-z]/g, "");
-const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta", tyres: "Pneus" };
+const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta", tyres: "Pneus", corner: "Curva" };
 const PREVIEW = /[?&]preview/.test(location.search);       // dentro do palco da página Overlays: só mostra, com dados de exemplo
 const root = document.getElementById("root");
 root.dataset.title = TITLES[NAME] || NAME;
@@ -16,7 +16,8 @@ const FLAG_INFO = {
 const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
   seconds: 8, steer: false, wheel: true, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
-  temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true };
+  temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true,
+  mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true };
 
 let cfg = { ...DEFAULT_CFG };
 let edit = false;
@@ -193,12 +194,13 @@ function mapOverlay() {
     if (f.chequered) return "chequered";
     return null;
   }
-  function dotNumber(x, y, n, col) {
+  function dotNumber(x, y, n, col, sc = 1) {
     const t = String(n);
-    ctx.fillStyle = col; ctx.font = `800 ${t.length > 2 ? 8 : t.length > 1 ? 10 : 11}px Segoe UI`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(t, x, y + 0.5);
+    ctx.fillStyle = col; ctx.font = `800 ${(t.length > 2 ? 8 : t.length > 1 ? 10 : 11) * sc}px Segoe UI`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(t, x, y + 0.5 * sc);
     ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
   }
+  let theta = 0;                              // giro suavizado do mapa (modo "seguir e girar")
   function draw() {
     const dpr = (window.devicePixelRatio || 1) * clamp(cfg.scale, 40, 300) / 100;
     if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
@@ -218,12 +220,39 @@ function mapOverlay() {
     if (!src.length) { nt.textContent = live() ? "Aprendendo a pista… complete uma volta" : ""; bn.innerHTML = ""; return; }
     const tf = fit(src);
     const n = src.length, P = src.map(tf);
-    const lw = clamp(cfg.width, 3, 20);
-    // base escura (contraste sobre qualquer fundo)
+    const me = live() ? data.me : null;
+    const mySp = me ? me.spline : previewing ? (t / 14) % 1 : null;
+    const at = (sp) => P[Math.round((((sp % 1) + 1) % 1) * n) % n];
+    // modo: pista inteira, seguindo o carro (norte para cima) ou seguindo e girando (a frente sempre para cima)
+    const mode = cfg.mapmode === "follow" || cfg.mapmode === "follow_rot" ? cfg.mapmode : "full";
+    const Z = mode === "full" || mySp == null ? 1 : clamp(cfg.fzoom, 150, 900) / 100, sc = 1 / Z;
+    let rotA = 0;
+    ctx.save();
+    if (Z > 1) {
+      const mi = Math.round((((mySp % 1) + 1) % 1) * n) % n, [px, py] = P[mi];
+      const A = P[(mi + 5) % n], B = P[(mi - 5 + n) % n];
+      if (mode === "follow_rot") {
+        const target = -Math.atan2(A[0] - B[0], -(A[1] - B[1]));
+        let d = target - theta; d = Math.atan2(Math.sin(d), Math.cos(d));
+        theta += d * 0.18; rotA = theta;
+      }
+      ctx.translate(W / 2, mode === "follow_rot" ? H * 0.66 : H / 2);
+      ctx.rotate(rotA); ctx.scale(Z, Z); ctx.translate(-px, -py);
+    }
+    // textos e marcas que precisam ficar em pé mesmo com o mapa girando
+    const upright = (x, y, fn) => { ctx.save(); ctx.translate(x, y); ctx.rotate(-rotA); ctx.scale(sc, sc); fn(); ctx.restore(); };
+    const style = ["asphalt", "thin", "classic"].includes(cfg.mapstyle) ? cfg.mapstyle : "asphalt";
+    const lw = (style === "thin" ? 3.2 : clamp(cfg.width, 3, 20)) * sc;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const trace = (a, b) => { ctx.beginPath(); ctx.moveTo(P[a][0], P[a][1]); for (let i = a + 1; i <= b; i++) ctx.lineTo(P[i % n][0], P[i % n][1]); };
-    ctx.strokeStyle = "rgba(150,165,196,.9)"; ctx.lineWidth = lw + 7; trace(0, n); ctx.stroke();      // borda clara
-    ctx.strokeStyle = "rgba(10,15,24,.95)"; ctx.lineWidth = lw + 2; trace(0, n); ctx.stroke();          // asfalto
+    if (style === "asphalt") {
+      ctx.strokeStyle = "rgba(150,165,196,.9)"; ctx.lineWidth = lw + 7 * sc; trace(0, n); ctx.stroke();      // borda clara
+      ctx.strokeStyle = "rgba(10,15,24,.95)"; ctx.lineWidth = lw + 2 * sc; trace(0, n); ctx.stroke();        // asfalto
+    } else if (style === "classic") {
+      ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw + 5 * sc; trace(0, n); ctx.stroke();            // só uma base escura
+    } else {
+      ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = lw + 2.5 * sc; trace(0, n); ctx.stroke();         // fina: um fio de sombra
+    }
     // cor por setor (a bandeira pinta só o trecho onde ela está)
     const sec = (i) => (i / n < sectors[0] ? 0 : i / n < sectors[1] ? 1 : 2);
     let a = 0;
@@ -233,34 +262,39 @@ function mapOverlay() {
       const fl = sectorFlag(sec(a), flags);
       ctx.globalAlpha = fl === "yellow" || fl === "red" ? pulse : 1;
       if (fl) { ctx.strokeStyle = FLAG_INFO[fl][1]; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke(); }     // bandeira: pinta a pista toda
-      else { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = Math.max(1.5, lw * 0.14); ctx.setLineDash([6, 8]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
-      if (fl === "chequered") { ctx.strokeStyle = "#111"; ctx.setLineDash([8, 8]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
+      else if (style === "asphalt") { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = Math.max(1.5 * sc, lw * 0.14); ctx.setLineDash([6 * sc, 8 * sc]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
+      else { ctx.strokeStyle = style === "thin" ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.88)"; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke(); }
+      if (fl === "chequered") { ctx.strokeStyle = "#111"; ctx.setLineDash([8 * sc, 8 * sc]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.globalAlpha = 1;
       a = i;
     }
-    // linha de largada/chegada e divisas dos setores
-    const tick = (idx, col, len) => {
+    // linha de largada/chegada, divisas dos setores e pontos de frenagem
+    const tick = (idx, col, len, w = 3) => {
       const p = P[idx % n], q = P[(idx + 2) % n], r = P[(idx - 2 + n) % n];
       let dx = q[0] - r[0], dy = q[1] - r[1]; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-      ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath();
+      ctx.strokeStyle = col; ctx.lineWidth = w * sc; ctx.beginPath();
       ctx.moveTo(p[0] - dy * len, p[1] + dx * len); ctx.lineTo(p[0] + dy * len, p[1] - dx * len); ctx.stroke();
     };
-    tick(0, "#ffffff", lw * 0.9 + 3);
+    const half = (style === "thin" ? 5 : lw * 0.9 + 3 * sc);
+    tick(0, "#ffffff", half);
     if (cfg.sectors) { tick(Math.round(sectors[0] * n), "rgba(0,0,0,.75)", lw * 0.7); tick(Math.round(sectors[1] * n), "rgba(0,0,0,.75)", lw * 0.7); }
     // curvas: número (e nome) no mapa e a curva em que você está agora
     const cs = corners.length ? corners : previewing ? previewCorners : [];
-    const at = (sp) => P[Math.round((((sp % 1) + 1) % 1) * n) % n];
+    if (cfg.brakepts) {                      // ponto de frenagem do seu melhor tempo: marca vermelha atravessando a pista
+      for (const c of cs) if (c.brake != null) tick(Math.round(c.brake * n), "#ff4d5e", Math.max(lw * 0.75, 4 * sc), 2.6);
+    }
     if (cfg.corners && cs.length) {
       let cx = 0, cy = 0; for (const p of P) { cx += p[0]; cy += p[1]; } cx /= n; cy /= n;
-      ctx.font = "700 10px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const c of cs) {
         const [x, y] = at(c.apex);
         let dx = x - cx, dy = y - cy; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-        const lx = clamp(x + dx * (lw / 2 + 12), 10, W - 10), ly = clamp(y + dy * (lw / 2 + 12), 10, H - 10);
-        ctx.fillStyle = "rgba(8,10,14,.62)"; ctx.beginPath(); ctx.arc(lx, ly, 8.5, 0, 7); ctx.fill();
-        ctx.fillStyle = "#fff"; ctx.fillText(String(c.n), lx, ly + 0.5);
+        const off = lw / 2 + 12 * sc;
+        const lx = Z > 1 ? x + dx * off : clamp(x + dx * off, 10, W - 10), ly = Z > 1 ? y + dy * off : clamp(y + dy * off, 10, H - 10);
+        upright(lx, ly, () => {
+          ctx.fillStyle = "rgba(8,10,14,.62)"; ctx.beginPath(); ctx.arc(0, 0, 8.5, 0, 7); ctx.fill();
+          ctx.fillStyle = "#fff"; ctx.font = "700 10px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(c.n), 0, 0.5);
+        });
       }
-      ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
     }
     let nowTxt = "";
     if (cfg.corner_now && cs.length) {
@@ -273,24 +307,28 @@ function mapOverlay() {
     if (cn.dataset.h !== nowTxt) { cn.dataset.h = nowTxt; cn.innerHTML = nowTxt; cn.style.display = nowTxt ? "block" : "none"; }
     // carros
     let cars = live() ? data.cars || [] : previewing ? previewCars(t) : [];
-    const me = live() ? data.me : null;
+    const small = style === "thin";
     if (cfg.cars) {
       for (const c of cars) {
         if (me && c.id === me.id) continue;
         const [x, y] = at(c.spline), num = cfg.numbers && c.number != null;
-        ctx.fillStyle = c.pit ? "rgba(255,194,51,.95)" : "#7fb2ff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x, y, num ? 9.5 : 5.5, 0, 7); ctx.stroke(); ctx.fill();
-        if (num) dotNumber(x, y, c.number, "#0b0d10");
+        upright(x, y, () => {
+          ctx.fillStyle = c.pit ? "rgba(255,194,51,.95)" : "#7fb2ff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(0, 0, num ? (small ? 8 : 9.5) : (small ? 3.8 : 5.5), 0, 7); ctx.stroke(); ctx.fill();
+          if (num) dotNumber(0, 0, c.number, "#0b0d10", small ? 0.85 : 1);
+        });
       }
     }
-    const mySp = me ? me.spline : previewing ? (t / 14) % 1 : null;
     if (mySp != null) {
       const [x, y] = at(mySp);
-      ctx.fillStyle = "rgba(255,59,78,.35)"; ctx.beginPath(); ctx.arc(x, y, 13 + 2 * Math.sin(t * 5), 0, 7); ctx.fill();
-      const mine = cfg.numbers && me ? cars.find((c) => c.id === me.id) : null, big = mine && mine.number != null;
-      ctx.fillStyle = "#ff3b4e"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, big ? 11 : 7, 0, 7); ctx.stroke(); ctx.fill();
-      if (big) dotNumber(x, y, mine.number, "#fff");
+      upright(x, y, () => {
+        ctx.fillStyle = "rgba(255,59,78,.35)"; ctx.beginPath(); ctx.arc(0, 0, (small ? 9 : 13) + 2 * Math.sin(t * 5), 0, 7); ctx.fill();
+        const mine = cfg.numbers && me ? cars.find((c) => c.id === me.id) : null, big = mine && mine.number != null;
+        ctx.fillStyle = "#ff3b4e"; ctx.strokeStyle = "#fff"; ctx.lineWidth = small ? 2 : 3; ctx.beginPath(); ctx.arc(0, 0, big ? (small ? 9 : 11) : (small ? 4.5 : 7), 0, 7); ctx.stroke(); ctx.fill();
+        if (big) dotNumber(0, 0, mine.number, "#fff", small ? 0.85 : 1);
+      });
     }
+    ctx.restore();
     // faixa com o nome das bandeiras
     const act = [];
     if (flags) {
@@ -316,7 +354,7 @@ function mapOverlay() {
     }
     return out;
   }
-  const previewCorners = [0.04, 0.14, 0.27, 0.38, 0.5, 0.63, 0.75, 0.88].map((a, i) => ({ n: i + 1, apex: a, start: a - 0.06, end: a + 0.06, name: i === 1 ? "Eau Rouge" : "" }));
+  const previewCorners = [0.04, 0.14, 0.27, 0.38, 0.5, 0.63, 0.75, 0.88].map((a, i) => ({ n: i + 1, apex: a, brake: a - 0.03, start: a - 0.06, end: a + 0.06, name: i === 1 ? "Eau Rouge" : "" }));
   function previewCars(t) { return [0.1, 0.22, 0.4, 0.55, 0.7, 0.86].map((s, i) => ({ id: 100 + i, spline: (s + t / 40) % 1, number: 10 + i * 9, pit: false })); }
   loadMap();
   const loop = () => {
@@ -327,6 +365,78 @@ function mapOverlay() {
   };
   requestAnimationFrame(loop);
   return { onData() {}, onCfg() { bounds = null; } };
+}
+
+// ------------------------------------------------------------------ PRÓXIMA CURVA E PONTO DE FRENAGEM
+function cornerOverlay() {
+  root.innerHTML = `<div class="card cnr shadow">
+    <div class="cn-top"><div class="cn-arrow" id="ca"></div>
+      <div class="cn-info"><b id="cnum">—</b><small id="cname"></small><span class="cn-dir" id="cdir"></span></div>
+      <div class="cn-dist num" id="cd"></div></div>
+    <div class="cn-brk" id="cb"><div class="lab"><span id="cbl">PONTO DE FRENAGEM</span><b class="num" id="cbd"></b></div><div class="bar"><i id="cbi"></i><u id="cbm"></u></div></div>
+    <div class="cn-sub" id="cs"></div><div class="cn-next" id="cx"></div></div>`;
+  const $ = (s) => root.querySelector(s);
+  let plan = [], length = 0, planAt = 0, planTrack = null;
+  const ARROW = (dir) => `<svg viewBox="0 0 48 48" width="58" height="58" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" style="${dir === "L" ? "transform:scaleX(-1)" : ""}"><path d="M14 42V24a10 10 0 0 1 10-10h14"/><path d="M31 5l9 9-9 9"/></svg>`;
+  async function loadPlan() {
+    try {
+      const m = await getJSON("/api/overlay/map");
+      plan = (m.corners || []).filter((c) => c.dir); length = m.length || 0; planTrack = m.track; planAt = performance.now();
+    } catch (e) { /* ok */ }
+  }
+  const prevPlan = [{ n: 1, apex: 0.1, brake: 0.075, dir: "R", angle: 62, min_speed: 74, entry_speed: 205, name: "" },
+    { n: 2, apex: 0.3, brake: 0.27, dir: "L", angle: 28, min_speed: 128, entry_speed: 230, name: "Eau Rouge" },
+    { n: 3, apex: 0.5, brake: null, dir: "R", angle: 18, min_speed: 210, entry_speed: 215, name: "" },
+    { n: 4, apex: 0.78, brake: 0.745, dir: "L", angle: 80, min_speed: 62, entry_speed: 190, name: "" }];
+  const mod1 = (v) => ((v % 1) + 1) % 1;
+  function render() {
+    const usePlan = plan.length ? plan : previewing ? prevPlan : [];
+    const L = length || (previewing ? 5200 : 0);
+    const sp = live() && data.me ? data.me.spline : previewing ? (performance.now() / 1000 / 40) % 1 : null;
+    if (!usePlan.length || sp == null || !L) {
+      $("#ca").innerHTML = ""; $("#cnum").textContent = live() ? "Sem curvas ainda" : "Aguardando…"; $("#cname").textContent = live() ? "grave uma volta nesta pista" : "";
+      $("#cd").textContent = ""; $("#cb").style.display = "none"; $("#cs").textContent = ""; $("#cx").textContent = ""; $("#cdir").textContent = ""; return;
+    }
+    // próxima curva: a primeira com ápice à frente (dando a volta na pista)
+    const ahead = usePlan.map((c) => ({ c, d: mod1(c.apex - sp) })).sort((x, y) => x.d - y.d);
+    const cur = ahead[0], nxt = ahead[1];
+    const c = cur.c, dApex = cur.d * L;
+    const zone = c.brake != null && mod1(sp - c.brake) < mod1(c.apex - c.brake) && mod1(sp - c.brake) > 0 && mod1(c.apex - c.brake) < 0.2;   // já dentro da zona de frenagem
+    const dBrake = c.brake != null ? mod1(c.brake - sp) * L : null;
+    const live2 = live() ? data.live : previewing ? { brake: zone ? 0.7 : 0, speed: 150 } : null;
+    $("#ca").innerHTML = ARROW(c.dir);
+    $("#ca").className = "cn-arrow " + (c.angle > 55 ? "hard" : c.angle > 28 ? "mid" : "easy") + (zone ? " go" : "");
+    $("#cnum").textContent = `Curva ${c.n}`;
+    $("#cname").textContent = cfg.name ? c.name || "" : "";
+    $("#cdir").textContent = (c.dir === "L" ? "ESQUERDA" : "DIREITA") + (c.angle > 60 ? " · GRAMPO" : c.angle > 40 ? " · FECHADA" : c.angle < 20 ? " · ABERTA" : "");
+    $("#cd").style.display = cfg.dist ? "" : "none";
+    $("#cd").innerHTML = dApex >= 1000 ? `${(dApex / 1000).toFixed(1).replace(".", ",")}<small>km</small>` : `${Math.round(dApex / 5) * 5}<small>m</small>`;
+    const cb = $("#cb");
+    cb.style.display = cfg.brakepoint ? "" : "none";
+    const lead = clamp(cfg.lead, 100, 500);
+    if (c.brake == null) {
+      cb.className = "cn-brk flat"; $("#cbl").textContent = "SEM FREIO NESTA CURVA"; $("#cbd").textContent = "ACELERADOR"; $("#cbi").style.width = "100%"; $("#cbm").style.left = "100%";
+    } else if (zone) {
+      cb.className = "cn-brk zone"; $("#cbl").textContent = "ZONA DE FRENAGEM"; $("#cbd").textContent = live2 && live2.brake > 0.05 ? `freio ${Math.round(live2.brake * 100)}%` : "sem freio!";
+      $("#cbi").style.width = "100%"; $("#cbm").style.left = "100%";
+    } else {
+      const near = dBrake < 60;
+      cb.className = "cn-brk " + (near ? "near" : "");
+      $("#cbl").textContent = near ? "PREPARE-SE · FREIO EM" : "FREIO EM";
+      $("#cbd").textContent = dBrake >= 1000 ? `${(dBrake / 1000).toFixed(1).replace(".", ",")} km` : `${Math.round(dBrake / 5) * 5} m`;
+      $("#cbi").style.width = clamp(1 - dBrake / lead, 0, 1) * 100 + "%"; $("#cbm").style.left = "100%";
+    }
+    $("#cs").innerHTML = cfg.speed ? `vel. mínima <b>${c.min_speed} km/h</b>${c.entry_speed ? ` · entrada <b>${c.entry_speed} km/h</b>` : ""}${c.brake != null && cur.c.brake_m ? ` · frenagem <b>${c.brake_m || Math.round(mod1(c.apex - c.brake) * L)} m</b>` : ""}` : "";
+    const nx = nxt && nxt.c !== c ? nxt : null;
+    $("#cx").innerHTML = cfg.next && nx ? `Depois: <b>Curva ${nx.c.n} ${nx.c.dir === "L" ? "←" : "→"}</b> em ${Math.round(nx.d * L / 10) * 10} m` : "";
+  }
+  const loop = () => {
+    if (!plan.length && performance.now() - planAt > 4000) loadPlan();
+    else if (data && data.track && planTrack !== data.track && performance.now() - planAt > 1500) loadPlan();
+    render(); requestAnimationFrame(loop);
+  };
+  loadPlan(); requestAnimationFrame(loop);
+  return { onData() {}, onCfg() {} };
 }
 
 // ------------------------------------------------------------------ PEDAIS
@@ -727,12 +837,12 @@ function tyresCards() {
 
 // ------------------------------------------------------------------ início
 let current = null;
-const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay };
+const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay, corner: cornerOverlay };
 (async function init() {
   try { applyCfg((await getJSON("/api/settings")).settings || {}); } catch (e) { /* ok */ }
   current = (KIND[NAME] || mapOverlay)();
-  const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres" }[NAME] || "all";
-  const every = { map: 100, pedals: 50, standings: 250, delta: 100, tyres: 200 }[NAME] || 200;
+  const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres", corner: "pos" }[NAME] || "all";
+  const every = { map: 100, pedals: 50, standings: 250, delta: 100, tyres: 200, corner: 100 }[NAME] || 200;
   dataLoop(parts, every);
   settingsLoop();
   new ResizeObserver(reportSize).observe(root);

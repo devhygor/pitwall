@@ -3067,14 +3067,15 @@ async function openOverlay() {
 }
 
 // ---------------------------------------------------------------- Overlays (ferramenta completa: palco + um overlay por vez)
-const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["tyres", "Pneus"], ["delta", "Delta"]];
-const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", tyres: "Pneus", delta: "Delta da volta" };
+const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["tyres", "Pneus"], ["corner", "Curva"], ["delta", "Delta"]];
+const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", tyres: "Pneus", corner: "Próxima curva", delta: "Delta da volta" };
 const OV_ICON = {
   map: '<path d="M4 15c3-9 6 3 9-5s5 2 7-2"/><circle cx="19" cy="6" r="1.6"/>',
   pedals: '<path d="M3 20V9M9 20V5M15 20v-8M21 20V8"/>',
   standings: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="7" cy="6" r=".6"/>',
   delta: '<path d="M12 4l8 15H4z"/>',
   tyres: '<rect x="7" y="3" width="10" height="18" rx="4"/><path d="M7 9h10M7 15h10"/>',
+  corner: '<path d="M7 20V11a5 5 0 0 1 5-5h6"/><path d="M15 2l4 4-4 4"/>',
 };
 const OV_MODE_TXT = { off: "Desligado", game: "Só na pista", always: "Sempre aberto" };
 const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
@@ -3096,17 +3097,30 @@ function ovPanel(n, S) {
     c.mode === "game" ? "abre ao entrar numa sessão e fecha ao sair" : "");
   g += ovGroup("Tamanho e fundo", ovSlider(n, "scale", "Tamanho", c.scale, 50, 250, 5, "%") + ovSlider(n, "bg", "Fundo", c.bg, 0, 90, 5, "%"), "fundo 0% = transparente");
   if (n === "map") {
+    g += ovGroup("Estilo da pista", ovSeg(n, "mapstyle", [["asphalt", "Asfalto"], ["thin", "Fino"], ["classic", "Clássico"]], c.mapstyle || "asphalt"),
+      "o Fino é uma linha só, discreta");
+    g += ovGroup("Modo do mapa", ovSeg(n, "mapmode", [["full", "Pista inteira"], ["follow", "Seguir o carro"], ["follow_rot", "Seguir e girar"]], c.mapmode || "full") +
+      ovSlider(n, "fzoom", "Aproximação (seguindo)", c.fzoom || 350, 150, 900, 10, "%"),
+      "“Seguir e girar” mantém a frente do carro sempre para cima");
     g += ovGroup("Mostrar no mapa", `<div class="ovchips">${ovChip(n, "banner", "Nome da bandeira", c.banner, "Etiqueta com a bandeira em vigor")}
       ${ovChip(n, "cars", "Outros carros", c.cars, "No ACC precisa do broadcasting ligado (padrão do jogo)")}
       ${ovChip(n, "numbers", "Nº dentro das bolinhas", c.numbers)}${ovChip(n, "sectors", "Setores", c.sectors)}
       ${ovChip(n, "corners", "Nº das curvas", c.corners, "Numeradas como na Análise; precisa de ao menos uma volta gravada na pista")}
-      ${ovChip(n, "corner_now", "Curva atual", c.corner_now, "Etiqueta com o número e o nome da curva em que você está")}</div>`,
+      ${ovChip(n, "corner_now", "Curva atual", c.corner_now, "Etiqueta com o número e o nome da curva em que você está")}
+      ${ovChip(n, "brakepts", "Pontos de frenagem", c.brakepts, "Marca vermelha na pista onde você começa a frear no seu melhor tempo")}</div>`,
       "a pista muda de cor com as bandeiras");
     g += ovGroup("Ajustes", ovSlider(n, "width", "Espessura da pista", c.width, 4, 16, 1, " px") +
       `<div class="ovslide"><span>Girar o mapa</span>${ovSeg(n, "rotate", [[0, "0°"], [90, "90°"], [180, "180°"], [270, "270°"]], c.rotate, true)}</div>`);
     g += `<details class="ovg cnames" id="cnBox"><summary>Dar nome às curvas</summary>
         <div class="sub" style="margin:6px 0">O jogo não informa os nomes das curvas: escreva o que quiser (ex.: “Eau Rouge”). A numeração é a da Análise e pode diferir da oficial.</div>
         <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>`;
+  } else if (n === "corner") {
+    g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "dist", "Distância até a curva", c.dist)}
+      ${ovChip(n, "brakepoint", "Ponto de frenagem", c.brakepoint, "Contagem regressiva até o ponto onde você começa a frear no seu melhor tempo desta pista")}
+      ${ovChip(n, "speed", "Velocidades (mínima e entrada)", c.speed)}${ovChip(n, "next", "Curva seguinte", c.next)}${ovChip(n, "name", "Nome da curva", c.name, "Os nomes são os que você escreveu no mapa")}</div>`);
+    g += ovGroup("Aviso de frenagem", ovSlider(n, "lead", "Começar a contar a", c.lead, 100, 500, 10, " m"),
+      "a barra enche conforme você chega ao ponto de frenagem");
+    g += `<p class="sub" style="margin:8px 0 0">As curvas, o lado delas e o ponto de frenagem vêm do seu melhor tempo no carro e na pista (o ACC e o iRacing não informam isso). Grave uma volta limpa na pista para o overlay aprender. O ponto é onde você começou a frear nessa volta: não é um cálculo de frenagem ideal.</p>`;
   } else if (n === "pedals") {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "coast", "Sem pedal", c.coast, "Faixa âmbar quando você não pisa em nenhum dos dois, e a porcentagem do tempo")}
       ${ovChip(n, "bars", "Barras", c.bars)}${ovChip(n, "wheel", "Roda do volante", c.wheel, "Desenho do volante que gira junto com o seu")}${ovChip(n, "steer", "Volante no gráfico", c.steer)}${ovChip(n, "gear", "Marcha", c.gear)}${ovChip(n, "speed", "Velocidade", c.speed)}</div>`);
@@ -3161,7 +3175,7 @@ async function renderOverlays() {
   if (current.name !== "overlays") return;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const sw = screen.width || 1920, sh = screen.height || 1080;
-  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36], tyres: [24, sh - 330] };
+  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36], tyres: [24, sh - 330], corner: [Math.round(sw / 2 - 165), 120] };
   let sel = localStorage.getItem("pitwall.ovSel");
   if (!OV_NAMES.some((x) => x[0] === sel)) sel = "map";
   view.innerHTML = `<div class="ovpage">

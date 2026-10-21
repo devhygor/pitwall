@@ -25,6 +25,7 @@ class OverlayHub:
         self.recorder = recorder
         self.settings = settings
         self._corners: list = []
+        self._length = 0
         self._corners_try = 0.0
         self._lock = threading.Lock()
         self._seq = 0
@@ -104,29 +105,30 @@ class OverlayHub:
         except Exception:  # noqa: BLE001
             pass
 
+    def plan_for(self, track: str, car: str | None = None) -> dict | None:
+        """Plano de curvas (ápice, lado, ponto de frenagem) a partir do seu melhor tempo na pista (do mesmo carro, se houver)."""
+        from . import corners as corner_plan
+        pbs = [(k, v) for k, v in self.db.personal_bests().items() if k[1] == track]
+        if not pbs:
+            return None
+        pbs.sort(key=lambda kv: kv[0][0] != car)                 # o do carro atual primeiro
+        lap = self.db.lap(pbs[0][1]["lap_id"])
+        return corner_plan.plan(lap) if lap else None
+
     def corners_for(self, track: str) -> list[dict]:
         """Curvas da pista, numeradas como na Análise (mínimos de velocidade do melhor tempo)."""
-        from .analysis import detect_segments, resample_lap
-        pbs = [v for k, v in self.db.personal_bests().items() if k[1] == track]
-        if not pbs:
-            return []
-        lap = self.db.lap(pbs[0]["lap_id"])
-        grid = np.linspace(0, 1, 2000)
-        R = resample_lap(lap, grid) if lap else None
-        if R is None or not R["length"]:
-            return []
-        segs = detect_segments(grid * R["length"], R["speed"])
-        return [{"n": s["n"], "apex": round(float(grid[s["apex"]]), 4), "start": round(float(grid[s["start"]]), 4),
-                 "end": round(float(grid[s["end"]]), 4)} for s in segs]
+        pl = self.plan_for(track, getattr(self.frame, "car", None))
+        return pl["corners"] if pl else []
 
     def _load_corners(self, track: str):
         try:
-            cs = self.corners_for(track)
+            pl = self.plan_for(track, getattr(self.frame, "car", None))
         except Exception:  # noqa: BLE001
-            cs = []
+            pl = None
         with self._lock:
             if self.track == track:
-                self._corners = cs
+                self._corners = pl["corners"] if pl else []
+                self._length = pl["length"] if pl else 0
 
     def _learn_sectors(self, f):
         """Descobre onde terminam o setor 1 e o setor 2 (pela virada do índice de setor)."""
@@ -156,7 +158,7 @@ class OverlayHub:
         if retry:                    # ainda sem curvas (pista nova): tenta de novo depois que uma volta for gravada
             threading.Thread(target=self._load_corners, args=(track,), daemon=True).start()
         names = ((self.settings.get("corner_names") or {}).get(track or "") or {}) if self.settings else {}
-        return {"track": track, "pts": pts, "filled": round(filled, 3), "sectors": [sec[0] or 1 / 3, sec[1] or 2 / 3],
+        return {"track": track, "length": self._length, "pts": pts, "filled": round(filled, 3), "sectors": [sec[0] or 1 / 3, sec[1] or 2 / 3],
                 "corners": [{**c, "name": names.get(str(c["n"]), "")} for c in corners]}
 
     def snapshot(self, since: int = 0, parts: str = "all") -> dict:
@@ -183,6 +185,10 @@ class OverlayHub:
                                     "pad": [round(v, 1) for v in f.pad_life] or None, "compound": f.tyre_compound, "game": f.game,
                                     "rain": list(f.rain), "grip": f.grip,
                                     "zones": [[round(v, 1) for v in z] for z in f.tyre_zones] or None}
+                if "pos" in want and "cars" not in want:
+                    last = self._samples[-1] if self._samples else None
+                    out["me"] = {"spline": f.norm_pos, "id": f.player_id}
+                    out["live"] = {"speed": round(f.speed), "brake": round(last[3], 3) if last else 0, "gas": round(last[2], 3) if last else 0}
                 if "cars" in want:
                     out["standings"] = self._standings(f)
                     out["me"] = {"spline": f.norm_pos, "x": f.x, "z": f.z, "id": f.player_id}
