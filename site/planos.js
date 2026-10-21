@@ -178,14 +178,33 @@ async function renderAccount() {
 }
 
 // ---------------------------------------------------------------- painel do administrador
-const ADM_TABS = [["geral", "Visão geral"], ["assinaturas", "Assinaturas"], ["pagamentos", "Pagamentos"], ["cortesias", "Cortesias"],
+const ADM_TABS = [["geral", "Visão geral"], ["usuarios", "Usuários e versões"], ["assinaturas", "Assinaturas"], ["pagamentos", "Pagamentos"], ["cortesias", "Cortesias"],
   ["testes", "Testes"], ["licencas", "Licenças e computadores"], ["precos", "Preços"], ["log", "Histórico"]];
+
+// última versão publicada do app (para marcar quem está desatualizado)
+let _latest = null;
+async function latestVersion() {
+  if (_latest) return _latest;
+  for (const repo of ["devhygor/pitwall-releases", "devhygor/pitwall"]) {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`);
+      if (r.ok) { const j = await r.json(); _latest = String(j.tag_name || "").replace(/^v/, ""); if (_latest) return _latest; }
+    } catch (e) { /* tenta o próximo */ }
+  }
+  return null;
+}
+const verParts = (v) => String(v || "").replace(/^v/, "").split(".").map((x) => parseInt(x, 10) || 0);
+function verOlder(a, b) {
+  const x = verParts(a), y = verParts(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); }
+  return false;
+}
 
 async function renderAdmin() {
   if (!isAdmin) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">Área restrita.</div></div></section>`; return; }
   view.innerHTML = `<div class="loading">Carregando…</div>`;
-  let D;
-  try { D = await rpc("admin_overview"); } catch (e) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">${esc(e.message)}</div></div></section>`; return; }
+  let D, U = [], LATEST = null;
+  try { D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; LATEST = await latestVersion(); } catch (e) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">${esc(e.message)}</div></div></section>`; return; }
   let tab = store.get("pw.admTab") || "geral", q = "";
   const match = (o) => !q || JSON.stringify(o).toLowerCase().includes(q);
   const badge = (s) => `<span class="st st-${s}">${esc(STATUS_NAME[s] || s)}</span>`;
@@ -202,6 +221,12 @@ async function renderAdmin() {
            ...D.trials.map((t) => [t.email, "Teste", "Pro", t.ends_at])]
             .filter((r) => { const d = days(r[3]); return d != null && d >= 0 && d <= 10; }).sort((a, b) => new Date(a[3]) - new Date(b[3]))
             .map((r) => [esc(r[0]), r[1], r[2], `${dt(r[3])} <span class="sub">(${days(r[3])} d)</span>`]), true)}</div>`,
+      usuarios: () => `<div class="panel"><h2>Quem usa o Pitwall</h2>
+        <p class="sub">A versão aparece depois que a pessoa abre o app novo (0.1.45 ou mais recente) com o login do Google.${LATEST ? ` Última versão publicada: <b>${esc(LATEST)}</b>.` : ""}</p>
+        ${table(["E-mail", "Plano", "Versão do app", "Último acesso do app", "Computadores", "Cadastro", "Último login"],
+          U.filter(match).map((u) => [esc(u.email), `${PLAN_NAME[u.plan] || "Grátis"}${SRC_NAME[u.source] ? ` <small class="sub">(${SRC_NAME[u.source]})</small>` : ""}`,
+            u.app_version ? `<b>${esc(u.app_version)}</b>${LATEST && verOlder(u.app_version, LATEST) ? ` <span class="st st-past_due">desatualizado</span>` : ` <span class="st st-active">em dia</span>`}` : `<span class="sub">ainda não apareceu</span>`,
+            u.last_seen ? `${dtt(u.last_seen)}<br><small class="sub">${esc(u.device_label || "")}</small>` : "—", u.devices || 0, dt(u.created_at), dtt(u.last_sign_in_at)]), true)}</div>`,
       assinaturas: () => `<div class="panel">${table(["E-mail", "Nome / CPF-CNPJ", "Plano", "Status", "Vence", "Chave", ""],
         D.subscriptions.filter(match).map((s) => [esc(s.email), `${esc(s.name || "")}<br><small class="sub">${esc(s.doc || "")}</small>`,
           `${PLAN_NAME[s.plan_code]} ${s.period === "year" ? "anual" : "mensal"}`, badge(s.status) + (s.cancel_at_period_end ? ` <small class="sub">cancela no fim</small>` : ""),
@@ -241,7 +266,7 @@ async function renderAdmin() {
   };
   const table = (head, rows, raw) => rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
       <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<p class="sub">Nada por aqui.</p>`;
-  const reload = async () => { D = await rpc("admin_overview"); draw(); };
+  const reload = async () => { D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; draw(); };
   const act = async (fn) => { try { await fn(); await reload(); } catch (e) { alert(e.message); } };
   function bind() {
     view.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { tab = b.dataset.tab; draw(); });

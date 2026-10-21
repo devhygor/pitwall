@@ -91,25 +91,23 @@ Deno.serve(async (req) => {
   if (entErr || !ent?.length) return json({ ok: false, error: "entitlement" }, 500);
   const e = ent[0];
 
-  // --- dispositivos (só conta para quem tem plano pago)
-  let devices: unknown[] = [];
-  if (e.plan_code !== "free") {
-    const since = new Date(Date.now() - 90 * 86400_000).toISOString();
-    const { data: list } = await admin.from("devices").select("id, device_hash, label, last_seen")
-      .eq("email", email).is("revoked_at", null).gte("last_seen", since);
-    const known = (list || []).find((d: any) => d.device_hash === hash);
-    if (!known && (list || []).length >= e.max_devices) {
-      return json({
-        ok: false, error: "device_limit", max_devices: e.max_devices,
-        devices: (list || []).map((d: any) => ({ label: d.label, last_seen: d.last_seen })),
-      }, 403);
-    }
-    await admin.from("devices").upsert({
-      email, device_hash: hash, label: String(device.label || "").slice(0, 80), app_version: String(body.app_version || "").slice(0, 20),
-      last_seen: new Date().toISOString(), revoked_at: null,
-    }, { onConflict: "email,device_hash" });
-    devices = list || [];
+  // --- dispositivos: todo mundo é registrado (versão do app e último acesso aparecem no painel do admin),
+  // mas o LIMITE de computadores só vale para quem tem plano pago.
+  const since = new Date(Date.now() - 90 * 86400_000).toISOString();
+  const { data: list } = await admin.from("devices").select("id, device_hash, label, last_seen")
+    .eq("email", email).is("revoked_at", null).gte("last_seen", since);
+  const known = (list || []).find((d: any) => d.device_hash === hash);
+  if (e.plan_code !== "free" && !known && (list || []).length >= e.max_devices) {
+    return json({
+      ok: false, error: "device_limit", max_devices: e.max_devices,
+      devices: (list || []).map((d: any) => ({ label: d.label, last_seen: d.last_seen })),
+    }, 403);
   }
+  await admin.from("devices").upsert({
+    email, device_hash: hash, label: String(device.label || "").slice(0, 80), app_version: String(body.app_version || "").slice(0, 20),
+    last_seen: new Date().toISOString(), revoked_at: null,
+  }, { onConflict: "email,device_hash" });
+  const devices: unknown[] = list || [];
 
   const now = Math.floor(Date.now() / 1000);
   const endsAt = new Date(e.ends_at).getTime() / 1000;
