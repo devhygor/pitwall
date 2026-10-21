@@ -58,8 +58,9 @@ async function renderPlans() {
       team: ["Tudo do plano Pro, e mais:", "Até 10 pilotos na equipe", "Painel do dono para gerenciar os pilotos", "Até 3 computadores por licença"],
     };
     const feats = (LISTS[pl.code] || (pl.features || []).map((f) => FEATURE_NAME[f] || f)).map((t, i) => `<li${i === 0 && /^Tudo do/.test(t) ? ' class="all"' : ""}>${esc(t)}</li>`).join("");
-    let amount = pl.code === "free" ? "R$ 0" : std ? brl(period === "year" ? std.amount_cents / 12 : std.amount_cents) : "—";
-    let sub = pl.code === "free" ? "para sempre" : period === "year" && std ? `${brl(std.amount_cents)} por ano` : "por mês";
+    // com preço Fundador ativo, é ele que o botão cobra: mostramos esse valor e o normal ao lado
+    let amount = pl.code === "free" ? "R$ 0" : fund ? brl(fund.amount_cents) : std ? brl(period === "year" ? std.amount_cents / 12 : std.amount_cents) : "—";
+    let sub = pl.code === "free" ? "para sempre" : fund ? `por mês${std ? ` · depois ${brl(std.amount_cents)}` : ""}` : period === "year" && std ? `${brl(std.amount_cents)} por ano` : "por mês";
     let btn;
     if (pl.code === "free") btn = `<a class="btn quiet" href="${esc(PITWALL.download)}">Baixar grátis</a>`;
     else if (cur) btn = `<span class="btn quiet" aria-disabled="true">Seu plano atual</span>`;
@@ -69,7 +70,7 @@ async function renderPlans() {
       ${pl.code === "pro" ? `<span class="plan-badge">Mais escolhido</span>` : ""}
       <h2>${esc(pl.name)}</h2><p class="plan-desc">${esc(pl.description)}</p>
       <div class="plan-price"><b>${amount}</b><span>${sub}</span></div>
-      ${fund ? `<div class="fundador">Preço Fundador: <b>${brl(fund.amount_cents)}</b>/mês, e o valor não sobe para quem assinar agora.</div>` : ""}
+      ${fund ? `<div class="fundador"><b>Preço Fundador</b>: o valor de hoje não sobe para quem assinar agora.</div>` : ""}
       <ul>${feats}</ul>
       ${btn}
       ${pl.code === "pro" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial>Testar 10 dias grátis</button>` : ""}
