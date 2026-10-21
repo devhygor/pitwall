@@ -3080,7 +3080,7 @@ const OV_MODE_TXT = { off: "Desligado", game: "Só na pista", always: "Sempre ab
 const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
   ["interval", "Intervalo p/ o da frente"], ["gap_leader", "Dif. p/ o líder"], ["last", "Última volta"], ["best", "Melhor volta"],
   ["laps", "Voltas"], ["pit", "Box"]];
-OV_COLS.splice(3, 0, ["car", "Carro (abreviado)"]);
+OV_COLS.splice(3, 0, ["car", "Carro (símbolo / abreviação)"]);
 
 // peças da tela de opções
 const ovChip = (n, k, label, v, tip) => `<button type="button" class="ovchip ${v ? "on" : ""}" data-ov="${n}" data-k="${k}" data-chip="1" title="${esc(tip || "")}"><i></i>${label}</button>`;
@@ -3117,7 +3117,7 @@ function ovPanel(n, S) {
       ${ovChip(n, "classpos", "Posição na classe", c.classpos, "Com as classes separadas, mostra a posição dentro da classe")}</div>` +
       ovSlider(n, "others", "Linhas das outras classes", c.others, 1, 10, 1, ""));
     g += ovGroup("Carro (coluna Carro)", ovSeg(n, "carstyle", [["both", "Símbolo e texto"], ["logo", "Só o símbolo"], ["text", "Só o texto"]], c.carstyle),
-      "marcas sem símbolo (Lexus, Alpine, Ginetta) aparecem em texto");
+      "escolher um estilo liga a coluna Carro; marcas sem símbolo (Lexus, Alpine, Ginetta) aparecem em texto");
     g += ovGroup("Nome do piloto", ovSeg(n, "name", [["short", "Sigla"], ["last", "Sobrenome"], ["full", "Nome completo"]], c.name));
     g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => `<button type="button" class="ovchip ${c.cols.includes(k) ? "on" : ""}" data-col="${k}"><i></i>${t}</button>`).join("")}</div>
       <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um.</p>`);
@@ -3282,7 +3282,16 @@ function bindOverlayPanel(box, n, put, putModes) {
     } else if (el.dataset.val !== undefined) {
       el.onclick = async () => {
         const v = el.dataset.num ? +el.dataset.val : el.dataset.val;
-        if (key === "ref") { await put({ overlay_reference: v }); }
+        if (key === "carstyle") {                      // escolher o estilo do carro liga a coluna Carro, se estiver desligada
+          const chip = box.querySelector('[data-col="car"]');
+          const patch = { carstyle: v };
+          if (chip && !chip.classList.contains("on")) {
+            chip.classList.add("on");
+            patch.cols = OV_COLS.map(([k2]) => k2).filter((k2) => box.querySelector(`[data-col="${k2}"]`).classList.contains("on"));
+          }
+          await put({ overlays: { [name]: patch } });
+        }
+        else if (key === "ref") { await put({ overlay_reference: v }); }
         else await send(name, key, v);
         if (key === "mode") { const sub = box.querySelector(".ovp-head .sub"); if (sub) sub.textContent = OV_MODE_TXT[v]; }
         el.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
