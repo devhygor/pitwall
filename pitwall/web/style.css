@@ -965,3 +965,5 @@ label.stack { display: grid; gap: 6px; color: var(--muted); font-size: 13px; mar
 .tlev.ev-invalid { color: #ffd23f; border-color: rgba(255, 210, 63, .4); }
 .tlev.ev-best { color: #d79bff; border-color: rgba(215, 155, 255, .45); }
 .tlev.ev-pit_in, .tlev.ev-pit_out { color: #7fb2ff; border-color: rgba(127, 178, 255, .4); }
+.ovreset { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; flex-wrap: wrap; }
+.ovreset .sub { flex: 1; min-width: 220px; }

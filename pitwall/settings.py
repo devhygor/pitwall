@@ -19,7 +19,7 @@ OVERLAY_DEFAULTS = {
                   "group": True, "classpos": True, "header": True, "others": 3, "carstyle": "both"},
     "delta": {**_BASE, "bg": 35, "fuel": True, "predicted": True},
     "tyres": {**_BASE, "bg": 25, "temp": True, "press": True, "brake": True, "wear": True, "compound": True, "punit": "psi",
-              "tmin": 80, "tmax": 100, "pmin": 26.5, "pmax": 28.0},
+              "tmin": 70, "tmax": 100, "pmin": 26.0, "pmax": 27.0},   # faixas do ACC 1.9+ (todas as classes)
 }
 
 

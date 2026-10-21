@@ -3130,7 +3130,8 @@ function ovPanel(n, S) {
     g += ovGroup("Unidade da pressão", ovSeg(n, "punit", [["psi", "psi"], ["bar", "bar"]], c.punit));
     g += ovGroup("Faixa ideal", ovSlider(n, "tmin", "Temp. mínima", c.tmin, 40, 120, 1, " °C") + ovSlider(n, "tmax", "Temp. máxima", c.tmax, 50, 140, 1, " °C") +
       ovSlider(n, "pmin", "Pressão mínima", c.pmin, 20, 35, 0.1, " psi") + ovSlider(n, "pmax", "Pressão máxima", c.pmax, 20, 35, 0.1, " psi"),
-      "abaixo = azul, dentro = verde, acima = vermelho");
+      "abaixo = azul, dentro = verde, acima = vermelho") .replace("</section>", `<div class="ovreset"><button type="button" class="btn sm" id="tyReset">Restaurar padrão</button>
+        <span class="sub">Padrão do ACC (1.9 em diante, todas as classes): 70–100 °C e 26,0–27,0 psi com o pneu quente. No iRacing a faixa muda de carro para carro: ajuste à mão.</span></div></section>`);
   } else if (n === "delta") {
     g += ovGroup("Comparar contra", ovSeg("", "ref", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], S.overlay_reference));
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "predicted", "Tempo previsto", c.predicted)}${ovChip(n, "fuel", "Combustível", c.fuel, "Voltas restantes e quanto falta/sobra até o fim")}</div>`);
@@ -3293,6 +3294,16 @@ function bindOverlayPanel(box, n, put, putModes) {
     const cols = OV_COLS.map(([k2]) => k2).filter((k2) => box.querySelector(`[data-col="${k2}"]`).classList.contains("on"));
     put({ overlays: { standings: { cols } } });
   });
+  const rs = box.querySelector("#tyReset");
+  if (rs) rs.onclick = async () => {
+    const def = { tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
+    await put({ overlays: { tyres: def } });
+    for (const [k2, v] of Object.entries(def)) {
+      const el = box.querySelector(`[data-ov="tyres"][data-k="${k2}"]`);
+      if (el) { el.value = v; el.nextElementSibling.textContent = v + el.nextElementSibling.dataset.unit; }
+    }
+    rs.textContent = "Restaurado ✓"; setTimeout(() => { rs.textContent = "Restaurar padrão"; }, 1500);
+  };
   const cb = box.querySelector("#cnBox");
   if (cb) {
     let loaded = false;

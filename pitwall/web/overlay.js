@@ -16,7 +16,7 @@ const FLAG_INFO = {
 const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
   seconds: 8, steer: false, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", fuel: true, predicted: true,
-  temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 80, tmax: 100, pmin: 26.5, pmax: 28 };
+  temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
 
 let cfg = { ...DEFAULT_CFG };
 let edit = false;
