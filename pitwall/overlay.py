@@ -43,6 +43,7 @@ class OverlayHub:
             pass
         self._prev_sector = None
         self._prev_pos = 0.0
+        self._gh: dict = {}          # histórico da distância até cada carro (tendência: aproximando/afastando)
 
     # ---- entrada -----------------------------------------------------------------
     def feed(self, f):
@@ -73,6 +74,7 @@ class OverlayHub:
         self._corners = []
         self._corners_try = 0.0
         self._prev_sector = None
+        self._gh = {}
         if track and self.db is not None:
             threading.Thread(target=self._prefill, args=(track,), daemon=True).start()
             threading.Thread(target=self._load_corners, args=(track,), daemon=True).start()
@@ -188,8 +190,32 @@ class OverlayHub:
         return out
 
     # ---- participantes -----------------------------------------------------------
-    @staticmethod
-    def _standings(f) -> dict:
+    def _trend(self, c, me, ref_ms: float, now: float):
+        """Estou me aproximando ou me afastando deste carro? (ms/s, positivo = bom para mim)
+
+        Guarda a distância (em tempo) entre mim e o carro nos últimos segundos e vê se ela cresce ou encolhe:
+        - carro à frente: encolher é bom (estou chegando); crescer é ruim (ele está abrindo);
+        - carro atrás: crescer é bom (estou abrindo); encolher é ruim (ele está chegando).
+        """
+        diff = me["_dist"] - c["_dist"]                         # > 0: o carro está atrás de mim
+        if c.get("pit") or abs(diff) >= 1.0:
+            self._gh.pop(c.get("id"), None)
+            return None
+        gap = diff * ref_ms
+        h = self._gh.setdefault(c.get("id"), deque(maxlen=120))
+        if h and abs(gap - h[-1][1]) > 0.4 * ref_ms:             # pulo (volta, box, teleporte): recomeça
+            h.clear()
+        if not h or now - h[-1][0] >= 0.4:
+            h.append((now, gap))
+        while h and now - h[0][0] > 25:
+            h.popleft()
+        if len(h) < 4 or h[-1][0] - h[0][0] < 5:
+            return None
+        rate = (abs(h[-1][1]) - abs(h[0][1])) / (h[-1][0] - h[0][0])      # ms por segundo; < 0: a distância encolhe
+        good = -rate if gap < 0 else rate
+        return {"good": round(good, 2), "per_lap": round(good * ref_ms / 1e6, 3)}
+
+    def _standings(self, f) -> dict:
         from .carinfo import acc_car
         cars = f.cars
         if not cars:
@@ -209,13 +235,15 @@ class OverlayHub:
         ref_ms = next((v for v in ((me or {}).get("best_ms"), (me or {}).get("last_ms"), order[0].get("best_ms")) if v), 100000)
         lead = order[0]
         rows = []
+        now = time.monotonic()
         for i, c in enumerate(order):
             ahead = order[i - 1] if i else None
             row = {"pos": c.get("pos") or i + 1, "number": c.get("number"), "first": c.get("first", ""), "last": c.get("last", ""),
                    "short": c.get("short", ""), "cls": c.get("cls", ""), "cls_color": c.get("cls_color"), "laps": c.get("laps", 0),
                    "brand": c.get("brand", "") if isinstance(c.get("brand"), str) else "", "model": c.get("model", "") if isinstance(c.get("model"), str) else "",
                    "best_ms": c.get("best_ms"), "last_ms": c.get("last_ms"), "pit": bool(c.get("pit")),
-                   "me": c is me, "id": c.get("id")}
+                   "me": c is me, "id": c.get("id"),
+                   "trend": self._trend(c, me, ref_ms, now) if me and c is not me else None}
             if race:
                 row["gap_leader"] = _gap(lead["_dist"] - c["_dist"], ref_ms) if i else None
                 row["interval"] = _gap(ahead["_dist"] - c["_dist"], ref_ms) if ahead else None

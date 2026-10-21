@@ -131,3 +131,6 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .carchip.withsym .logo { width: 34px; height: 24px; }
 .carchip.sym { width: 100%; justify-content: center; }
 .stand .mid { justify-content: center; }
+.stand .tr-good { color: #4be58f; font-weight: 700; } .stand .tr-bad { color: #ff5a64; font-weight: 700; } .stand .tr-flat { color: var(--muted); }
+.stand .trd { display: inline-flex; align-items: baseline; gap: 4px; font-size: 13px; } .stand .trd b { font-weight: 700; font-size: 13px; }
+.stand .trd.tr-good, .stand .trd.tr-bad { font-weight: 700; }

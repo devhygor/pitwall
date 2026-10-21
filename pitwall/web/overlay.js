@@ -15,7 +15,7 @@ const FLAG_INFO = {
 };
 const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
   seconds: 8, steer: false, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
-  cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", fuel: true, predicted: true,
+  cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27 };
 
 let cfg = { ...DEFAULT_CFG };
@@ -427,10 +427,11 @@ const BRAND_FILE = { POR: "porsche", MER: "mercedes", FER: "ferrari", AUD: "audi
   CAD: "cadillac", ACU: "acura", HYU: "hyundai", MAZ: "mazda", VW: "volkswagen" };
 // logotipos originais, coloridos e com fundo transparente (web/brands/color); sem arquivo, cai para a sigla
 const BRAND_COLOR_FILE = { ...BRAND_FILE, LEX: "lexus", ALP: "alpine", GIN: "ginetta" };
+const TR_MIN = 1.5;       // ms/s (~0,14 s por volta de 90 s): abaixo disso a distância está estável
 const COLS = {
   pos: ["Pos", "pos", "c"], number: ["#", "dim r", ""], name: ["Piloto", "", ""], cls: ["Classe", "dim", ""],
   gap_leader: ["Líder", "r num", ""], interval: ["À frente", "r num", ""], vs_me: ["Δ eu", "r num", ""],
-  last: ["Última", "r num", ""], best: ["Melhor", "r num", ""], laps: ["Voltas", "dim r num", ""], pit: ["Box", "c", ""], car: ["Carro", "", ""],
+  last: ["Última", "r num", ""], best: ["Melhor", "r num", ""], laps: ["Voltas", "dim r num", ""], pit: ["Box", "c", ""], car: ["Carro", "", ""], trend: ["Tendência", "r num", ""],
 };
 function standingsOverlay() {
   root.innerHTML = `<div class="card stand shadow" id="st"></div>`;
@@ -446,7 +447,8 @@ function standingsOverlay() {
     const rows = names.map((n, i) => { const gt4 = i >= 8, c = gt4 ? ["BMW", "M4 GT4"] : cars[i % cars.length];
       return { pos: i + 1, number: 10 + i * 7, first: n[0], last: n[1], short: n[1].slice(0, 3).toUpperCase(), cls: gt4 ? "GT4" : "GT3", cls_color: gt4 ? "#3d8bff" : "#e8505b",
         brand: c[0], model: c[1], cls_pos: gt4 ? i - 7 : i + 1, laps: 7, best_ms: 98500 + i * 410, last_ms: i === 0 || i === 2 || i === 8 ? 98500 + i * 410 : 98900 + i * 380, pit: i === 9, me: i === 5,
-        gap_leader: i ? { ms: i * 1300 } : null, interval: i ? { ms: 900 + i * 40 } : null, vs_me: i === 5 ? null : { ms: (5 - i) * 1100 } }; });
+        gap_leader: i ? { ms: i * 1300 } : null, interval: i ? { ms: 900 + i * 40 } : null, vs_me: i === 5 ? null : { ms: (i - 5) * 1100 },
+        trend: i === 5 ? null : (() => { const ahead = i < 5, good = [4, -3, 0.5, -5, 6, 0, 2.5, -4, 3, 0, 1, -2][i]; return { good, per_lap: good * 0.09 }; })() }; });
     return { race: true, rows, classes: [{ name: "GT3", color: "#e8505b", n: 8 }, { name: "GT4", color: "#3d8bff", n: 4 }],
       header: { time_left: 1208000, total: 2700000, lap: 7, total_laps: 20, count: 36, type: "Race" } };
   }
@@ -476,7 +478,7 @@ function standingsOverlay() {
     const bestCls = {};                                    // com várias classes, o mais rápido de cada classe fica roxo
     for (const r of rows) { const k = r.cls || ""; if (r.best_ms && (!bestCls[k] || r.best_ms < bestCls[k])) bestCls[k] = r.best_ms; }
     const isBest = (r) => r.best_ms && r.best_ms === (multi ? bestCls[r.cls || ""] : bestAll);
-    const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", car: cfg.carstyle === "logo" ? "64px" : cfg.carstyle === "text" ? "92px" : "118px" };
+    const W = { name: "minmax(88px,1fr)", pos: "34px", number: "40px", pit: "40px", cls: "52px", laps: "52px", trend: "78px", car: cfg.carstyle === "logo" ? "64px" : cfg.carstyle === "text" ? "92px" : "118px" };
     const tpl = cols.map((c) => W[c] || "74px").join(" ");
     const clsPos = multi && cfg.classpos;
     const rowHtml = (r) => cols.map((c, ci) => {
@@ -499,7 +501,19 @@ function standingsOverlay() {
       else if (c === "cls") v = r.cls || "";
       else if (c === "gap_leader") v = (clsPos ? r.cls_pos === 1 : r.pos === 1) ? "" : fmtGap(r.gap_leader);
       else if (c === "interval") v = r.interval ? fmtGap(r.interval) : "";
-      else if (c === "vs_me") { v = r.me ? "" : fmtGap(r.vs_me); const g = r.vs_me; if (g) cls += (g.laps ? g.laps < 0 : g.ms < 0) ? " ahead" : " behind"; }
+      else if (c === "vs_me") {
+        v = r.me ? "" : fmtGap(r.vs_me); const g = r.vs_me;
+        if (g && cfg.trendcolor && r.trend) cls += r.trend.good > TR_MIN ? " tr-good" : r.trend.good < -TR_MIN ? " tr-bad" : " tr-flat";
+        else if (g) cls += (g.laps ? g.laps < 0 : g.ms < 0) ? " ahead" : " behind";
+      }
+      else if (c === "trend") {
+        const t = r.trend;
+        if (r.me || !t) v = "";
+        else {
+          const up = t.good > TR_MIN, dn = t.good < -TR_MIN;
+          v = `<span class="trd ${up ? "tr-good" : dn ? "tr-bad" : "tr-flat"}">${up ? "▲" : dn ? "▼" : "•"}<b class="num">${Math.abs(t.per_lap).toFixed(2)}</b></span>`;
+        }
+      }
       else if (c === "last") {                          // roxo: a última volta foi a melhor da sessão (da classe); verde: foi a melhor dele
         v = r.last_ms ? fmtLap(r.last_ms) : "—";
         if (r.last_ms && isBest({ ...r, best_ms: r.last_ms })) cls += " best-all";
