@@ -212,7 +212,8 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
             return False
         if app.state.settings.get("overlay_edit") or cfg["mode"] == "always":
             return True
-        return (recorder.live or {}).get("state") == "recording"
+        hub = getattr(recorder, "hub", None)
+        return bool(hub and hub.active())
 
     def ov_sync():
         with ov_lock:

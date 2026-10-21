@@ -29,6 +29,7 @@ class OverlayHub:
         self._corners_try = 0.0
         self._lock = threading.Lock()
         self._seq = 0
+        self._ft: deque = deque(maxlen=20)       # instantes dos últimos frames recebidos
         self._samples: deque = deque(maxlen=SAMPLES)
         self._last_at = 0.0
         self.frame = None            # último frame
@@ -48,6 +49,19 @@ class OverlayHub:
         self._ih: dict = {}          # histórico do intervalo de cada carro para o da frente
         self._win = 25.0
 
+    def active(self) -> bool:
+        """O jogo está mandando dados agora? (frames novos nos últimos 3 s, fora do menu)
+
+        Serve para abrir/fechar os overlays "só na pista". Não dá para confiar no estado do gravador: ele só
+        encerra a sessão 60 s depois do último frame, e programas como o SimHub deixam a memória do ACC
+        parada com os dados da última sessão, o que parece "gravando" com o jogo fechado.
+        """
+        f = self.frame
+        ft = self._ft
+        # vários frames em sequência: a memória parada manda um único frame ao abrir o Pitwall, o jogo de verdade manda dezenas por segundo
+        return (f is not None and f.status != "off" and len(ft) >= 10 and ft[-1] - ft[-10] <= 2.0
+                and time.monotonic() - ft[-1] <= 3.0)
+
     # ---- entrada -----------------------------------------------------------------
     def feed(self, f):
         if f is None:
@@ -56,6 +70,7 @@ class OverlayHub:
         with self._lock:
             self.frame = f
             self._last_at = now
+            self._ft.append(now)
             if f.status == "off":
                 return
             if f.track != self.track:
