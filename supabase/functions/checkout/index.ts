@@ -82,6 +82,27 @@ Deno.serve(async (req) => {
   const now = new Date();
   if ((price.starts_at && new Date(price.starts_at) > now) || (price.ends_at && new Date(price.ends_at) < now)) return json({ error: "preco_fora_do_prazo" }, 400);
 
+  // cupom de desconto / código de afiliado
+  let cp: any = null, pct = 0, aff: string | null = null;
+  const couponCode = String(b.coupon || "").trim().toUpperCase();
+  if (couponCode) {
+    const bad = (reason: string) => json({ error: "cupom", reason }, 400);
+    const { data: c } = await admin.from("coupons").select("*").eq("code", couponCode).maybeSingle();
+    if (!c || !c.active) return bad("invalido");
+    if (c.expires_at && new Date(c.expires_at) < now) return bad("expirado");
+    if (c.max_uses != null && c.uses >= c.max_uses) return bad("esgotado");
+    if (c.kind !== "discount") return bad("use_no_checkout");      // código de presente se resgata em Minha conta
+    if (c.plan_code && c.plan_code !== price.plan_code) return bad("plano_diferente");
+    if (c.affiliate_id) {
+      const { data: a } = await admin.from("affiliates").select("*").eq("id", c.affiliate_id).maybeSingle();
+      if (!a || !a.active) return bad("invalido");
+      if (a.email && String(a.email).toLowerCase() === email) return bad("proprio");   // ninguém ganha comissão de si mesmo
+      aff = a.id;
+    }
+    cp = c; pct = c.percent_off || 0;
+  }
+  const chargeCents = pct > 0 ? Math.max(500, Math.round(price.amount_cents * (100 - pct) / 100)) : price.amount_cents;
+
   try {
     // cliques repetidos em "Assinar" não podem empilhar cobranças: cancela as assinaturas ainda não pagas deste e-mail
     const { data: stale } = await admin.from("subscriptions").select("id, provider_subscription_id")
@@ -92,6 +113,8 @@ Deno.serve(async (req) => {
     }
     const { data: sub, error: se } = await admin.from("subscriptions").insert({
       email, user_id: u.user.id, name, doc, plan_code: price.plan_code, period: price.period, provider: "asaas", status: "pending",
+      coupon_code: cp?.code ?? null, affiliate_id: aff, discount_pct: pct, discount_duration: pct > 0 ? cp.duration : null,
+      full_price_cents: pct > 0 ? price.amount_cents : null,
     }).select("id").single();
     if (se) throw new Error(se.message);
 
@@ -101,9 +124,9 @@ Deno.serve(async (req) => {
     if (!customer) customer = await asaas("/customers", { method: "POST", body: JSON.stringify({ name, email, cpfCnpj: doc, externalReference: sub.id }) });
     const today = new Date().toISOString().slice(0, 10);
     const subBody: Record<string, unknown> = {
-      customer: customer.id, billingType: "UNDEFINED", value: price.amount_cents / 100, nextDueDate: today,
+      customer: customer.id, billingType: "UNDEFINED", value: chargeCents / 100, nextDueDate: today,
       cycle: price.period === "year" ? "YEARLY" : "MONTHLY",
-      description: `Pitwall ${price.plan_code === "team" ? "Equipe" : "Pro"} (${price.period === "year" ? "anual" : "mensal"})`,
+      description: `Pitwall ${price.plan_code === "team" ? "Equipe" : "Pro"} (${price.period === "year" ? "anual" : "mensal"})${cp ? ` · cupom ${cp.code}` : ""}`,
       externalReference: sub.id,
     };
     let subscription;
@@ -113,6 +136,10 @@ Deno.serve(async (req) => {
       subscription = await asaas("/subscriptions", { method: "POST", body: JSON.stringify(subBody) });
     }
     await admin.from("subscriptions").update({ provider_customer_id: customer.id, provider_subscription_id: subscription.id }).eq("id", sub.id);
+    if (cp) {   // conta o uso do cupom
+      await admin.from("coupons").update({ uses: (cp.uses || 0) + 1 }).eq("code", cp.code);
+      await admin.from("coupon_redemptions").insert({ code: cp.code, email, user_id: u.user.id, kind: "discount", subscription_id: sub.id });
+    }
 
     // link da primeira cobrança
     let url: string | null = null;
@@ -122,7 +149,7 @@ Deno.serve(async (req) => {
       if (!url) await new Promise((r) => setTimeout(r, 700));
     }
     if (!url) throw new Error("não consegui o link de pagamento");
-    return json({ ok: true, url, subscription_id: sub.id });
+    return json({ ok: true, url, subscription_id: sub.id, charged_cents: chargeCents, discount_pct: pct });
   } catch (e) {
     return json({ error: "asaas", message: String((e as Error).message || e) }, 502);
   }

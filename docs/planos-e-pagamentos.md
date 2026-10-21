@@ -84,9 +84,24 @@ Hoje o atualizador e o botão "Baixar" usam as Releases públicas do `devhygor/p
 Efeitos de privar: o GitHub Pages (`devhygor.github.io/pitwall`, só redirecionava links antigos de convite) deixa de funcionar no plano Free;
 o site oficial continua na VPS. O código que já foi público continua nos forks e clones de quem baixou.
 
+## Afiliados, cupons e códigos de presente
+
+Esquema em `supabase/afiliados_v1.sql` (já aplicado). Painel: `#/admin` > **Afiliados**, **Códigos e cupons** e **Comissões**.
+
+* **Afiliado:** cria nome, e-mail, código (ex.: `JOAO10`), desconto para o cliente (padrão 10% no 1º pagamento) e comissão (padrão 20% todo mês).
+  O link de divulgação é `https://pitwall.hygor.com.br/?ref=JOAO10`: o código já vem preenchido no checkout.
+* **Desconto só no 1º mês:** a assinatura nasce no Asaas com o valor com desconto; no primeiro pagamento recebido o webhook devolve a assinatura
+  ao preço normal (`PUT /subscriptions`, só para as próximas cobranças; testado no sandbox).
+* **Código de presente (sorteios):** gere um lote (ex.: 20 códigos de 30 dias de Pro). Cada código vale para uma pessoa; resgata em
+  *Minha conta* (site) ou menu *Plano* (app). Vira uma cortesia com prazo.
+* **Cupom avulso:** desconto sem afiliado (com limite de usos e validade) ou presente reutilizável.
+* **Comissão:** calculada sobre o valor realmente pago, sem descontar a taxa do Asaas. Fica "em espera" 7 dias; depois "aprovada". Reembolso cancela.
+  Quem se indica (e-mail igual ao do afiliado) não gera comissão. O pagamento ao afiliado é manual (Pix): marque como paga no painel.
+* O desconto nunca deixa a cobrança abaixo de R$ 5,00.
+
 ## Banco (Supabase)
 
-* Esquema: `supabase/licencas_v1.sql` e `supabase/licencas_v1_pagamentos.sql` (já aplicados no projeto `pitwall`).
+* Esquema: `supabase/licencas_v1.sql`, `supabase/licencas_v1_pagamentos.sql` e `supabase/afiliados_v1.sql` (já aplicados no projeto `pitwall`).
 * Tabelas: `plans`, `prices`, `subscriptions`, `payments`, `grants`, `trials`, `licenses`, `devices`, `webhook_events`, `admins`,
   `admin_log`, `license_signing_keys` (só o service role lê).
 * Administrador: tabela `admins` (hoje só `hygor.k92@gmail.com`). Para outro: `insert into admins select id from auth.users where email = '...'`.

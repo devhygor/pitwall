@@ -609,3 +609,7 @@ html { scroll-padding-top: 76px; }
   padding: 14px 18px; border-radius: 14px; background: var(--asphalt-2); border: 1px solid var(--line); box-shadow: 0 20px 50px rgba(0,0,0,.45); }
 .consent p { margin: 0; font-size: 14px; color: #c8d1e0; } .consent div { display: flex; gap: 8px; flex: none; }
 @media (max-width: 700px) { .consent { flex-direction: column; align-items: stretch; } }
+
+.modal-ok { color: var(--sodium); min-height: 18px; font-size: 14px; }
+.adm-codes { width: 100%; margin: 8px 0; padding: 10px; border-radius: 10px; background: var(--night); border: 1px solid var(--line); color: var(--chalk); font: 15px/1.5 ui-monospace, Consolas, monospace; }
+.adm-form label { display: inline-flex; align-items: center; gap: 6px; }

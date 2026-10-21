@@ -51,6 +51,11 @@ async function renderPlano() {
         ${(paid && s.source !== "dev") ? `<div class="sub" style="margin-top:8px"><button class="btn sm" id="pClear">Remover a licença deste computador</button></div>` : ""}
       </div>
 
+      <div class="set-card"><h2>Código de presente</h2>
+        ${setRow("Ganhou um código?", "Códigos de sorteios e parcerias liberam o Pro por alguns dias. Precisa estar com o Google ligado (botão acima).",
+          `<div class="eng-inline"><input id="pGift" type="text" placeholder="PW-XXXXXXXX" style="min-width:200px"><button class="btn" id="pGiftBtn">Resgatar</button></div>`)}
+      </div>
+
       <div class="set-card"><h2>O que cada plano libera</h2>
         <div class="plan-table">
           ${PLAN_FEATURES.map(([t, need]) => {
@@ -81,6 +86,13 @@ async function renderPlano() {
     const r = await post("/api/license/key", { key: $("#pKey").value });
     if (r.error) alert(r.error);
   });
+  $("#pGiftBtn").onclick = async () => {
+    try {
+      const r = await post("/api/license/redeem", { code: $("#pGift").value });
+      alert(`Pronto! Você ganhou o plano ${r.plan === "team" ? "Equipe" : "Pro"} por ${r.days} dias.`);
+    } catch (e) { alert(e.message); }
+    renderPlano();
+  };
   const c = $("#pClear");
   if (c) c.onclick = () => act(() => post("/api/license/clear"));
 }

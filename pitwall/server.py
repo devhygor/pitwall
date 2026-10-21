@@ -765,6 +765,25 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def license_key(key: str = Body(..., embed=True)):
         return _lic().activate_key(key)
 
+    @app.post("/api/license/redeem")
+    def license_redeem(code: str = Body(..., embed=True)):
+        """Resgata um código de presente (sorteio, parceiro): precisa estar logado com o Google."""
+        from .team import TeamError
+        t = _team()
+        if not t.configured:
+            raise HTTPException(400, "Entre com o Google (botão no menu Plano) para resgatar o código.")
+        try:
+            r = t._rpc("redeem_code", {"p_code": code})
+        except TeamError as e:
+            raise HTTPException(400, str(e))
+        if not r.get("ok"):
+            msgs = {"invalido": "Código inválido.", "expirado": "Esse código expirou.", "esgotado": "Esse código já foi usado.",
+                    "ja_usado": "Você já resgatou esse código.", "use_no_checkout": "Esse código é de desconto: use na hora de assinar, no site.",
+                    "login": "Entre com o Google primeiro."}
+            raise HTTPException(400, msgs.get(r.get("error"), "Não foi possível resgatar o código."))
+        _lic().refresh()
+        return {**r, "status": _lic().status()}
+
     @app.post("/api/license/trial")
     def license_trial():
         return _lic().start_trial()

@@ -53,5 +53,23 @@ Deno.serve(async (req) => {
     await admin.from("webhook_events").update({ error: error.message }).eq("provider", "asaas").eq("event_id", eventId);
     return new Response("erro", { status: 500 });          // o Asaas tenta de novo
   }
+  // depois do 1º pagamento com desconto "só no primeiro mês", a assinatura volta ao preço normal nas próximas cobranças
+  if ((event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") && body.payment?.subscription) {
+    try {
+      const { data: sub } = await admin.from("subscriptions").select("id, full_price_cents, discount_pct, discount_duration, full_restored")
+        .eq("provider", "asaas").eq("provider_subscription_id", body.payment.subscription).maybeSingle();
+      if (sub && sub.discount_pct > 0 && sub.discount_duration === "once" && !sub.full_restored && sub.full_price_cents) {
+        const key = Deno.env.get("ASAAS_API_KEY");
+        const r = await fetch(`${asaasBase()}/subscriptions/${body.payment.subscription}`, {
+          method: "PUT", headers: { access_token: key || "", "Content-Type": "application/json", "User-Agent": "Pitwall" },
+          body: JSON.stringify({ value: sub.full_price_cents / 100, updatePendingPayments: false }),
+        });
+        if (r.ok) await admin.from("subscriptions").update({ full_restored: true }).eq("id", sub.id);
+        else await admin.from("webhook_events").update({ error: `não voltou ao preço normal (Asaas ${r.status})` }).eq("provider", "asaas").eq("event_id", eventId);
+      }
+    } catch (e) {
+      await admin.from("webhook_events").update({ error: `preço normal: ${String((e as Error).message || e)}` }).eq("provider", "asaas").eq("event_id", eventId);
+    }
+  }
   return new Response(String(data), { status: 200 });
 });

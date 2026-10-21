@@ -101,6 +101,22 @@ begin
     update public.subscriptions set status = 'canceled', current_period_end = least(coalesce(current_period_end, now()), now()), updated_at = now() where id = s.id;
   end if;
 
+  -- comissão do afiliado (e cancelamento dela se houver reembolso)
+  select id into pid from public.payments where provider = 'asaas' and provider_payment_id = pay ->> 'id';
+  if new_status = 'paid' and coalesce(old_status, '') <> 'paid' and s.affiliate_id is not null then
+    select * into aff from public.affiliates where id = s.affiliate_id;
+    if aff.id is not null and aff.active and (aff.email is null or lower(aff.email) <> lower(s.email))
+       and (aff.commission_mode = 'recurring' or not exists (select 1 from public.commissions where subscription_id = s.id)) then
+      paid_cents := round(coalesce((pay ->> 'value')::numeric, 0) * 100);
+      insert into public.commissions (affiliate_id, subscription_id, payment_id, base_cents, pct, amount_cents)
+      values (aff.id, s.id, pid, paid_cents, aff.commission_pct, round(paid_cents * aff.commission_pct / 100.0))
+      on conflict (payment_id) do nothing;
+    end if;
+  elsif new_status = 'refunded' and coalesce(old_status, '') = 'paid' then
+    update public.commissions set status = 'canceled', note = coalesce(note || ' · ', '') || 'reembolso' where payment_id = pid and status = 'pending';
+    update public.commissions set note = coalesce(note || ' · ', '') || 'reembolso depois de paga a comissão' where payment_id = pid and status = 'paid';
+  end if;
+
   update public.webhook_events set processed_at = now() where id = ev_id;
   return 'ok';
 end $$;
