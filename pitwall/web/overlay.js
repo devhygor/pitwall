@@ -12,7 +12,7 @@ const FLAG_INFO = {
   white: ["Bandeira branca", "#ffffff"], green: ["Bandeira verde", "#2fe58a"], chequered: ["Bandeirada", "#ffffff"],
   black: ["Bandeira preta", "#9aa0aa"], penalty: ["Penalidade", "#ff9f1a"], orange: ["Bandeira laranja", "#ff9f1a"],
 };
-const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: false, rotate: 0, width: 9, banner: true, sectors: true,
+const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true, rotate: 0, width: 9, banner: true, sectors: true,
   seconds: 8, steer: false, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], fuel: true, predicted: true };
 
@@ -140,6 +140,12 @@ function mapOverlay() {
     if (f.chequered) return "chequered";
     return null;
   }
+  function dotNumber(x, y, n, col) {
+    const t = String(n);
+    ctx.fillStyle = col; ctx.font = `800 ${t.length > 2 ? 8 : t.length > 1 ? 10 : 11}px Segoe UI`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(t, x, y + 0.5);
+    ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
+  }
   function draw() {
     const dpr = (window.devicePixelRatio || 1) * clamp(cfg.scale, 40, 300) / 100;
     if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
@@ -193,17 +199,19 @@ function mapOverlay() {
     if (cfg.cars) {
       for (const c of cars) {
         if (me && c.id === me.id) continue;
-        const [x, y] = at(c.spline);
-        ctx.fillStyle = c.pit ? "rgba(255,194,51,.85)" : "#7fb2ff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 7); ctx.stroke(); ctx.fill();
-        if (cfg.numbers && c.number != null) { ctx.fillStyle = "#fff"; ctx.font = "700 10px Segoe UI"; ctx.shadowColor = "#000"; ctx.shadowBlur = 4; ctx.fillText(c.number, x + 8, y + 4); ctx.shadowBlur = 0; }
+        const [x, y] = at(c.spline), num = cfg.numbers && c.number != null;
+        ctx.fillStyle = c.pit ? "rgba(255,194,51,.95)" : "#7fb2ff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, num ? 9.5 : 5.5, 0, 7); ctx.stroke(); ctx.fill();
+        if (num) dotNumber(x, y, c.number, "#0b0d10");
       }
     }
     const mySp = me ? me.spline : previewing ? (t / 14) % 1 : null;
     if (mySp != null) {
       const [x, y] = at(mySp);
       ctx.fillStyle = "rgba(255,59,78,.35)"; ctx.beginPath(); ctx.arc(x, y, 13 + 2 * Math.sin(t * 5), 0, 7); ctx.fill();
-      ctx.fillStyle = "#ff3b4e"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke(); ctx.fill();
+      const mine = cfg.numbers && me ? cars.find((c) => c.id === me.id) : null, big = mine && mine.number != null;
+      ctx.fillStyle = "#ff3b4e"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, big ? 11 : 7, 0, 7); ctx.stroke(); ctx.fill();
+      if (big) dotNumber(x, y, mine.number, "#fff");
     }
     // faixa com o nome das bandeiras
     const act = [];

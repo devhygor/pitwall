@@ -3026,7 +3026,7 @@ function overlaySettings(s) {
       <div class="sub" style="margin:2px 0 10px">A pista muda de cor em tempo real: amarela (só no setor da bandeira), vermelha, azul, branca ou verde.</div>
       ${setRow("Mostrar o nome da bandeira", "", tg("map", "banner", m.banner))}
       ${setRow("Outros carros", "Pontinhos no mapa. No ACC precisa do broadcasting ligado (padrão do jogo).", tg("map", "cars", m.cars))}
-      ${setRow("Números dos carros", "", tg("map", "numbers", m.numbers))}
+      ${setRow("Número do carro dentro da bolinha", "", tg("map", "numbers", m.numbers))}
       ${setRow("Marcar os setores", "", tg("map", "sectors", m.sectors))}
       ${setRow("Espessura da pista", "", rng("map", "width", m.width, 4, 16, 1, "px"))}
       ${setRow("Girar o mapa", "", sel("ov-map-rot", [[0, "0°"], [90, "90°"], [180, "180°"], [270, "270°"]], m.rotate, 'data-ov="map" data-k="rotate" data-num="1"'))}

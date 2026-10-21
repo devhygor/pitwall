@@ -11,7 +11,7 @@ from .db import data_dir
 #   scale = tamanho em %, bg = opacidade do fundo (0 = totalmente transparente), x/y = posição na tela
 _BASE = {"mode": "off", "scale": 100, "bg": 0, "x": None, "y": None}
 OVERLAY_DEFAULTS = {
-    "map": {**_BASE, "scale": 110, "bg": 0, "cars": True, "numbers": False, "rotate": 0, "width": 9, "banner": True,
+    "map": {**_BASE, "scale": 110, "bg": 0, "cars": True, "numbers": True, "rotate": 0, "width": 9, "banner": True,
             "sectors": True},
     "pedals": {**_BASE, "bg": 25, "seconds": 8, "steer": False, "gear": True, "coast": True, "bars": True, "speed": True},
     "standings": {**_BASE, "bg": 25, "rows": 10, "view": "around", "name": "short",
