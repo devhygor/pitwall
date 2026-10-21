@@ -62,7 +62,7 @@ function markTop() {
 function renderMe() {
   const el = $("#me");
   if (!session) {
-    el.innerHTML = `<nav class="topnav pub"><a href="#overlays" data-go="overlays">Overlays</a><a href="#recursos" data-go="recursos">Recursos</a></nav>
+    el.innerHTML = `<nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#equipe" data-go="equipe">Equipe</a></nav>
       <a class="btn small quiet" href="#entrar" data-go="entrar" id="goLogin">Entrar</a>`;
     return;
   }
@@ -185,6 +185,53 @@ function renderLanding(invite) {
       </div>
     </section>
 
+    <section class="sect" id="analise">
+      <div class="wrap">
+        <span class="eyebrow">Compare com os amigos</span>
+        <h2>Veja onde o amigo é mais rápido, curva a curva</h2>
+        <p class="lede">Escolha a sua volta e a volta de um companheiro de equipe como referência. O Pitwall mostra
+          a diferença, aponta a curva onde você perde mais tempo e explica o porquê, mesmo com carros diferentes.</p>
+        <div class="win" role="img" aria-label="Exemplo da tela de análise comparando duas voltas">
+          <div class="win-top">
+            <div class="lapc a"><i class="av">H</i><div><small>VOLTA ANALISADA</small><b>1:50.207</b><span>Você · Ferrari 296 GT3</span></div></div>
+            <span class="vs">vs</span>
+            <div class="lapc b"><i class="av">J</i><div><small>REFERÊNCIA</small><b>1:52.590</b><span>Lucas · McLaren 720S GT3 Evo</span></div></div>
+            <div class="bigd"><small>DIFERENÇA</small><b>−2,383 s</b><span>S1 −0,098 · S2 −1,432 · S3 −0,853</span></div>
+          </div>
+          <div class="win-mid"><span class="pill">Onde perde tempo <b>Curva 4 +0,21 s</b></span><span class="ok">Nenhuma travada, rodada ou saída de pista registrada.</span></div>
+          <div class="win-body">
+            <div class="tips">
+              <h4>Curva 4 <em>+0,213 s</em></h4>
+              <p class="mut">Maior perda na entrada (frenagem até o ápice)</p>
+              <div class="tip"><b>Freou cedo</b><span>Você começou a frear 6 m antes da referência.</span></div>
+              <div class="tip"><b>Pouca velocidade na curva</b><span>Velocidade mínima 5 km/h abaixo da referência (116 × 121 km/h).</span></div>
+              <div class="tip good"><b>Acelera a fundo mais cedo</b><span>Saída 3 km/h mais rápida.</span></div>
+            </div>
+            <div class="chart">
+              <svg viewBox="0 0 520 230" aria-hidden="true">
+                <g stroke="#2a3548" stroke-width="1"><path d="M0 40H520M0 100H520M0 160H520"/></g>
+                <rect x="292" y="6" width="70" height="150" fill="#ff5a5f" opacity=".1" rx="6"/>
+                <path d="M0 40 C40 40 60 44 80 120 C92 160 120 160 140 120 C170 60 200 30 260 30 C300 30 310 60 330 140 C340 170 370 168 390 120 C420 70 470 50 520 46" fill="none" stroke="#f2a93b" stroke-width="2.5"/>
+                <path d="M0 42 C38 42 58 50 84 126 C96 164 126 166 146 126 C176 66 206 36 262 34 C302 34 314 66 336 148 C346 176 378 172 396 128 C426 78 472 56 520 52" fill="none" stroke="#5ab0ff" stroke-width="2.5"/>
+                <path d="M0 196 C80 196 130 206 200 200 S300 186 340 192 S460 212 520 214" fill="none" stroke="#39d98a" stroke-width="2"/>
+                <path d="M0 196 H520" stroke="#3c4a63" stroke-dasharray="4 6"/>
+                <text x="8" y="18" fill="#8e9bb2" font-size="12" font-family="Barlow">Velocidade</text>
+                <text x="8" y="186" fill="#8e9bb2" font-size="12" font-family="Barlow">Diferença para a referência</text>
+                <text x="298" y="22" fill="#ff5a5f" font-family="Barlow Condensed" font-weight="700" font-size="17">Curva 4</text>
+              </svg>
+              <div class="legend"><span><i style="background:#f2a93b"></i>Você</span><span><i style="background:#5ab0ff"></i>Referência</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="feats mini">
+          <article class="feat"><div class="fi">${ico(`<path d="M3 12h18M7 7l-4 5 4 5M17 7l4 5-4 5"/>`)}</div><h3>Carros diferentes, sem problema</h3><p>Compare a sua Ferrari com a McLaren do amigo: a referência é sempre o recorde de cada piloto na pista.</p></article>
+          <article class="feat"><div class="fi">${ico(`<path d="M12 3l2.4 5.4 5.9.6-4.4 4 1.3 5.8L12 15.8 6.8 18.8l1.3-5.8-4.4-4 5.9-.6z"/>`)}</div><h3>Dicas em português</h3><p>“Freou cedo”, “pouca velocidade na curva”, “acelerou tarde”: o app diz o que mudar em cada curva.</p></article>
+          <article class="feat"><div class="fi">${ico(`<path d="M5 21V4m0 0h11l-2 4 2 4H5"/>`)}</div><h3>Acontecimentos da volta</h3><p>Travadas, rodadas e saídas de pista aparecem marcadas. Um clique leva ao momento no gráfico, no mapa e no vídeo.</p></article>
+          <article class="feat"><div class="fi">${ico(`<rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3"/>`)}</div><h3>Vídeo lado a lado</h3><p>Se os dois gravaram a tela, os replays tocam juntos e sincronizados com o mapa e com os gráficos.</p></article>
+        </div>
+      </div>
+    </section>
+
     <section class="uses">
       <div class="wrap">
         <span class="eyebrow">Para correr com os amigos</span>
@@ -208,18 +255,20 @@ function renderLanding(invite) {
             <div class="steps"><span>Abre o link</span><span>Entra com Google</span><span>Já está na equipe</span></div>
           </div>
         </div>
-        <div class="use">
-          <div class="copy"><h3>Onde você perde o tempo</h3>
-            <p>A volta do amigo vira referência: velocidade, freio e acelerador sobrepostos, o delta curva a
-              curva e o replay com os dois carros na pista.</p></div>
-          <div class="shot">
-            <svg viewBox="0 0 520 190" role="img" aria-label="Exemplo de gráfico de velocidade de duas voltas">
-              <path d="M0 40 C40 40 60 44 80 120 C92 160 120 160 140 120 C170 60 200 30 260 30 C300 30 310 60 330 140 C340 170 370 168 390 120 C420 70 470 50 520 46" fill="none" stroke="#a77bff" stroke-width="2.5"/>
-              <path d="M0 42 C38 42 58 50 84 126 C96 164 126 166 146 126 C176 66 206 36 262 34 C302 34 314 66 336 148 C346 176 378 172 396 128 C426 78 472 56 520 52" fill="none" stroke="#f2a93b" stroke-width="2.5"/>
-              <rect x="300" y="10" width="64" height="172" fill="#ff5a5f" opacity=".1" rx="6"/>
-              <text x="306" y="28" fill="#ff5a5f" font-family="Barlow Condensed" font-weight="700" font-size="18">+0.18</text>
-            </svg>
-          </div>
+      </div>
+    </section>
+
+    <section class="sect alt" id="equipe">
+      <div class="wrap">
+        <span class="eyebrow">Equipe e comunidade</span>
+        <h2>Monte a sua equipe em um minuto</h2>
+        <div class="feats">
+          <article class="feat"><div class="fi">${ico(`<path d="M8 21V8l4-4 4 4v13M4 21h16M10 12h4M10 16h4"/>`)}</div><h3>Ranking por pista e carro</h3><p>Filtre por pista, carro ou piloto. Cada um aparece com a melhor volta e a diferença para o líder.</p></article>
+          <article class="feat"><div class="fi">${ico(`<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>`)}</div><h3>Comunidade</h3><p>Uma lista aberta com o recorde de cada piloto em cada pista, para você se medir com todo mundo.</p></article>
+          <article class="feat"><div class="fi">${ico(`<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 8l9 6 9-6"/>`)}</div><h3>Convite por e-mail ou link</h3><p>Mande o link no grupo ou convide pelo e-mail. Quem entra com o Google já cai dentro da equipe.</p></article>
+          <article class="feat"><div class="fi">${ico(`<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>`)}</div><h3>Você controla quem entra</h3><p>Equipe só por convite, com pedidos que o líder aprova, ou aberta. Dono e líderes gerenciam os pilotos.</p></article>
+          <article class="feat"><div class="fi">${ico(`<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/>`)}</div><h3>Logo e identidade</h3><p>Coloque o escudo da sua equipe e dê cara para o grupo de amigos ou para o campeonato.</p></article>
+          <article class="feat"><div class="fi">${ico(`<path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16"/>`)}</div><h3>Seus dados, a sua escolha</h3><p>As voltas só são vistas pela sua equipe e os setups nunca saem do seu PC.</p></article>
         </div>
       </div>
     </section>
