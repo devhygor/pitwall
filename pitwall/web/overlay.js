@@ -391,6 +391,7 @@ function cornerOverlay() {
   const mod1 = (v) => ((v % 1) + 1) % 1;
   function render() {
     $("#cnr").classList.toggle("compact", cfg.cstyle === "compact");
+    $("#cnr").classList.toggle("nodist", cfg.cstyle === "compact" && !cfg.dist);       // só a seta: ela fica no centro
     const compact = cfg.cstyle === "compact";
     const usePlan = plan.length ? plan : previewing ? prevPlan : [];
     const L = length || (previewing ? 5200 : 0);

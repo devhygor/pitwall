@@ -195,3 +195,7 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .cn-sub { margin-top: 8px; font-size: 12px; color: var(--muted); } .cn-sub b { color: var(--text); }
 .cn-next { margin-top: 4px; font-size: 12px; color: var(--muted); } .cn-next b { color: var(--text); }
 .cn-sub:empty, .cn-next:empty { display: none; }
+.cnr.compact { justify-content: center; }
+.cnr.compact.nodist { grid-template-columns: 1fr; grid-template-areas: "arrow" "brk"; justify-items: center; }
+.cnr.compact.nodist .cn-brk { width: 100%; justify-self: stretch; }
+.cnr.compact .cn-brk { justify-self: stretch; }
