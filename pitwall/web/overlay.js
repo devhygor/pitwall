@@ -473,7 +473,7 @@ function standingsOverlay() {
       for (const i of [...idx].sort((x, y) => x - y)) { if (prev >= 0 && i - prev > 1) out.push(null); out.push(list[i]); prev = i; }
       return out;
     };
-    const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || (rows.some((r) => r.cls) && !multi)) && (c !== "car" || rows.some((r) => r.brand)));
+    const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || rows.some((r) => r.cls)) && (c !== "car" || rows.some((r) => r.brand)));
     const bestAll = Math.min(...rows.map((r) => r.best_ms || 1e12));
     const bestCls = {};                                    // com várias classes, o mais rápido de cada classe fica roxo
     for (const r of rows) { const k = r.cls || ""; if (r.best_ms && (!bestCls[k] || r.best_ms < bestCls[k])) bestCls[k] = r.best_ms; }
