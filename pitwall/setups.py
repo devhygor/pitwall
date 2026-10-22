@@ -271,6 +271,20 @@ def save_shared(db, car: str, track: str, name: str, content: dict) -> dict:
     return {"id": sid, "name": path.stem, "path": str(path)}
 
 
+def detect_used(db, car: str, track: str, max_age_days: int = 21):
+    """Qual setup a pessoa provavelmente usou: o único do carro/pista ou, havendo vários, o salvo mais recentemente.
+    O ACC não diz qual setup está carregado; por isso é uma estimativa (a pessoa pode corrigir na sessão)."""
+    import time
+    cands = [s for s in db.setups_list() if s["car"] == car and (s["track"] or "").lower() == (track or "").lower()]
+    if not cands:
+        return None
+    if len(cands) == 1:
+        return cands[0]["id"]
+    now = time.time()
+    fresh = [s for s in cands if s.get("file_mtime") and now - s["file_mtime"] <= max_age_days * 86400]
+    return max(fresh, key=lambda s: s["file_mtime"])["id"] if fresh else None
+
+
 def install(db, setup_id: int) -> dict:
     """Grava no ACC um setup que está só no banco (ex.: depois de formatar o PC)."""
     s = load(db, setup_id)

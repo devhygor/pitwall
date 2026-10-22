@@ -485,6 +485,22 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def team_setup(id: str = Body(..., embed=True)):
         return _team_call(lambda: _team().import_setup(id))
 
+    @app.get("/api/team/setups")
+    def team_setups(team_id: str):
+        return _team_call(lambda: _team().setup_library(team_id))
+
+    @app.post("/api/team/setups/share")
+    def team_setups_share(team_id: str = Body(..., embed=True), setup_id: int = Body(..., embed=True), note: str = Body("", embed=True)):
+        return _team_call(lambda: _team().share_setup(team_id, setup_id, note))
+
+    @app.post("/api/team/setups/import")
+    def team_setups_import(team_id: str = Body(..., embed=True), kind: str = Body(..., embed=True), id: str = Body(..., embed=True)):
+        return _team_call(lambda: _team().import_library_item(team_id, kind, id))
+
+    @app.post("/api/team/setups/delete")
+    def team_setups_delete(team_id: str = Body(..., embed=True), id: str = Body(..., embed=True)):
+        return _team_call(lambda: _team().delete_library_item(team_id, id))
+
     @app.post("/api/team/logo")
     async def team_logo(request: Request):
         """Corpo = a imagem; ?team_id=... (ou JSON {team_id, url} para usar um link)."""

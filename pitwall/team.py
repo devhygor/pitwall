@@ -434,7 +434,11 @@ class Team:
                "uploaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                "telemetry": base64.b64encode(pack(tel)).decode(), "setup_name": None, "setup_json": None,
                "clip_path": None, "events": lap.get("events") or []}
-        setup = self.db.setup(sess["setup_id"]) if sess.get("setup_id") else None
+        sid = sess.get("setup_id") or sess.get("suggested_setup_id")
+        if not sid:
+            from . import setups as _setups
+            sid = _setups.detect_used(self.db, lap["car"], lap["track"])      # estimativa, para o setup do recorde ir junto
+        setup = self.db.setup(sid) if sid else None
         if setup and self.settings.get("team_share_setup"):
             row["setup_name"], row["setup_json"] = setup["name"], json.dumps(setup["content"])
         self._rest("POST", "laps", {"on_conflict": "user_id,game,car,track"}, [row],
@@ -593,6 +597,35 @@ class Team:
             except Exception as e:  # noqa: BLE001
                 self.last_error = f"Clipe da equipe: {e}"
         return lap_id
+
+    # --- biblioteca de setups da equipe (plano Equipe) ------------------------------
+    def setup_library(self, team_id: str) -> dict:
+        return self._rpc("team_setup_library", {"p_team": team_id}) or {"ok": False, "error": "erro"}
+
+    def share_setup(self, team_id: str, setup_id: int, note: str = "") -> dict:
+        s = self.db.setup(setup_id)
+        if not s:
+            raise TeamError("Setup não encontrado.")
+        pb = None
+        try:
+            pb = self.db.pb_for(s["car"], s["track"])
+        except Exception:  # noqa: BLE001
+            pb = None
+        content = s["content"] if isinstance(s["content"], str) else json.dumps(s["content"])
+        r = self._rpc("share_team_setup", {"p_team": team_id, "p_game": "acc", "p_car": s["car"], "p_track": s["track"], "p_name": s["name"],
+                                           "p_content": content, "p_lap_ms": (pb or {}).get("lap_time_ms"), "p_air": (pb or {}).get("air_temp"),
+                                           "p_road": (pb or {}).get("road_temp"), "p_note": (note or "").strip() or None})
+        return r or {"ok": False}
+
+    def import_library_item(self, team_id: str, kind: str, item_id: str) -> dict:
+        r = self._rpc("team_setup_get", {"p_team": team_id, "p_kind": kind, "p_id": item_id}) or {}
+        if not r.get("ok"):
+            raise TeamError({"plano": "A biblioteca de setups é do plano Equipe (o dono da equipe precisa ter o plano).", "membro": "Você não é desta equipe."}.get(r.get("error"), "Setup não encontrado."))
+        from . import setups
+        return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {r.get('who') or 'Equipe'} - {r['name']}", json.loads(r["content"]))
+
+    def delete_library_item(self, team_id: str, item_id: str) -> dict:
+        return self._rpc("delete_team_setup", {"p_team": team_id, "p_id": item_id}) or {"ok": False}
 
     def import_setup(self, remote_id: str) -> dict:
         """Salva no ACC (e na biblioteca) o setup que o companheiro usou nessa volta."""

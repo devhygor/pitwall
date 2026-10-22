@@ -42,6 +42,13 @@ Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/_
 (categorias de aviso), `voice/answers.py` (perguntas), `voice/humor.py` (personalidade), `voice/tts.py` (voz online) e
 `video.py` (vídeos guardados).
 
+### Plano Equipe: biblioteca de setups da equipe
+`supabase/equipe_setups.sql`. Reúne, por equipe, (1) o setup usado no melhor tempo de cada piloto (já vai junto com o recorde quando "Enviar o setup usado junto" está ligado) e (2) setups que alguém
+compartilha de propósito (app: Setups > detalhe > *Compartilhar com a equipe*, com nota). Ver e baixar: app (Setups > *Setups da equipe*, instala no ACC com um clique) e site (página da equipe).
+Só funciona se o **dono da equipe** tem o plano Equipe ativo (a checagem é no banco, nas funções `team_setup_library`, `team_setup_get`, `share_team_setup`).
+O app descobre o setup do recorde assim: o escolhido na sessão, senão o sugerido pela temperatura, senão o único/mais recente do carro e pista (`setups.detect_used`; o ACC não informa qual setup está carregado, por isso é uma estimativa).
+O botão "⚙ setup" na lista de voltas dos companheiros (download direto do setup daquela volta) continua para todas as equipes.
+
 ### Plano Equipe: chaves para dividir
 O dono do plano Equipe (assinatura ou cortesia) gera até 10 chaves `PWT-XXXXXXXX` em **Minha conta > Chaves da equipe** (site). Cada chave libera o **Pro** para quem a resgatar
 (site: *Tenho um código*; app: menu *Plano*). **Todas vencem junto com o plano do dono**: ativar no último dia não dá dias a mais. O dono pode revogar uma chave e passar para outra pessoa.

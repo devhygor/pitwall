@@ -1129,3 +1129,9 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .cm-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.04); }
 .cm-row canvas { width: 28px; height: 44px; }
 .carmap.locked .cm-row { opacity: .7; }
+
+/* setups da equipe */
+.tsetups { margin-bottom: 16px; }
+.tsx { width: 100%; border-collapse: collapse; }
+.tsx th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; }
+.tsx td { padding: 8px; border-top: 1px solid #19212e; vertical-align: top; }

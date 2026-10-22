@@ -534,6 +534,7 @@ async function renderTeam(id) {
       <div class="hint-an">📈 Clique em <b>Analisar</b> ou <b>Comparar</b> numa volta para abrir a análise completa: onde perde tempo em cada curva, dicas, gráficos, mapa e vídeo.</div></div></div></div>
     <div class="layout">
       <div>${laps.length ? `<div id="teamRank">${R.html}</div>` : `<div class="panel empty"><b>Ninguém enviou voltas ainda</b><p>Os recordes sobem sozinhos quando os pilotos gravam no app do PC.</p></div>`}
+      <div id="teamSetups"></div>
       ${mine ? "" : appPanel()}</div>
       <aside class="side">
         ${requests.length ? `<div class="panel"><h2>Pedidos para entrar <span class="role">${requests.length}</span></h2>
@@ -599,6 +600,7 @@ async function renderTeam(id) {
     if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "O link atual vai parar. Trocar?"; return; }
     await rpc("new_invite_code", { t: id }); renderTeam(id);
   };
+  loadTeamSetups(id);
   view.querySelectorAll("[data-kick]").forEach((b) => b.onclick = () => {
     if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Remover mesmo?"; return; }
     run(b, () => rpc("remove_member", { t: id, u: b.dataset.kick }));
@@ -678,6 +680,36 @@ function bindRows(root) {
     const blob = new Blob([JSON.stringify(JSON.parse(data.setup_json), null, "\t")], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `${data.setup_name}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+}
+
+// ---------------------------------------------------------------- setups da equipe (plano Equipe)
+async function loadTeamSetups(teamId) {
+  const box = $("#teamSetups");
+  if (!box) return;
+  let r;
+  try { r = await rpc("team_setup_library", { p_team: teamId }); } catch (e) { return; }
+  if (!r) return;
+  if (!r.ok) {
+    if (r.error === "plano") box.innerHTML = `<div class="panel"><h2>Setups da equipe</h2><p class="help">A biblioteca de setups é do plano <b>Equipe</b>: o dono da equipe precisa ter o plano ativo. Com ele, o setup de cada melhor tempo dos pilotos fica reunido aqui, com notas, e baixa com um clique. <a href="#/planos">Ver planos</a></p></div>`;
+    return;
+  }
+  const items = r.items || [];
+  box.innerHTML = `<div class="panel"><h2>Setups da equipe <span class="role">${items.length}</span></h2>
+    <p class="help">Os setups usados nos melhores tempos dos pilotos (enviados pelo app) e os compartilhados de propósito. Baixe o arquivo e coloque na pasta de setups do ACC, ou use o app do Pitwall para instalar com um clique.</p>
+    ${items.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Piloto</th><th>Carro / pista</th><th>Setup</th><th>Melhor volta</th><th></th></tr></thead><tbody>${items.slice(0, 100).map((x) => `<tr>
+      <td>${esc(x.who || "—")}</td><td class="sub">${esc(pretty(x.car))} · ${esc(pretty(x.track))}</td>
+      <td>${esc(x.name || "")}${x.note ? `<br><small class="sub">${esc(x.note)}</small>` : ""}</td>
+      <td>${x.best_lap_ms ? fmtLap(x.best_lap_ms) : "—"}<br><small class="sub">${x.kind === "volta" ? "do melhor tempo" : "compartilhado"}</small></td>
+      <td><button class="btn small go" data-tsd="${x.kind}:${x.id}">Baixar</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="help">Nenhum setup ainda. Eles aparecem quando os pilotos batem um recorde com o setup selecionado na sessão do app.</p>`}</div>`;
+  box.querySelectorAll("[data-tsd]").forEach((b) => b.onclick = async () => {
+    const [kind, sid] = b.dataset.tsd.split(":");
+    const g = await rpc("team_setup_get", { p_team: teamId, p_kind: kind, p_id: sid });
+    if (!g || !g.ok) { alert("Não foi possível baixar este setup."); return; }
+    const blob = new Blob([JSON.stringify(JSON.parse(g.content), null, "\t")], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `${(g.name || "setup").replace(/[^\w.-]+/g, "_")}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 }

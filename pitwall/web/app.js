@@ -1458,6 +1458,7 @@ async function renderSetups() {
       <div class="sub">${all.length} setups no seu banco · pasta do ACC: <code>${esc(lib.root)}</code>${lib.exists ? "" : " (não encontrada)"}</div></div>
       <span class="spacer"></span><button class="btn" id="sImport">Importar da pasta do ACC</button></div>
     <div id="sImportOut"></div>
+    <div id="tSetups"></div>
     <div class="filters">
       ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
       ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
@@ -1497,6 +1498,7 @@ async function renderSetups() {
     await reRender();
     $("#sImportOut").innerHTML = `<div class="note okk">${r.exists ? `${r.found} arquivos lidos, ${r.new} novos no banco.` : "Pasta do ACC não encontrada."}</div>`;
   };
+  paintTeamSetups();
   view.querySelectorAll("[data-pick]").forEach((cb) => cb.onclick = (e) => {
     e.stopPropagation();
     const id = +cb.dataset.pick;
@@ -1516,6 +1518,76 @@ async function renderSetups() {
   if (st.open) showSetup(st.open);
 }
 
+// ---------------------------------------------------------------- setups da equipe (plano Equipe)
+const tsState = { team: "", q: "" };
+async function paintTeamSetups() {
+  const box = $("#tSetups");
+  if (!box) return;
+  const head = (inner) => `<div class="panel tsetups"><div class="row"><h2 style="margin:0">Setups da equipe</h2><span class="spacer"></span>${inner || ""}</div>`;
+  let st;
+  try { st = await api("/api/team/status"); } catch (e) { box.innerHTML = ""; return; }
+  if (!st.logged_in) { box.innerHTML = head() + `<div class="sub" style="margin-top:8px">Entre com o Google (menu Equipe) para ver os setups usados nos melhores tempos dos seus companheiros e baixar com um clique.</div></div>`; return; }
+  const teams = st.teams || [];
+  if (!teams.length) { box.innerHTML = head() + `<div class="sub" style="margin-top:8px">Você ainda não está em nenhuma equipe. Crie ou entre numa no menu Equipe.</div></div>`; return; }
+  if (!teams.some((t) => t.id === tsState.team)) tsState.team = teams[0].id;
+  const teamSel = teams.length > 1 ? `<select id="tsTeam">${teams.map((t) => `<option value="${t.id}" ${t.id === tsState.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : `<span class="sub">${esc(teams[0].name)}</span>`;
+  let r;
+  try { r = await api(`/api/team/setups?team_id=${tsState.team}`); } catch (e) { r = { ok: false, error: "erro", msg: e.message }; }
+  if (!r.ok) {
+    const msg = r.error === "plano"
+      ? `A <b>biblioteca de setups da equipe</b> é do plano <b>Equipe</b>: o dono desta equipe precisa ter o plano Equipe ativo. Com ele, o setup de cada melhor volta dos companheiros fica reunido aqui e dá para baixar para o ACC com um clique. <a class="lnk" href="#/plano">Ver o plano</a>`
+      : esc(r.msg || "Não deu para carregar agora.");
+    box.innerHTML = head(teamSel) + `<div class="note" style="margin-top:8px">${msg}</div></div>`;
+    const sel0 = $("#tsTeam"); if (sel0) sel0.onchange = (e) => { tsState.team = e.target.value; paintTeamSetups(); };
+    return;
+  }
+  const q = tsState.q.toLowerCase();
+  const items = (r.items || []).filter((x) => !q || `${x.who} ${x.car} ${x.track} ${x.name}`.toLowerCase().includes(q));
+  box.innerHTML = head(`${teamSel}<input id="tsQ" placeholder="Buscar piloto, carro, pista…" value="${esc(tsState.q)}">`) +
+    `<div class="sub" style="margin:6px 0 10px">Os setups usados nos melhores tempos dos companheiros (enviados automaticamente) e os que eles compartilham de propósito. Clique em Baixar para salvar no ACC e na sua biblioteca.</div>
+    ${items.length ? `<table class="tsx"><thead><tr><th>Piloto</th><th>Carro / pista</th><th>Setup</th><th>Melhor volta</th><th></th></tr></thead><tbody>${items.slice(0, 200).map((x) => `<tr>
+      <td>${esc(x.who || "—")}${x.mine ? ` <span class="sub">(você)</span>` : ""}</td>
+      <td class="sub">${esc(pretty(x.car))} · ${esc(pretty(x.track))}</td>
+      <td>${esc(x.name || "")}${x.note ? `<br><small class="sub">${esc(x.note)}</small>` : ""}${x.air_temp != null ? `<br><small class="sub">${Math.round(x.air_temp)}°C ar${x.road_temp != null ? ` · ${Math.round(x.road_temp)}°C pista` : ""}</small>` : ""}</td>
+      <td class="num">${x.best_lap_ms ? fmtLap(x.best_lap_ms) : "—"}<br><small class="sub">${x.kind === "volta" ? "do melhor tempo" : "compartilhado"}</small></td>
+      <td><button class="btn sm primary" data-tsget="${x.kind}:${x.id}">Baixar</button>${x.kind === "compartilhado" ? ` <button class="btn sm quiet" data-tsdel="${x.id}" title="Remover da biblioteca">✕</button>` : ""}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="sub">Nenhum setup na biblioteca ainda. Eles aparecem quando os companheiros batem um recorde com o setup selecionado na sessão, ou quando alguém usa “Compartilhar com a equipe” em um setup.</div>`}</div>`;
+  const sel = $("#tsTeam"); if (sel) sel.onchange = (e) => { tsState.team = e.target.value; paintTeamSetups(); };
+  const qi = $("#tsQ");
+  if (qi) qi.oninput = (e) => { tsState.q = e.target.value; clearTimeout(tsState.t); tsState.t = setTimeout(() => { paintTeamSetups().then(() => { const i = $("#tsQ"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 300); };
+  box.querySelectorAll("[data-tsget]").forEach((b) => b.onclick = async () => {
+    const [kind, id] = b.dataset.tsget.split(":");
+    b.disabled = true; b.textContent = "Baixando…";
+    try {
+      const res = await api("/api/team/setups/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: tsState.team, kind, id }) });
+      b.textContent = res.already ? "✓ já tinha" : "✓ salvo no ACC";
+      setTimeout(() => renderSetups(), 900);
+    } catch (e) { b.disabled = false; b.textContent = "Baixar"; toast(e.message); }
+  });
+  box.querySelectorAll("[data-tsdel]").forEach((b) => b.onclick = async () => {
+    if (!confirm("Remover este setup compartilhado da biblioteca da equipe?")) return;
+    await api("/api/team/setups/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: tsState.team, id: b.dataset.tsdel }) });
+    paintTeamSetups();
+  });
+}
+async function shareBox(setupId) {                       // botão "Compartilhar com a equipe" no detalhe do setup
+  const box = $("#sShare");
+  if (!box) return;
+  let st; try { st = await api("/api/team/status"); } catch (e) { return; }
+  const teams = st.teams || [];
+  if (!st.logged_in || !teams.length) { box.innerHTML = `<div class="sub">Para compartilhar com a equipe, entre com o Google e participe de uma equipe (menu Equipe).</div>`; return; }
+  box.innerHTML = `<h3>Compartilhar com a equipe</h3><div class="row" style="gap:8px;flex-wrap:wrap">
+    <select id="shTeam">${teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
+    <input id="shNote" placeholder="nota (ex.: bom na chuva)" style="flex:1;min-width:140px"><button class="btn primary sm" id="shGo">Compartilhar</button></div><div id="shOut" class="sub" style="margin-top:6px"></div>`;
+  $("#shGo").onclick = async () => {
+    const out = $("#shOut"); out.textContent = "Enviando…";
+    try {
+      const r = await api("/api/team/setups/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: $("#shTeam").value, setup_id: setupId, note: $("#shNote").value }) });
+      out.textContent = r.ok ? "✓ Compartilhado com a equipe." : r.error === "plano" ? "A biblioteca da equipe é do plano Equipe (o dono da equipe precisa ter o plano)." : "Não foi possível compartilhar.";
+    } catch (e) { out.textContent = e.message; }
+  };
+}
+
 async function showSetup(id) {
   view.querySelectorAll(".srow").forEach((tr) => tr.classList.toggle("sel", +tr.dataset.id === id));
   const s = await api(`/api/setups/${id}`);
@@ -1526,7 +1598,9 @@ async function showSetup(id) {
     ${groups.map((g) => `<h3>${esc(g)}</h3><table class="stab"><tbody>
       ${s.rows.filter((r) => r.group === g).map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${
         r.values.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ")}${r.unit ? " " + r.unit : ""}</td></tr>`).join("")}
-    </tbody></table>`).join("")}`;
+    </tbody></table>`).join("")}
+    <div id="sShare" style="margin-top:14px"></div>`;
+  shareBox(id);
 }
 
 async function showDiff(a, b) {
