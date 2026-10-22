@@ -239,8 +239,13 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         except FileNotFoundError as e:
             raise HTTPException(404, str(e))
 
+    def _need_setup_gen():
+        if lic and not lic.has("setup_gen"):
+            raise HTTPException(403, "O gerador de setup é do plano Pro ou Equipe. Veja o menu Plano.")
+
     @app.get("/api/setups/{setup_id}/advice")
     def setup_advice(setup_id: int, target: float = 26.5):
+        _need_setup_gen()
         try:
             return setups.advice(db, setup_id, target)
         except FileNotFoundError as e:
@@ -249,6 +254,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     @app.post("/api/setups/{setup_id}/apply")
     def setup_apply(setup_id: int, changes: list[dict] = Body(..., embed=True), mode: str = Body("new", embed=True), name: str | None = Body(None, embed=True)):
         """mode = 'new' (cria uma versão nova) ou 'update' (atualiza o próprio setup, com backup)."""
+        _need_setup_gen()
         try:
             if mode == "update":
                 return setups.update_in_place(db, setup_id, changes)
@@ -272,6 +278,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
 
     @app.post("/api/setups/generate")
     def setup_generate(body: dict = Body(...)):
+        _need_setup_gen()
         try:
             return setups.generate(db, int(body["base_id"]), body.get("changes") or [], body.get("name"))
         except (KeyError, ValueError, FileNotFoundError, OSError) as e:

@@ -1660,13 +1660,15 @@ async function shareBox(setupId) {                       // botão "Compartilhar
 async function showSetup(id) {
   view.querySelectorAll(".srow").forEach((tr) => tr.classList.toggle("sel", +tr.dataset.id === id));
   const s = await api(`/api/setups/${id}`);
+  try { const l = await api("/api/license"); OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); } catch (e) { /* sem licença: tratado como grátis */ }
+  const genLock = !OV_FEATS.has("setup_gen");
   const groups = [...new Set(s.rows.map((r) => r.group))];
   $("#sDetail").innerHTML = `
     <h2 style="margin-bottom:2px">${esc(s.name)}</h2>
     <div class="sub" style="margin-bottom:10px">${esc(pretty(s.car))} · ${esc(pretty(s.track))} · ${esc(srcLabel(s.source))}${s.version ? " " + esc(s.version) : ""}</div>
     ${s.stats ? `<div class="note okk" style="margin-bottom:10px">Seu melhor tempo com este setup: <b>${fmtLap(s.stats.best_ms)}</b> · ${s.stats.laps} volta${s.stats.laps === 1 ? "" : "s"} em ${s.stats.sessions} sess${s.stats.sessions === 1 ? "ão" : "ões"}${s.stats.estimated ? " (estimado: você não marcou o setup nas sessões)" : ""}.</div>`
       : `<div class="note" style="margin-bottom:10px">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para o Pitwall juntar seus tempos aqui.</div>`}
-    <div class="gen-box" id="sGen"><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" id="sAdvice">Gerador de setup: ver recomendações</button>
+    <div class="gen-box" id="sGen"><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup: ver recomendações<em class="tier">Pro</em></button>
       <label class="sub" style="display:flex;align-items:center;gap:6px">Pressão alvo (psi) <input id="eTarget" type="number" step="0.1" value="26.5" style="width:70px"></label></div>
       <div class="sub" style="margin-top:6px">O Pitwall analisa as suas últimas voltas com este setup (equilíbrio, travadas, pressões e freios) e sugere ajustes. Depois você cria uma <b>versão nova</b> ou <b>atualiza este setup</b>.</div>
       <div id="eOut"></div></div>
@@ -1677,6 +1679,7 @@ async function showSetup(id) {
     <div id="sShare" style="margin-top:14px"></div>`;
   shareBox(id);
   $("#sAdvice").onclick = async () => {
+    if (genLock) { $("#eOut").innerHTML = `<div class="note warn" style="margin-top:8px">O <b>gerador de setup</b> (recomendações e criação de versões) é do plano <b>Pro</b> ou <b>Equipe</b>. <a href="#/plano">Ver planos</a></div>`; return; }
     $("#eOut").innerHTML = `<div class="sub" style="margin-top:8px">Analisando as suas voltas…</div>`;
     try {
       const r = await api(`/api/setups/${id}/advice?target=${parseFloat($("#eTarget").value) || 26.5}`);

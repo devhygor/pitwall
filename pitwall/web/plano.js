@@ -12,6 +12,7 @@ const PLAN_FEATURES = [
   ["Vídeos das voltas sem limite (grátis guarda as últimas 5 sessões)", "pro"],
   ["Overlays básicos: mapa simples, pedais minimalistas, delta só número, participantes compacto, pneus em 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego (uma por lado)", "free"],
   ["Todos os modelos dos overlays: gráfico de pedais com volante e painel do piloto, delta completo e em barra larga, participantes completo e em torre, pneus como no ACC e em faixa, próxima curva completa, mapa com asfalto e modo seguir, radar (de cima, circular e halo) com carrinhos por classe", "pro"],
+  ["Gerador de setup: analisa as suas voltas, recomenda ajustes e cria uma versão nova (ou atualiza o setup, com backup)", "pro"],
   ["Setups da equipe: o setup de cada melhor tempo dos companheiros, com notas e instalação em 1 clique no ACC (para quem está na equipe)", "pro"],
   ["Equipe: Pro para 10 pessoas (o seu e mais 9 chaves para dividir com a equipe; todas vencem junto com o plano do dono)", "team"],
   ["Sem anúncios no site", "pro"],
