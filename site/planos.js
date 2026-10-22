@@ -118,9 +118,7 @@ async function renderPlans() {
     let cmpTxt = "";
     const sPl = ST[pl.code];
     if (sPl && sPl.m && sPl.y) {
-      if (sPl.saveC > 0) cmpTxt += period === "year"
-        ? `<div class="cmp good">Anual: <b>−${pctTxt(sPl.savePct)}</b> em relação a pagar 12 meses no mensal (${brl(sPl.year12)}) · você economiza ${brl(sPl.saveC)}</div>`
-        : `<div class="cmp">No anual sai ${brl(Math.round(sPl.yMonth))}/mês: <b>−${pctTxt(sPl.savePct)}</b> (economiza ${brl(sPl.saveC)} por ano)</div>`;
+      if (sPl.saveC > 0 && period === "year") cmpTxt += `<div class="cmp good">Anual: <b>−${pctTxt(sPl.savePct)}</b> em relação a pagar 12 meses no mensal (${brl(sPl.year12)}) · você economiza ${brl(sPl.saveC)}</div>`;      // só aparece quando o Anual está selecionado
     }
     if (pl.code === "team" && ST.bm && ST.by) {
       const yr = period === "year", bd = yr ? ST.by : ST.bm, own = yr ? ST.team.y : ST.team.m, un = yr ? "ano" : "mês";
