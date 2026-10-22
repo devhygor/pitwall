@@ -72,3 +72,12 @@ grant execute on function public.start_trial(text, text) to authenticated;
 
 -- Duração do teste grátis configurável (migração "trial_days_config"): tabela app_config + trial_days() + admin_set_trial_days();
 -- start_trial passa a usar make_interval(days => trial_days()). Detalhes na migração aplicada no projeto.
+
+-- Preços atuais (22/10/2026), aplicados pelo painel/SQL (a tabela prices manda; este bloco só documenta):
+--   Pro mensal 19,90 · Fundador mensal 9,90 · Pro anual 179,90 (≈ 9 meses pagos)
+--   Equipe (Pro para 10 pessoas) mensal 99,90 · anual 899,90 (≈ metade de 10 Pros avulsos)
+update public.prices set amount_cents = 1990 where plan_code = 'pro' and period = 'month' and label = '';
+update public.prices set amount_cents = 990 where plan_code = 'pro' and period = 'month' and label = 'Fundador';
+update public.prices set amount_cents = 17990 where plan_code = 'pro' and period = 'year' and label = '';
+update public.prices set amount_cents = 9990 where plan_code = 'team' and period = 'month' and label = '';
+update public.prices set amount_cents = 89990 where plan_code = 'team' and period = 'year' and label = '';
