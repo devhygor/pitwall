@@ -437,6 +437,8 @@ class Team:
         me = self.user["id"]
         sess = self.db.session(lap["session_id"]) or {}
         game = sess.get("game") or "acc"
+        if game == "demo" or str(lap.get("track") or "").startswith("demo_"):
+            return {"sent": False, "reason": "sessão de demonstração não vai para a nuvem"}
         if known is not None:       # sincronização em lote: já temos a lista da nuvem
             cur = [{"lap_time_ms": known[(game, lap["car"], lap["track"])]}] if (game, lap["car"], lap["track"]) in known else []
         else:
