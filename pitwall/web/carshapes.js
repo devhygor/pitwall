@@ -160,7 +160,7 @@ const OPT_LOCK = {
   delta: { predicted: false, fuel: false },
   corner: { lead: 250, speed: false, next: false, name: false, brakepoint: false },
   tyres: { brake: false, pads: false, wear: false, compound: false, weather: false, tmin: 70, tmax: 100, pmin: 26, pmax: 27, bmin: 350, bmax: 800, punit: "psi" },
-  radar: { range: 40, gap: false, numbers: false },
+  radar: { range: 40, gap: false, numbers: false, carcolor: "heat" },
   blindl: { always: true }, blindr: { always: true },
 };
 const OPT_LOCK_TEAM = { radar: { carmap: null } };                    // escolher o carrinho de cada classe: Pro

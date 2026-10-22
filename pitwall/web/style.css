@@ -1150,3 +1150,13 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .cm-row select:disabled { opacity: .8; }
 .cm-row span { font-size: 14px; }
 .ovslide > span { white-space: nowrap; }
+
+/* escolha visual do carrinho de cada classe */
+.cm-row { display: flex !important; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 12px; }
+.cm-row .cm-name { display: flex; align-items: baseline; gap: 10px; } .cm-row .cm-name b { font-size: 14px; } .cm-row .cm-name small { color: var(--muted); font-size: 12px; }
+.cm-opts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cm-opt { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px; border-radius: 12px; border: 2px solid transparent; background: rgba(255,255,255,.05); color: var(--text); cursor: pointer; }
+.cm-opt:hover:not(:disabled) { background: rgba(255,255,255,.09); }
+.cm-opt.on { border-color: var(--accent); background: rgba(62,224,143,.12); }
+.cm-opt canvas { width: 32px; height: 52px; } .cm-opt span { font-size: 11px; color: var(--muted); } .cm-opt.on span { color: var(--text); }
+.cm-opt:disabled { opacity: .6; cursor: default; }

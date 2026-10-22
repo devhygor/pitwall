@@ -18,7 +18,7 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true,
   mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full",
-  rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true };
+  rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true, carcolor: "heat" };
 
 let cfg = { ...DEFAULT_CFG };
 // modelos extras de overlay: Pro (overlay_styles); sem o recurso, volta para o modelo simples
@@ -618,6 +618,9 @@ function radarOverlay() {
     sd.style.display = style === "sides" ? "" : "none";
     const kindOf = (c) => { const b = carKindOf(c || {}); return FEATS.has(F_TEAM) && cfg.carmap && cfg.carmap[b] ? cfg.carmap[b] : b; };
     const myKind = kindOf(D && D.me);
+    const white = cfg.carcolor === "white";                                             // carros brancos (sem a cor por proximidade; o perigo vira brilho vermelho)
+    const tone = (d) => (white ? "#f4f7ff" : hsl(heat(d, R * 0.8)));
+    const glowOf = (col) => (white ? "#ff4d5e" : col);
     if (style === "sides") {
       const mc = root.querySelector("#mc"), mx = mc.getContext("2d"); mx.clearRect(0, 0, mc.width, mc.height); drawCar(mx, 32, 52, 92, "#e8f0ff", { kind: myKind, hi: "#fff" });
       sd.querySelector(".L").className = "L" + (L ? " on" : ""); sd.querySelector(".R").className = "R" + (Rr ? " on" : "");
@@ -637,8 +640,8 @@ function radarOverlay() {
       ctx.setLineDash([]);
       ctx.strokeStyle = "rgba(255,255,255,.1)"; ctx.beginPath(); ctx.moveTo(10, cy - R / 2 * ky); ctx.lineTo(W - 10, cy - R / 2 * ky); ctx.moveTo(10, cy + R / 2 * ky); ctx.lineTo(W - 10, cy + R / 2 * ky); ctx.stroke();
       for (const c of cars) {
-        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = hsl(heat(d, R * 0.8));
-        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null, hi: hsl(heat(d, R * 0.8), 1) });
+        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = tone(d);
+        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), glow: alongside(c) ? glowOf(col) : null, label: cfg.numbers ? c.n : null, labelCol: white ? "#0b0d10" : "#fff", hi: white ? "#ffffff" : col });
       }
       drawCar(ctx, cx, cy, 46, "#e8f0ff", { kind: myKind, glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
     } else if (style === "circle") {
@@ -650,8 +653,8 @@ function radarOverlay() {
       for (const c of cars) {
         const x = cx + clamp(c.side * 2.2, -R, R) * k * 0.62, y = cy - c.fwd * k, d = Math.hypot(c.fwd, c.side * 1.5);
         if (Math.hypot(x - cx, y - cy) > W / 2 - 8) continue;
-        const col = hsl(heat(d, R * 0.8));
-        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null });
+        const col = tone(d);
+        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), glow: alongside(c) ? glowOf(col) : null, label: cfg.numbers ? c.n : null, labelCol: white ? "#0b0d10" : "#fff" });
       }
       drawCar(ctx, cx, cy, 38, "#e8f0ff", { kind: myKind, glow: "#3ee08f", hi: "#ffffff" });
     } else {                                                                                         // halo: oito setores ao redor do carro acendem conforme a proximidade

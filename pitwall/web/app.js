@@ -3264,10 +3264,13 @@ function ovPanel(n, S) {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "gap", "Distância do carro à frente e atrás", c.gap, "Metros até o carro mais próximo na sua linha")}
       ${ovChip(n, "numbers", "Número dos carros", c.numbers)}</div>` + ovSlider(n, "range", "Alcance do radar", c.range || 40, 20, 80, 5, " m"));
     const cm = c.carmap || {}, cmLock = !OV_FEATS.has(OV_T);
-    g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => `<div class="cm-row"><canvas data-prev="${k}" width="56" height="88"></canvas>
-        <span>${t}</span><select data-carmap="${k}" ${cmLock ? "disabled" : ""}>${CAR_KINDS.map(([v, tt]) => `<option value="${v}" ${(cm[k] || k) === v ? "selected" : ""}>${tt}</option>`).join("")}</select></div>`).join("")}
+    g += ovGroup("Cor dos carros", ovSeg(n, "carcolor", [["heat", "Por proximidade · verde → vermelho"], ["white", "Brancos"]], c.carcolor || "heat"),
+      "brancos: todos os carros em branco; quem está ao seu lado ganha um brilho vermelho");
+    g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => `<div class="cm-row" data-class="${k}"><div class="cm-name"><b>${t}</b><small>${(cm[k] || k) === k ? "automático" : "escolhido por você"}</small></div>
+        <div class="cm-opts">${CAR_KINDS.map(([v, tt]) => `<button type="button" class="cm-opt ${(cm[k] || k) === v ? "on" : ""}" data-pick="${k}:${v}" title="${tt}" ${cmLock ? "disabled" : ""}>
+          <canvas data-thumb="${v}" width="64" height="104"></canvas><span>${tt.split(" (")[0].split(" /")[0]}</span></button>`).join("")}</div></div>`).join("")}
       ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe o desenho sozinho pela classe do carro. No plano Pro você escolhe o carrinho de cada classe.</div>`
-        : `<div class="sub">O radar escolhe o desenho pela classe de cada carro (ACC e iRacing). Aqui você troca o carrinho de cada classe. <button type="button" class="btn xs" id="cmReset">Voltar ao automático</button></div>`}</div>`,
+        : `<div class="sub">Para cada classe, clique no carrinho que quer ver no radar. O radar descobre a classe de cada carro sozinho (ACC e iRacing). <button type="button" class="btn xs" id="cmReset">Voltar ao automático</button></div>`}</div>`,
       "ex.: mostrar todos os GT3 como carro de turismo");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
       "se o radar mostrar o carro do lado errado, ligue isto (vale também para o aviso falado do engenheiro)");
@@ -3487,20 +3490,29 @@ function bindOverlayPanel(box, n, put, putModes) {
         else await send(name, key, v);
         if (key === "mode") { const sub = box.querySelector(".ovp-head .sub"); if (sub) sub.textContent = OV_MODE_TXT[v]; }
         el.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
+        if (key === "carcolor" && box._paintThumbs) box._paintThumbs();
         if (key === "trend_secs") { const sl = box.querySelector('input[data-k="trend_secs"]'); if (sl) { sl.value = v; sl.nextElementSibling.textContent = v + " s"; } }
       };
     }
   });
-  box.querySelectorAll("canvas[data-prev]").forEach((cv) => {                       // prévia dos carrinhos
-    const x = cv.getContext("2d"), sel = box.querySelector(`select[data-carmap="${cv.dataset.prev}"]`);
-    const paint = () => { x.clearRect(0, 0, cv.width, cv.height); drawCar(x, 28, 44, 76, "#e8f0ff", { kind: sel ? sel.value : cv.dataset.prev, hi: "#fff" }); };
-    paint(); if (sel) sel.addEventListener("change", paint);
+  box._paintThumbs = () => box.querySelectorAll("canvas[data-thumb]").forEach((cv) => {                  // miniaturas dos carrinhos (na cor escolhida)
+    const x = cv.getContext("2d"), cc = box.querySelector('button[data-k="carcolor"].on'), white = !!cc && cc.dataset.val === "white";
+    x.clearRect(0, 0, cv.width, cv.height); drawCar(x, 32, 52, 88, white ? "#f4f7ff" : "#3ee08f", { kind: cv.dataset.thumb, hi: "#ffffff" });
   });
-  box.querySelectorAll("select[data-carmap]").forEach((sel) => sel.onchange = () => {
-    const map = {}; box.querySelectorAll("select[data-carmap]").forEach((x) => { if (x.value !== x.dataset.carmap) map[x.dataset.carmap] = x.value; });
+  box._paintThumbs();
+  box.querySelectorAll("button[data-pick]").forEach((b) => b.onclick = () => {
+    if (b.disabled) return;
+    const [cls, kind] = b.dataset.pick.split(":"), row = b.closest(".cm-row");
+    row.querySelectorAll(".cm-opt").forEach((x) => x.classList.toggle("on", x === b));
+    row.querySelector("small").textContent = kind === cls ? "automático" : "escolhido por você";
+    const map = {};
+    box.querySelectorAll(".cm-row").forEach((r) => { const on = r.querySelector(".cm-opt.on"); const [k2, v2] = on ? on.dataset.pick.split(":") : []; if (k2 && v2 !== k2) map[k2] = v2; });
     put({ overlays: { radar: { carmap: Object.keys(map).length ? map : null } } });
   });
-  const cmr = box.querySelector("#cmReset"); if (cmr) cmr.onclick = () => { put({ overlays: { radar: { carmap: null } } }); box.querySelectorAll("select[data-carmap]").forEach((x) => { x.value = x.dataset.carmap; x.dispatchEvent(new Event("change")); }); };
+  const cmr = box.querySelector("#cmReset"); if (cmr) cmr.onclick = () => {
+    put({ overlays: { radar: { carmap: null } } });
+    box.querySelectorAll(".cm-row").forEach((r) => { r.querySelectorAll(".cm-opt").forEach((x) => x.classList.toggle("on", x.dataset.pick.split(":")[0] === x.dataset.pick.split(":")[1])); r.querySelector("small").textContent = "automático"; });
+  };
   box.querySelectorAll("[data-swap]").forEach((el) => el.onclick = () => { el.classList.toggle("on"); put({ eng_spotter_swap: el.classList.contains("on") }); });
   box.querySelectorAll(".ovslide.locked").forEach((el) => el.onclick = () => toast(`Esta opção é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano.`));
   box.querySelectorAll("[data-col]").forEach((el) => el.onclick = () => {
