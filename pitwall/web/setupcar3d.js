@@ -131,7 +131,7 @@ function makeLivery(P, key) {
   // linhas das portas
   g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 3;
   const cab = P.cab, ux = (x) => (x + 2.32) / 4.64;
-  for (const [a, b] of [[0.93, 1.07], [0.43, 0.57]]) for (const xx of [cab[0] + 0.35, cab[1] - 0.55]) {
+  if (!clean) for (const [a, b] of [[0.93, 1.07], [0.43, 0.57]]) for (const xx of [cab[0] + 0.35, cab[1] - 0.55]) {
     const u = ux(xx); [[a, Math.min(b, 1)], [0, Math.max(0, b - 1)]].forEach(([v0, v1]) => { if (v1 > v0) { g.beginPath(); g.moveTo(U(u), V(v0)); g.lineTo(U(u), V(v1)); g.stroke(); } });
   }
   // número, nome e roundel (cada lado lido de fora: o esquerdo é desenhado girado)
@@ -152,7 +152,7 @@ function makeLivery(P, key) {
 
 
 // ------------------------------------------------------------------ pintura Pitwall: verde neon metálico, carbono, faixas em ângulo e brilho
-function makePitwallLivery(P, key) {
+function makePitwallLivery(P, key, clean = false) {
   const W = 2048, H = 1024, c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
   const U = (u) => u * W, V = (v) => H * (1 - v);
   const dark = "#070a0e", neon = "#3dffa4", emerald = "#00cf6e", deep = "#00924f";
@@ -168,10 +168,10 @@ function makePitwallLivery(P, key) {
     [[0, 0.09], [0.16, 0.07], [0.38, 0.05], [0.58, 0.055], [0.8, 0.1], [1, 0.16]].forEach(([u, d]) => g.lineTo(U(u), V(vMid + sgn * d)));
     g.lineTo(U(1), V(vMid + sgn * 0.4)); g.lineTo(U(0), V(vMid + sgn * 0.4)); g.closePath(); g.fill();
   };
-  skirt(1.0, -1); skirt(0.5, 1); g.fillRect(0, V(0.9), W, V(0.6) - V(0.9));
+  if (!clean) { skirt(1.0, -1); skirt(0.5, 1); g.fillRect(0, V(0.9), W, V(0.6) - V(0.9)); }
   // linha de neon acompanhando a saia
   g.lineWidth = 8; g.strokeStyle = neon; g.shadowColor = neon; g.shadowBlur = 14;
-  for (const [vm, sg] of [[1.0, -1], [0.5, 1]]) { g.beginPath(); [[0, 0.1], [0.16, 0.078], [0.38, 0.058], [0.58, 0.063], [0.8, 0.11], [1, 0.17]].forEach(([u, d], k) => { const x = U(u), y = V(vm + sg * d); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); }
+  if (!clean) for (const [vm, sg] of [[1.0, -1], [0.5, 1]]) { g.beginPath(); [[0, 0.1], [0.16, 0.078], [0.38, 0.058], [0.58, 0.063], [0.8, 0.11], [1, 0.17]].forEach(([u, d], k) => { const x = U(u), y = V(vm + sg * d); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); }
   g.shadowBlur = 0;
   // faixas do capô ao teto: carbono com fio de neon e cortes em ângulo
   const bar = (v, w, col) => { g.fillStyle = col; g.fillRect(U(0.02), V(v + w / 2), U(0.96), V(v - w / 2) - V(v + w / 2)); };
@@ -190,11 +190,11 @@ function makePitwallLivery(P, key) {
     }
     g.restore();
   };
-  shard(0.045, false); shard(0.955, true); shard(0.545, false);
+  if (!clean) { shard(0.045, false); shard(0.955, true); shard(0.545, false); }
   // saídas de ar, linhas das portas
   g.fillStyle = "#04070a";
-  if (P.layout === "front") for (let k = 0; k < 5; k++) g.fillRect(U(0.74 + k * 0.022), V(0.25 + 0.075), U(0.012), V(0.25 - 0.075) - V(0.25 + 0.075));
-  else for (let k = 0; k < 7; k++) g.fillRect(U(0.1 + k * 0.022), V(0.25 + 0.065), U(0.012), V(0.25 - 0.065) - V(0.25 + 0.065));
+  if (!clean) if (P.layout === "front") for (let k = 0; k < 5; k++) g.fillRect(U(0.74 + k * 0.022), V(0.25 + 0.075), U(0.012), V(0.25 - 0.075) - V(0.25 + 0.075));
+  else if (!clean) for (let k = 0; k < 7; k++) g.fillRect(U(0.1 + k * 0.022), V(0.25 + 0.065), U(0.012), V(0.25 - 0.065) - V(0.25 + 0.065));
   g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 3;
   const cab = P.cab, ux = (x) => (x + 2.32) / 4.64;
   for (const [a, b] of [[0.93, 1.07], [0.43, 0.57]]) for (const xx of [cab[0] + 0.35, cab[1] - 0.55]) {
@@ -505,10 +505,97 @@ function makeRestyle(model, car) {
   };
 }
 
+
+// ------------------------------------------------------------------ modelo de malha única (gerado por IA, sem peças nomeadas)
+// Acha as rodas pelo contato com o chão, alinha às medidas do editor, separa as rodas por região (para a cambagem e a
+// convergência girarem de verdade) e pinta por zonas: pintura Pitwall (livery projetada por UV), carbono, vidros, pneus e aros.
+function adoptRaw(gltf, brand) {
+  let mesh = null; gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse((o) => { if (o.isMesh && (!mesh || o.geometry.attributes.position.count > mesh.geometry.attributes.position.count)) mesh = o; });
+  if (!mesh) throw new Error("modelo sem malha");
+  const g = mesh.geometry; g.applyMatrix4(mesh.matrixWorld);
+  const PA = g.attributes.position.array, NA = g.attributes.normal ? g.attributes.normal.array : null, n = PA.length / 3;
+  let idx = g.index ? g.index.array : null; if (!idx) { idx = new Uint32Array(n); for (let i = 0; i < n; i++) idx[i] = i; }
+  // eixos: a traseira é a ponta com o ponto mais alto (a asa); queremos a frente em +x
+  let xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
+  for (let i = 0; i < n; i++) { const x = PA[3 * i], y = PA[3 * i + 1]; if (x < xmin) xmin = x; if (x > xmax) xmax = x; if (y < ymin) ymin = y; if (y > ymax) ymax = y; }
+  const Lm = xmax - xmin; let hi = [-1e9, -1e9];
+  for (let i = 0; i < n; i++) { const x = PA[3 * i], y = PA[3 * i + 1]; if (x < xmin + 0.08 * Lm && y > hi[0]) hi[0] = y; if (x > xmax - 0.08 * Lm && y > hi[1]) hi[1] = y; }
+  const flip = hi[1] > hi[0];                                   // traseira em +x: gira 180° em torno de y
+  if (flip) for (let i = 0; i < n; i++) { PA[3 * i] = -PA[3 * i]; PA[3 * i + 2] = -PA[3 * i + 2]; if (NA) { NA[3 * i] = -NA[3 * i]; NA[3 * i + 2] = -NA[3 * i + 2]; } }
+  // contato com o chão -> rodas
+  const tol = 0.02 * (ymax - ymin), lowX = [], lowZ = [], lowI = [];
+  for (let i = 0; i < n; i++) if (PA[3 * i + 1] < ymin + tol) { lowX.push(PA[3 * i]); lowZ.push(PA[3 * i + 2]); lowI.push(i); }
+  if (lowX.length < 50) throw new Error("não achei o contato das rodas com o chão");
+  let c0 = Math.min(...lowX), c1 = Math.max(...lowX);
+  for (let it = 0; it < 8; it++) {
+    let s0 = 0, n0 = 0, s1 = 0, n1 = 0;
+    for (const x of lowX) { if (Math.abs(x - c0) < Math.abs(x - c1)) { s0 += x; n0++; } else { s1 += x; n1++; } }
+    c0 = s0 / Math.max(n0, 1); c1 = s1 / Math.max(n1, 1);
+  }
+  const mid = (c0 + c1) / 2, wheels = [];            // [frente esq, frente dir, trás esq, trás dir] (esquerda = z negativo)
+  const box = (front, sign) => { let a = 1e9, b = -1e9, xa = 1e9, xb = -1e9; lowX.forEach((x, k) => { if ((x > mid) === front && Math.sign(lowZ[k]) === sign) { if (lowZ[k] < a) a = lowZ[k]; if (lowZ[k] > b) b = lowZ[k]; if (x < xa) xa = x; if (x > xb) xb = x; } }); return { zc: (a + b) / 2, hw: (b - a) / 2, xc: (xa + xb) / 2 }; };
+  const wb = { front: [box(true, -1), box(true, 1)], rear: [box(false, -1), box(false, 1)] };
+  const xf = (wb.front[0].xc + wb.front[1].xc) / 2, xr = (wb.rear[0].xc + wb.rear[1].xc) / 2, k = (WB.front - WB.rear) / (xf - xr);
+  const sc = (v) => v * k;
+  const zOf = (b) => sc(Math.abs(b.zc));
+  // transforma tudo para o sistema do editor (frente +x, chão y=0, eixos nas medidas padrão)
+  for (let i = 0; i < n; i++) { PA[3 * i] = (PA[3 * i] - xf) * k + WB.front; PA[3 * i + 1] = (PA[3 * i + 1] - ymin) * k; PA[3 * i + 2] = PA[3 * i + 2] * k; }
+  const centers = [[WB.front, -zOf(wb.front[0])], [WB.front, zOf(wb.front[1])], [WB.rear, -zOf(wb.rear[0])], [WB.rear, zOf(wb.rear[1])]];
+  const halfW = [TW.front / 2, TW.front / 2, TW.rear / 2, TW.rear / 2];
+  g.deleteAttribute("uv");
+  // UV: projeta a pintura Pitwall (a mesma textura do carro por código) pelo lado, por cima e por trás
+  const UV = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const x = PA[3 * i], y = PA[3 * i + 1], z = PA[3 * i + 2], ny = NA ? NA[3 * i + 1] : 0, nz = NA ? NA[3 * i + 2] : 0;
+    let v;
+    if (ny > 0.55) v = 0.25 - clamp(z, -0.75, 0.75) * 0.32;                       // por cima: centro em v=0,25
+    else { const t = clamp((y - 0.5) / 0.42 * 0.22, -0.2, 0.24); v = z >= 0 ? (t < 0 ? 1 + t : t) : 0.5 - t; }   // lados
+    UV[2 * i] = clamp((x + 2.32) / 4.64, 0, 1); UV[2 * i + 1] = v;
+  }
+  g.setAttribute("uv", new THREE.BufferAttribute(UV, 2));
+  // classificação por triângulo
+  const T = idx.length / 3, cls = new Uint8Array(T), cnt = new Uint32Array(10);   // 0 pintura 1 carbono 2 vidro 3 pneu 4 aro  5..8 rodas (tire/rim por roda)
+  let roof = 0; for (let i = 0; i < n; i++) { const y = PA[3 * i + 1]; if (y < 1.34 && y > roof && PA[3 * i] > -1 && PA[3 * i] < 0.8) roof = y; }
+  const wheelOf = new Int8Array(T).fill(-1);
+  for (let t = 0; t < T; t++) {
+    const a = idx[3 * t] * 3, b = idx[3 * t + 1] * 3, c = idx[3 * t + 2] * 3;
+    const cx = (PA[a] + PA[b] + PA[c]) / 3, cy = (PA[a + 1] + PA[b + 1] + PA[c + 1]) / 3, cz = (PA[a + 2] + PA[b + 2] + PA[c + 2]) / 3;
+    let w = -1;
+    for (let i = 0; i < 4; i++) { const dx = cx - centers[i][0], dy = cy - R, dz = cz - centers[i][1]; if (Math.abs(dz) < halfW[i] + 0.015 && dx * dx + dy * dy < (R * 1.04) ** 2) { w = i; break; } }
+    wheelOf[t] = w;
+    if (w >= 0) { const i = w, dx = cx - centers[i][0], dy = cy - R, r = Math.hypot(dx, dy); cls[t] = r > R * 0.8 ? 3 : 4; continue; }
+    if (cy < 0.2 || (cx < -1.95 && cy > 0.75) || cy > 1.34 || (cx > 2.25 && cy < 0.32)) cls[t] = 1;
+    else if (cy > 0.84 && cx > -1.05 && cx < 0.8 && Math.abs(cz) < 0.82 && cy < roof - 0.045) cls[t] = 2;
+    else cls[t] = 0;
+  }
+  const mk = (cl, w) => { let m = 0; for (let t = 0; t < T; t++) if (cls[t] === cl && (w === undefined || wheelOf[t] === w)) m++; const out = new Uint32Array(m * 3); let p = 0; for (let t = 0; t < T; t++) if (cls[t] === cl && (w === undefined || wheelOf[t] === w)) { out[p++] = idx[3 * t]; out[p++] = idx[3 * t + 1]; out[p++] = idx[3 * t + 2]; } return out; };
+  const geo = (arr) => { const gg = new THREE.BufferGeometry(); gg.setAttribute("position", g.attributes.position); if (NA) gg.setAttribute("normal", g.attributes.normal); gg.setAttribute("uv", g.attributes.uv); gg.setIndex(new THREE.BufferAttribute(arr, 1)); return gg; };
+  const P = PROFILES[brand] || PROFILES.generic;
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: makePitwallLivery(P, brand, true), metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.03 });
+  const carbon = new THREE.MeshStandardMaterial({ color: "#0b0e12", metalness: 0.4, roughness: 0.45 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: "#0c1520", metalness: 0.6, roughness: 0.06, clearcoat: 1, opacity: 0.88, transparent: true });
+  const rubber = new THREE.MeshStandardMaterial({ color: "#121316", roughness: 0.92 });
+  const rimM = new THREE.MeshStandardMaterial({ color: "#222831", metalness: 0.85, roughness: 0.3 });
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  for (const [cl, m] of [[0, paint], [1, carbon], [2, glass]]) { const me = new THREE.Mesh(geo(mk(cl)), m); me.castShadow = true; me.receiveShadow = true; body.add(me); }
+  const corners = [];
+  for (let i = 0; i < 4; i++) {
+    const [cx, cz] = centers[i], piv = new THREE.Group(); piv.position.set(cx, R, cz); root.add(piv);
+    const tire = new THREE.Mesh(geo(mk(3, i)), rubber), rim = new THREE.Mesh(geo(mk(4, i)), rimM);
+    for (const me of [tire, rim]) { me.position.set(-cx, -R, -cz); me.castShadow = true; piv.add(me); }
+    const dummy = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial());
+    corners.push({ piv, ax: cx, z: cz, side: Math.sign(cz) || 1, front: i < 2, g: piv, tire, ring: dummy, disc: dummy, cal: dummy, barrel: dummy });
+  }
+  const keep = new Map(); [paint, carbon, glass, rubber, rimM].forEach((m) => keep.set(m, { t: m.transparent, o: m.opacity, d: m.depthWrite }));
+  return { isModel: true, isRaw: true, restyle: (mode) => { const pw = mode === "pitwall"; const lv = paint.userData.lv || (paint.userData.lv = paint.map); paint.map = pw ? lv : null; paint.color.set(pw ? 0xffffff : P.paint); paint.needsUpdate = true; }, root, body, P, corners, wing: new THREE.Group(), wingGroup: new THREE.Group(), splitter: new THREE.Group(), ducts: [], dashLed: { material: { emissiveIntensity: 1 } },
+    modelMats: keep, paint: null, paintPlain: null, carbon: null, dark: null, bodyMats: [], cabinMeshes: [], glass: null };
+}
+
 // ------------------------------------------------------------------ modelo .glb do próprio usuário (opcional)
 // Procura rodas/discos/suspensão pelos nomes (WHEEL_LF, DISC_RF, SUSP_LR...), alinha o modelo às medidas do editor
 // e prende as peças em pivôs para a cambagem, a convergência e a altura mexerem de verdade.
-async function adoptModel(url, onProgress) {
+async function adoptModel(url, onProgress, brand) {
   const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
   const gltf = await new GLTFLoader().loadAsync(url, (e) => { if (onProgress && e.total) onProgress(e.loaded / e.total); });
   const model = gltf.scene, root = new THREE.Group(), body = new THREE.Group();
@@ -516,7 +603,7 @@ async function adoptModel(url, onProgress) {
   model.updateMatrixWorld(true);
   const find = (rx) => { let r = null; model.traverse((o) => { if (!r && rx.test(o.name)) r = o; }); return r; };
   const wn = { LF: find(/^WHEEL_LF/), RF: find(/^WHEEL_RF/), LR: find(/^WHEEL_LR/), RR: find(/^WHEEL_RR/) };
-  if (!wn.LF || !wn.RF || !wn.LR || !wn.RR) throw new Error("rodas não encontradas no modelo");
+  if (!wn.LF || !wn.RF || !wn.LR || !wn.RR) return adoptRaw(gltf, brand);          // malha única: separa as rodas por geometria
   const ctr = (o) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
   const c = Object.fromEntries(Object.entries(wn).map(([k, o]) => [k, ctr(o)]));
   const fwd = new THREE.Vector3().addVectors(c.LF, c.RF).sub(new THREE.Vector3().addVectors(c.LR, c.RR)).setY(0).normalize();     // trás -> frente
@@ -597,7 +684,7 @@ export async function createStage(host, opts) {
   const glow2 = new THREE.Mesh(new THREE.RingGeometry(3.7, 3.74, 120), new THREE.MeshBasicMaterial({ color: "#2ee59d", transparent: true, opacity: 0.22 })); glow2.rotation.x = -Math.PI / 2; glow2.position.y = 0.004; scene.add(glow2);
 
   let car = null;
-  if (opts.modelUrl) { try { car = await adoptModel(opts.modelUrl, opts.onProgress); } catch (e) { console.warn("modelo 3D local indisponível, usando o carro por código:", e); } }
+  if (opts.modelUrl) { try { car = await adoptModel(opts.modelUrl, opts.onProgress, brand); } catch (e) { console.warn("modelo 3D local indisponível, usando o carro por código:", e); } }
   if (!car) car = buildCar(brand, scene); else car.P = PROFILES[brand] || PROFILES.generic;
   scene.add(car.root);
   const sus = buildSuspension(car); sus.grp.visible = false; car.root.add(sus.grp);
