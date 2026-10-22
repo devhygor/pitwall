@@ -356,6 +356,36 @@ class DB:
                                 FROM setups ORDER BY car, track, name""").fetchall()
         return [dict(r) for r in rows]
 
+    def setup_stats(self) -> dict:
+        """Por setup: melhor volta válida sua com ele, quantas voltas e sessões, e quando usou por último.
+        Vale o setup escolhido na sessão; sem escolha, o sugerido (então vira estimativa)."""
+        with self.connect() as c:
+            rows = c.execute("""SELECT COALESCE(s.setup_id, s.suggested_setup_id) AS sid, MIN(l.lap_time_ms) AS best_ms, COUNT(*) AS laps,
+                                       COUNT(DISTINCT s.id) AS sessions, MAX(s.started_at) AS last_used,
+                                       SUM(CASE WHEN s.setup_id IS NOT NULL THEN 1 ELSE 0 END) AS explicit_laps
+                                FROM laps l JOIN sessions s ON s.id = l.session_id
+                                WHERE l.valid = 1 AND l.out_lap = 0 AND l.in_lap = 0 AND COALESCE(s.kind, 'own') = 'own'
+                                  AND COALESCE(s.setup_id, s.suggested_setup_id) IS NOT NULL
+                                GROUP BY sid""").fetchall()
+        return {r["sid"]: {"best_ms": r["best_ms"], "laps": r["laps"], "sessions": r["sessions"], "last_used": r["last_used"],
+                           "estimated": not r["explicit_laps"]} for r in rows}
+
+    def sessions_using_setup(self, setup_id: int, car: str, track: str, limit: int = 3) -> tuple[list[int], bool]:
+        """Últimas sessões em que este setup foi usado; sem nenhuma, as últimas do mesmo carro e pista (assumido=True)."""
+        with self.connect() as c:
+            ids = [r[0] for r in c.execute("""SELECT id FROM sessions WHERE COALESCE(setup_id, suggested_setup_id) = ? AND COALESCE(kind, 'own') = 'own'
+                                              ORDER BY started_at DESC LIMIT ?""", (setup_id, limit))]
+            if ids:
+                return ids, False
+            ids = [r[0] for r in c.execute("""SELECT id FROM sessions WHERE car = ? AND lower(track) = lower(?) AND COALESCE(kind, 'own') = 'own'
+                                              ORDER BY started_at DESC LIMIT ?""", (car, track, limit))]
+        return ids, True
+
+    def update_setup_content(self, setup_id: int, sha1: str, content: str, file_mtime: float, imported_at: str, notes: str | None = None):
+        with self._lock, self.connect() as c:
+            c.execute("UPDATE setups SET sha1 = ?, content = ?, file_mtime = ?, imported_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
+                      (sha1, content, file_mtime, imported_at, notes, setup_id))
+
     def setup(self, setup_id: int) -> dict | None:
         with self.connect() as c:
             r = c.execute("SELECT * FROM setups WHERE id = ?", (setup_id,)).fetchone()

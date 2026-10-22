@@ -1376,7 +1376,7 @@ async function engineerPanel(s) {
   run();
 }
 
-function renderEngineer(r, setupId, setupName) {
+function renderEngineer(r, setupId, setupName, opt = {}) {
   const out = $("#eOut");
   const sevCls = { alta: "bad", média: "warn", info: "info" };
   const stateCls = { subesterço: "us", sobresterço: "os", neutro: "ok" };
@@ -1406,8 +1406,9 @@ function renderEngineer(r, setupId, setupName) {
             <td class="num"><b>${c.from == null ? (c.delta > 0 ? "+" : "") + c.delta + " clique(s)" : fmtV(c, c.to, c.to_disp)}</b></td>
             <td class="why">${c.reasons.map(esc).join("; ")}</td></tr>`).join("")}</tbody></table>
         ${setupId ? `
-        <div class="gen"><input id="eName" value="${esc("Pitwall - " + (setupName || "setup"))}">
-          <button class="btn primary" id="eGen">Criar setup novo no ACC</button></div>
+        <div class="gen"><input id="eName" value="${esc(opt.nextName || "Pitwall - " + (setupName || "setup"))}">
+          <button class="btn primary" id="eGen">Criar versão nova no ACC</button>
+          <button class="btn" id="eUpd" title="Aplica os ajustes marcados no próprio arquivo deste setup (guarda um backup antes)">Atualizar este setup</button></div>
         <div id="eGenOut"></div>` :
         `<div class="note">Escolha o setup que você usou para ver os valores atuais e criar um setup novo já ajustado.</div>`}
         <div class="note">Mude poucas coisas por vez e grave mais voltas para confirmar. Sem os dados reais de cada carro, os ajustes
@@ -1421,6 +1422,21 @@ function renderEngineer(r, setupId, setupName) {
         </tbody></table>` : ""}
       </div>
     </div>`;
+  const upd = $("#eUpd");
+  if (upd) upd.onclick = async () => {
+    const chosen = [...out.querySelectorAll("[data-chg]")].filter((c) => c.checked).map((c) => r.changes[+c.dataset.chg]);
+    if (!chosen.length) { $("#eGenOut").innerHTML = `<div class="note warn">Marque pelo menos um ajuste.</div>`; return; }
+    if (!confirm("Aplicar os ajustes marcados direto no arquivo deste setup? Eu guardo um backup do original antes, então dá para voltar.")) return;
+    upd.disabled = true;
+    try {
+      const res = await api(`/api/setups/${setupId}/apply`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "update", changes: chosen.map((c) => ({ path: c.path, delta: c.delta })) }) });
+      $("#eGenOut").innerHTML = res.unchanged ? `<div class="note okk">Nada mudou: o setup já está assim.</div>`
+        : res.already ? `<div class="note okk">Esse resultado já existe como <b>${esc(res.name)}</b>.</div>`
+        : `<div class="note okk">Pronto! <b>${esc(res.name)}</b> foi atualizado no ACC. Backup do original em <code>${esc(res.backup || "")}</code>.</div>`;
+    } catch (e) { $("#eGenOut").innerHTML = `<div class="note warn">Não deu para atualizar: ${esc(e.message)}</div>`; }
+    finally { upd.disabled = false; }
+  };
   const gen = $("#eGen");
   if (gen) gen.onclick = async () => {
     const chosen = [...out.querySelectorAll("[data-chg]")].filter((c) => c.checked).map((c) => r.changes[+c.dataset.chg]);
@@ -1439,7 +1455,11 @@ function renderEngineer(r, setupId, setupName) {
 }
 
 // ---------------------------------------------------------------- biblioteca de setups
-const setupsState = { car: "", track: "", kind: "", source: "", q: "", sel: [], open: null, diffOnly: true };
+const setupsState = { car: "", track: "", kind: "", source: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name" };
+const SETUP_PAGE = 40;
+// nomes de exibição das origens (o valor gravado no banco não muda)
+const SRC_LABEL = { "GO Setups": "Coleção Pitwall", "Meu": "Meus", "Pitwall": "Gerados pelo Pitwall", "Equipe": "Da equipe" };
+const srcLabel = (s) => SRC_LABEL[s] || s || "—";
 async function renderSetups() {
   current = { name: "setups" };
   const lib = await api("/api/setups");
@@ -1452,6 +1472,11 @@ async function renderSetups() {
   const q = st.q.toLowerCase();
   const list = all.filter((f) => (!st.car || f.car === st.car) && (!st.track || f.track === st.track)
     && (!st.kind || f.kind === st.kind) && (!st.source || f.source === st.source) && (!q || f.name.toLowerCase().includes(q)));
+  if (st.sort === "best") list.sort((a, b) => (a.best_ms || 1e12) - (b.best_ms || 1e12));
+  else if (st.sort === "used") list.sort((a, b) => String(b.last_used || "").localeCompare(String(a.last_used || "")));
+  const pages = Math.max(1, Math.ceil(list.length / SETUP_PAGE));
+  if (st.page >= pages) st.page = pages - 1;
+  const pageList = list.slice(st.page * SETUP_PAGE, (st.page + 1) * SETUP_PAGE);
   const sel = (id, opts, val, all_) => `<select id="${id}"><option value="">${all_}</option>${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === val ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
   view.innerHTML = `
     <div class="head"><div><h1>Setups</h1>
@@ -1463,35 +1488,43 @@ async function renderSetups() {
       ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
       ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
       ${sel("fKind", [["Q", "Classificação (Q)"], ["R", "Corrida (R)"]], st.kind, "Q e R")}
-      ${sel("fSrc", [["GO Setups", "GO Setups"], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"]], st.source, "Todas as origens")}
+      ${sel("fSrc", [["GO Setups", srcLabel("GO Setups")], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"], ["Equipe", "Da equipe"]], st.source, "Todas as origens")}
+      <select id="fSort"><option value="name" ${st.sort === "name" ? "selected" : ""}>Ordenar: nome</option><option value="best" ${st.sort === "best" ? "selected" : ""}>Ordenar: meu melhor tempo</option><option value="used" ${st.sort === "used" ? "selected" : ""}>Ordenar: usado por último</option></select>
       <input id="fQ" placeholder="Buscar pelo nome…" value="${esc(st.q)}">
       <span class="spacer"></span>
       <button class="btn primary" id="sCmp" ${st.sel.length === 2 ? "" : "disabled"}>Comparar 2 selecionados</button>
     </div>
     <div class="slib">
       <div class="panel pad0 slist">
-        ${list.length ? `<table><thead><tr><th></th><th>Nome</th><th>Carro / pista</th><th>Origem</th><th>Tipo</th><th>Temp.</th><th>No ACC</th></tr></thead><tbody>
-          ${list.slice(0, 400).map((f) => `<tr class="srow ${st.open === f.id ? "sel" : ""}" data-id="${f.id}">
+        ${list.length ? `<table><thead><tr><th></th><th>Nome</th><th>Carro / pista</th><th>Meu melhor</th><th>Origem</th><th>Tipo</th><th>Temp.</th><th>No ACC</th></tr></thead><tbody>
+          ${pageList.map((f) => `<tr class="srow ${st.open === f.id ? "sel" : ""}" data-id="${f.id}">
             <td><input type="checkbox" data-pick="${f.id}" ${st.sel.includes(f.id) ? "checked" : ""}></td>
             <td>${esc(f.name)}</td>
             <td class="sub">${esc(pretty(f.car))} · ${esc(pretty(f.track))}</td>
-            <td><span class="tag ${f.source === "GO Setups" ? "go" : f.source === "Pitwall" ? "pw" : ""}">${esc(f.source || "—")}</span></td>
+            <td class="num">${f.best_ms ? `<b>${fmtLap(f.best_ms)}</b><br><small class="sub">${f.laps_n} volta${f.laps_n === 1 ? "" : "s"}${f.estimated ? " · estimado" : ""}</small>` : `<span class="sub">—</span>`}</td>
+            <td><span class="tag ${f.source === "GO Setups" ? "go" : f.source === "Pitwall" ? "pw" : ""}">${esc(srcLabel(f.source))}</span></td>
             <td>${f.kind || "—"}${f.variant ? ` <span class="sub">${esc(f.variant)}</span>` : ""}</td>
             <td class="num">${f.temp_c != null ? f.temp_c + "°C" : "—"}</td>
             <td>${f.in_acc ? `<span class="status ok">sim</span>` : `<button class="btn sm" data-install="${f.id}">Instalar</button>`}</td>
           </tr>`).join("")}</tbody></table>
-          ${list.length > 400 ? `<div class="note" style="padding:0 14px 12px">Mostrando 400 de ${list.length}. Use os filtros.</div>` : ""}`
+          <div class="pager"><button class="btn sm" id="pgPrev" ${st.page ? "" : "disabled"}>‹ Anterior</button>
+            <span class="sub">${list.length} setups · página ${st.page + 1} de ${pages}</span>
+            <button class="btn sm" id="pgNext" ${st.page + 1 < pages ? "" : "disabled"}>Próxima ›</button></div>`
         : `<div class="empty"><b>Nenhum setup encontrado</b>${all.length ? "Mude os filtros." : "Clique em “Importar da pasta do ACC”."}</div>`}
       </div>
       <div class="panel sdetail" id="sDetail"><div class="sub">Clique num setup para ver os detalhes, ou marque dois para comparar.</div></div>
     </div>`;
   const reRender = () => renderSetups();
-  $("#fCar").onchange = (e) => { st.car = e.target.value; st.track = ""; reRender(); };
-  $("#fTrack").onchange = (e) => { st.track = e.target.value; reRender(); };
-  $("#fKind").onchange = (e) => { st.kind = e.target.value; reRender(); };
-  $("#fSrc").onchange = (e) => { st.source = e.target.value; reRender(); };
+  $("#fCar").onchange = (e) => { st.car = e.target.value; st.track = ""; st.page = 0; reRender(); };
+  $("#fTrack").onchange = (e) => { st.track = e.target.value; st.page = 0; reRender(); };
+  $("#fKind").onchange = (e) => { st.kind = e.target.value; st.page = 0; reRender(); };
+  $("#fSrc").onchange = (e) => { st.source = e.target.value; st.page = 0; reRender(); };
+  $("#fSort").onchange = (e) => { st.sort = e.target.value; st.page = 0; reRender(); };
+  const pgp = $("#pgPrev"), pgn = $("#pgNext");
+  if (pgp) pgp.onclick = () => { st.page--; reRender(); };
+  if (pgn) pgn.onclick = () => { st.page++; reRender(); };
   let tq;
-  $("#fQ").oninput = (e) => { clearTimeout(tq); tq = setTimeout(() => { st.q = e.target.value; reRender().then(() => { const i = $("#fQ"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 250); };
+  $("#fQ").oninput = (e) => { clearTimeout(tq); tq = setTimeout(() => { st.q = e.target.value; st.page = 0; reRender().then(() => { const i = $("#fQ"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 250); };
   $("#sImport").onclick = async () => {
     $("#sImport").disabled = true;
     const r = await api("/api/setups/import", { method: "POST" });
@@ -1545,12 +1578,12 @@ async function paintTeamSetups() {
   const items = (r.items || []).filter((x) => !q || `${x.who} ${x.car} ${x.track} ${x.name}`.toLowerCase().includes(q));
   box.innerHTML = head(`${teamSel}<input id="tsQ" placeholder="Buscar piloto, carro, pista…" value="${esc(tsState.q)}">`) +
     `<div class="sub" style="margin:6px 0 10px">Os setups usados nos melhores tempos dos companheiros (enviados automaticamente) e os que eles compartilham de propósito. Clique em Baixar para salvar no ACC e na sua biblioteca.</div>
-    ${items.length ? `<table class="tsx"><thead><tr><th>Piloto</th><th>Carro / pista</th><th>Setup</th><th>Melhor volta</th><th></th></tr></thead><tbody>${items.slice(0, 200).map((x) => `<tr>
+    ${items.length ? `<div class="tsx-wrap"><table class="tsx"><thead><tr><th>Piloto</th><th>Carro / pista</th><th>Setup</th><th>Melhor volta</th><th></th></tr></thead><tbody>${items.slice(0, 200).map((x) => `<tr>
       <td>${esc(x.who || "—")}${x.mine ? ` <span class="sub">(você)</span>` : ""}</td>
       <td class="sub">${esc(pretty(x.car))} · ${esc(pretty(x.track))}</td>
       <td>${esc(x.name || "")}${x.note ? `<br><small class="sub">${esc(x.note)}</small>` : ""}${x.air_temp != null ? `<br><small class="sub">${Math.round(x.air_temp)}°C ar${x.road_temp != null ? ` · ${Math.round(x.road_temp)}°C pista` : ""}</small>` : ""}</td>
       <td class="num">${x.best_lap_ms ? fmtLap(x.best_lap_ms) : "—"}<br><small class="sub">${x.kind === "volta" ? "do melhor tempo" : "compartilhado"}</small></td>
-      <td><button class="btn sm primary" data-tsget="${x.kind}:${x.id}">Baixar</button>${x.kind === "compartilhado" ? ` <button class="btn sm quiet" data-tsdel="${x.id}" title="Remover da biblioteca">✕</button>` : ""}</td></tr>`).join("")}</tbody></table>`
+      <td><button class="btn sm primary" data-tsget="${x.kind}:${x.id}">Baixar</button>${x.kind === "compartilhado" ? ` <button class="btn sm quiet" data-tsdel="${x.id}" title="Remover da biblioteca">✕</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
       : `<div class="sub">Nenhum setup na biblioteca ainda. Eles aparecem quando os companheiros batem um recorde com o setup selecionado na sessão, ou quando alguém usa “Compartilhar com a equipe” em um setup.</div>`}</div>`;
   const sel = $("#tsTeam"); if (sel) sel.onchange = (e) => { tsState.team = e.target.value; paintTeamSetups(); };
   const qi = $("#tsQ");
@@ -1594,13 +1627,31 @@ async function showSetup(id) {
   const groups = [...new Set(s.rows.map((r) => r.group))];
   $("#sDetail").innerHTML = `
     <h2 style="margin-bottom:2px">${esc(s.name)}</h2>
-    <div class="sub" style="margin-bottom:10px">${esc(pretty(s.car))} · ${esc(pretty(s.track))} · ${esc(s.source || "")}${s.version ? " " + esc(s.version) : ""}</div>
+    <div class="sub" style="margin-bottom:10px">${esc(pretty(s.car))} · ${esc(pretty(s.track))} · ${esc(srcLabel(s.source))}${s.version ? " " + esc(s.version) : ""}</div>
+    ${s.stats ? `<div class="note okk" style="margin-bottom:10px">Seu melhor tempo com este setup: <b>${fmtLap(s.stats.best_ms)}</b> · ${s.stats.laps} volta${s.stats.laps === 1 ? "" : "s"} em ${s.stats.sessions} sess${s.stats.sessions === 1 ? "ão" : "ões"}${s.stats.estimated ? " (estimado: você não marcou o setup nas sessões)" : ""}.</div>`
+      : `<div class="note" style="margin-bottom:10px">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para o Pitwall juntar seus tempos aqui.</div>`}
+    <div class="gen-box" id="sGen"><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary" id="sAdvice">Gerador de setup: ver recomendações</button>
+      <label class="sub" style="display:flex;align-items:center;gap:6px">Pressão alvo (psi) <input id="eTarget" type="number" step="0.1" value="26.5" style="width:70px"></label></div>
+      <div class="sub" style="margin-top:6px">O Pitwall analisa as suas últimas voltas com este setup (equilíbrio, travadas, pressões e freios) e sugere ajustes. Depois você cria uma <b>versão nova</b> ou <b>atualiza este setup</b>.</div>
+      <div id="eOut"></div></div>
     ${groups.map((g) => `<h3>${esc(g)}</h3><table class="stab"><tbody>
       ${s.rows.filter((r) => r.group === g).map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${
         r.values.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ")}${r.unit ? " " + r.unit : ""}</td></tr>`).join("")}
     </tbody></table>`).join("")}
     <div id="sShare" style="margin-top:14px"></div>`;
   shareBox(id);
+  $("#sAdvice").onclick = async () => {
+    $("#eOut").innerHTML = `<div class="sub" style="margin-top:8px">Analisando as suas voltas…</div>`;
+    try {
+      const r = await api(`/api/setups/${id}/advice?target=${parseFloat($("#eTarget").value) || 26.5}`);
+      const m = r.meta || {};
+      $("#eOut").insertAdjacentHTML("beforebegin", "");
+      renderEngineer(r, id, s.name, { nextName: m.next_name, update: true });
+      $("#eOut").insertAdjacentHTML("afterbegin", `<div class="note" style="margin-top:8px">${m.sessions && m.sessions.length ? (m.assumed
+        ? `Você ainda não usou este setup: a análise é das suas últimas sessões com este carro e pista (${m.sessions.length}). Confira se faz sentido.`
+        : `Baseado nas suas últimas ${m.sessions.length} sessão(ões) com este setup.`) : "Sem sessões para analisar."}</div>`);
+    } catch (e) { $("#eOut").innerHTML = `<div class="note warn">${esc(e.message)}</div>`; }
+  };
 }
 
 async function showDiff(a, b) {

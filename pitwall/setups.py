@@ -16,6 +16,8 @@ import re
 import sys
 from pathlib import Path
 
+from .db import data_dir
+
 WHEELS = ("DE", "DD", "TE", "TD")   # dianteira esq./dir., traseira esq./dir.
 
 
@@ -178,8 +180,11 @@ def import_folder(db) -> dict:
 def library(db) -> dict:
     root = setups_root()
     cars: dict = {}
+    stats = db.setup_stats()
     for s in db.setups_list():
         s["in_acc"] = bool(s["rel_path"]) and (root / s["rel_path"]).exists()
+        st = stats.get(s["id"]) or {}
+        s["best_ms"], s["laps_n"], s["sessions_n"], s["last_used"], s["estimated"] = st.get("best_ms"), st.get("laps", 0), st.get("sessions", 0), st.get("last_used"), st.get("estimated", False)
         cars.setdefault(s["car"], {}).setdefault(s["track"], []).append(s)
     return {"root": str(root), "exists": root.exists(),
             "cars": [{"car": c, "tracks": [{"track": t, "files": fs} for t, fs in sorted(tr.items())]}
@@ -196,7 +201,62 @@ def load(db, setup_id: int) -> dict:
 def info(db, setup_id: int) -> dict:
     s = load(db, setup_id)
     content = s.pop("content")
-    return {**s, "rows": describe(content)}
+    return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s)}
+
+
+def next_version_name(db, s: dict) -> str:
+    """Nome da próxima versão: 'Setup', 'Setup v2', 'Setup v3'..."""
+    base = re.sub(r"\s+v\d+$", "", s["name"])
+    taken = {x["name"] for x in db.setups_list() if x["car"] == s["car"] and x["track"] == s["track"]}
+    n = 2
+    while f"{base} v{n}" in taken:
+        n += 1
+    return f"{base} v{n}"
+
+
+def advice(db, setup_id: int, target: float = 26.5) -> dict:
+    """Recomendações para este setup, a partir das suas últimas sessões com ele (ou do mesmo carro e pista, se ainda não usou)."""
+    from . import engineer
+    s = load(db, setup_id)
+    ids, assumed = db.sessions_using_setup(setup_id, s["car"], s["track"])
+    laps = []
+    for sid in reversed(ids):                      # da mais antiga para a mais nova (a análise usa as últimas voltas)
+        laps.extend(db.session_laps_full(sid))
+    res = engineer.analyze(laps, s["content"], target) if laps else {"error": "Ainda não há voltas suas neste carro e pista para analisar. Grave uma sessão com este setup.",
+                                                                       "findings": [], "changes": [], "pressures": [], "balance": [], "temps": {}, "laps_used": []}
+    stats = db.setup_stats().get(int(setup_id))
+    return {**res, "meta": {"sessions": ids, "assumed": assumed, "stats": stats, "next_name": next_version_name(db, s)}}
+
+
+def update_in_place(db, setup_id: int, changes: list[dict]) -> dict:
+    """Aplica os ajustes no PRÓPRIO arquivo do setup (guarda um backup antes)."""
+    import datetime as dt
+    import hashlib
+    import shutil
+    s = load(db, setup_id)
+    root = setups_root()
+    path = root / s["rel_path"] if s.get("rel_path") else None
+    if not path or not path.exists():
+        raise FileNotFoundError("O arquivo deste setup não está na pasta do ACC. Use 'Instalar' ou crie uma versão nova.")
+    new = apply_changes(s["content"], changes)
+    canon = json.dumps(new, sort_keys=True, separators=(",", ":"))
+    sha = hashlib.sha1(canon.encode()).hexdigest()
+    if sha == s["sha1"]:
+        return {"id": setup_id, "name": s["name"], "unchanged": True}
+    for other in db.setups_list():
+        if other["id"] != setup_id and other["car"] == s["car"] and other["track"] == s["track"]:
+            full = db.setup(other["id"])
+            if full and full["sha1"] == sha:
+                return {"id": other["id"], "name": other["name"], "already": True}
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    bdir = Path(data_dir()) / "setup_backups" / s["car"] / s["track"]
+    bdir.mkdir(parents=True, exist_ok=True)
+    backup = bdir / f"{path.stem}.{stamp}.json"
+    shutil.copy2(path, backup)
+    path.write_text(json.dumps(new, indent="\t"), encoding="utf-8")
+    db.update_setup_content(setup_id, sha, canon, path.stat().st_mtime, dt.datetime.now().isoformat(timespec="seconds"),
+                            notes=f"Atualizado pelo gerador em {stamp}")
+    return {"id": setup_id, "name": s["name"], "path": str(path), "backup": str(backup)}
 
 
 def diff(db, id_a: int, id_b: int) -> dict:

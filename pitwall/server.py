@@ -239,6 +239,23 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         except FileNotFoundError as e:
             raise HTTPException(404, str(e))
 
+    @app.get("/api/setups/{setup_id}/advice")
+    def setup_advice(setup_id: int, target: float = 26.5):
+        try:
+            return setups.advice(db, setup_id, target)
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e))
+
+    @app.post("/api/setups/{setup_id}/apply")
+    def setup_apply(setup_id: int, changes: list[dict] = Body(..., embed=True), mode: str = Body("new", embed=True), name: str | None = Body(None, embed=True)):
+        """mode = 'new' (cria uma versão nova) ou 'update' (atualiza o próprio setup, com backup)."""
+        try:
+            if mode == "update":
+                return setups.update_in_place(db, setup_id, changes)
+            return setups.generate(db, setup_id, changes, name)
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e))
+
     @app.get("/api/setups/{setup_id}")
     def setup_info(setup_id: int):
         try:
