@@ -1093,8 +1093,12 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .ovseg button.locked { opacity: .72; }
 
 /* ---- tour e primeiros passos ---- */
-#tour { position: fixed; right: 24px; bottom: 24px; z-index: 120; }
-.tour-card { width: 400px; max-width: calc(100vw - 48px); padding: 18px 20px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--accent); box-shadow: 0 14px 44px rgba(0,0,0,.55); animation: setIn .2s ease-out; }
+#tour { position: fixed; inset: 0; z-index: 120; pointer-events: none; }
+#tourSpot { position: fixed; z-index: 119; border-radius: 12px; pointer-events: none; border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgba(3, 6, 12, .72), 0 0 24px rgba(62,224,143,.45); transition: left .25s, top .25s, width .25s, height .25s; }
+.tour-card { position: fixed; pointer-events: auto; width: 380px; max-width: calc(100vw - 16px); padding: 18px 20px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--accent); box-shadow: 0 14px 44px rgba(0,0,0,.6); }
+.tour-acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
+.tour-done { font-size: 12.5px; color: var(--muted); margin: 0 0 6px; } .tour-done.ok { color: var(--accent); font-weight: 600; }
 .tour-step { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
 .tour-card h3 { margin: 4px 0 8px; font-size: 18px; }
 .tour-card p { margin: 0 0 8px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
@@ -1102,7 +1106,6 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .tour-dots i { width: 8px; height: 8px; border-radius: 99px; background: #26303f; cursor: pointer; }
 .tour-dots i.past { background: #3b6d58; } .tour-dots i.on { background: var(--accent); width: 20px; }
 .tour-btns { display: flex; align-items: center; gap: 8px; } .tour-btns span { flex: 1; }
-.tour-hl { position: relative; animation: tourPulse 1.2s ease-in-out infinite; border-radius: 10px; }
 @keyframes tourPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(62,224,143,.0); } 50% { box-shadow: 0 0 0 4px rgba(62,224,143,.55); } }
 .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #04140d; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
 .gd-prog { display: flex; flex-direction: column; gap: 8px; }
