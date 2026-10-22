@@ -1476,6 +1476,64 @@ const SETUP_PAGE = 40;
 // nomes de exibição das origens (o valor gravado no banco não muda)
 const SRC_LABEL = { "GO Setups": "Coleção Pitwall", "Meu": "Meus", "Pitwall": "Gerados pelo Pitwall", "Equipe": "Da equipe" };
 const srcLabel = (s) => SRC_LABEL[s] || s || "—";
+// ---------------------------------------------------------------- seletor com busca (no lugar do <select> feio)
+// pwCombo(host, { label, all, options: [{ v, t, s }], value, onPick, search }): botão "pílula" + lista que abre embaixo, com campo de busca,
+// teclado (↑ ↓ Enter Esc) e a opção de limpar. Com poucas opções some o campo de busca.
+const _norm = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+let _comboOpen = null;
+function pwCombo(host, cfg) {
+  const opts = cfg.options || [], cur = opts.find((o) => String(o.v) === String(cfg.value || ""));
+  const hasVal = !!cur && cfg.value !== "" && cfg.value != null;
+  host.classList.add("cb");
+  host.innerHTML = `<button type="button" class="cb-btn ${hasVal ? "act" : ""}" ${cfg.title ? `title="${esc(cfg.title)}"` : ""}>
+    ${cfg.label ? `<span class="cb-l">${esc(cfg.label)}</span>` : ""}<span class="cb-v">${esc(hasVal ? cur.t : cfg.all || "Escolher…")}</span><i>▾</i></button>`;
+  const btn = host.querySelector(".cb-btn");
+  btn.onclick = (e) => { e.stopPropagation(); if (_comboOpen) { const same = _comboOpen.host === host; _comboOpen.close(); if (same) return; } open(); };
+  function open() {
+    const pop = document.createElement("div");
+    pop.className = "cb-pop";
+    const searchable = cfg.search != null ? cfg.search : opts.length > 7;
+    pop.innerHTML = `${searchable ? `<input class="cb-q" type="search" placeholder="Digite para buscar…" autocomplete="off">` : ""}<div class="cb-list" role="listbox"></div>`;
+    document.body.appendChild(pop);
+    const r = btn.getBoundingClientRect(), w = Math.max(r.width, cfg.width || 260);
+    pop.style.minWidth = w + "px";
+    pop.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+    pop.style.top = (r.bottom + 6) + "px";
+    const room = innerHeight - r.bottom - 20;
+    pop.querySelector(".cb-list").style.maxHeight = Math.max(160, Math.min(340, room - (searchable ? 52 : 0))) + "px";
+    const list = pop.querySelector(".cb-list"), q = pop.querySelector(".cb-q");
+    let items = [], idx = 0;
+    const draw = () => {
+      const t = _norm(q ? q.value : "");
+      const rows = [];
+      if (cfg.all != null && !t) rows.push({ v: "", t: cfg.all, clear: true });
+      for (const o of opts) if (!t || _norm(o.t + " " + (o.s || "")).includes(t)) rows.push(o);
+      items = rows.slice(0, 300); idx = Math.max(0, items.findIndex((o) => String(o.v) === String(cfg.value || "")));
+      list.innerHTML = items.length ? items.map((o, i) => `<div class="cb-it ${o.clear ? "clr" : ""} ${String(o.v) === String(cfg.value || "") && !o.clear ? "on" : ""} ${i === idx ? "hl" : ""}" data-i="${i}" role="option">
+        <span class="cb-t">${esc(o.t)}</span>${o.s ? `<small>${esc(o.s)}</small>` : ""}</div>`).join("") + (rows.length > 300 ? `<div class="cb-more">Mostrando 300 de ${rows.length}: continue digitando para afinar.</div>` : "")
+        : `<div class="cb-none">Nada encontrado para “${esc(q ? q.value : "")}”.</div>`;
+      list.querySelectorAll(".cb-it").forEach((el) => {
+        el.onmousemove = () => { idx = +el.dataset.i; mark(); };
+        el.onclick = () => pick(items[+el.dataset.i]);
+      });
+    };
+    const mark = () => { list.querySelectorAll(".cb-it").forEach((el, i) => el.classList.toggle("hl", i === idx)); const h = list.querySelector(".cb-it.hl"); if (h) h.scrollIntoView({ block: "nearest" }); };
+    const pick = (o) => { if (!o) return; close(); cfg.onPick(o.v); };
+    const close = () => { pop.remove(); document.removeEventListener("mousedown", away, true); document.removeEventListener("keydown", key, true); _comboOpen = null; };
+    const away = (e) => { if (!pop.contains(e.target) && !host.contains(e.target)) close(); };
+    const key = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(); btn.focus(); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); idx = Math.min(items.length - 1, idx + 1); mark(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); idx = Math.max(0, idx - 1); mark(); }
+      else if (e.key === "Enter") { e.preventDefault(); pick(items[idx]); }
+    };
+    document.addEventListener("mousedown", away, true); document.addEventListener("keydown", key, true);
+    _comboOpen = { host, close };
+    if (q) { q.oninput = draw; q.focus(); }
+    draw();
+  }
+}
+
 async function renderSetups() {
   current = { name: "setups" };
   const lib = await api("/api/setups");
@@ -1503,7 +1561,8 @@ async function renderSetups() {
   const pages = Math.max(1, Math.ceil(list.length / SETUP_PAGE));
   if (st.page >= pages) st.page = pages - 1;
   const pageList = list.slice(st.page * SETUP_PAGE, (st.page + 1) * SETUP_PAGE);
-  const sel = (id, opts, val, all_) => `<select id="${id}" class="${val ? "act" : ""}"><option value="">${all_}</option>${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === val ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  const cbs = [];                                    // seletores a montar depois de desenhar a tela
+  const sel = (id, opts, val, all_, label) => { cbs.push({ id, opts, val, all_, label }); return `<div id="${id}"></div>`; };
   const extra = [st.kind, st.source, st.time, st.inacc].filter(Boolean).length;
   const anyFilter = st.car || st.track || extra || st.q;
   const nm = (id) => { const f = all.find((x) => x.id === id); return f ? f.name : "?"; };
@@ -1522,18 +1581,18 @@ async function renderSetups() {
       <span class="spacer"></span><button class="btn sm" id="sImport" title="Lê a pasta de setups do ACC e traz os novos para o Pitwall">Importar da pasta do ACC</button></div>
     <div class="sbar">
       <input id="fQ" class="sq" type="search" placeholder="Buscar setup pelo nome…" value="${esc(st.q)}">
-      ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
-      ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
+      ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros", "Carro")}
+      ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas", "Pista")}
       <button class="btn sm ${extra ? "on" : "quiet"}" id="fMoreBtn">Mais filtros${extra ? ` <b class="cnt">${extra}</b>` : ""}</button>
       ${anyFilter ? `<button class="btn sm quiet" id="fClear">Limpar todos</button>` : ""}
     </div>
     ${chips.length ? `<div class="fchips"><span class="fcount">Mostrando <b>${list.length}</b> de ${all.length} setups</span>
       ${chips.map(([k, t, v]) => `<button class="fchip" data-fx="${k}" title="Remover este filtro">${t}: <b>${esc(v)}</b> <i>✕</i></button>`).join("")}</div>` : ""}
     <div class="sbar more" id="fMore" ${st.moreOpen || extra ? "" : "hidden"}>
-      ${sel("fKind", [["Q", "Classificação (Q)"], ["R", "Corrida (R)"]], st.kind, "Q e R")}
-      ${sel("fSrc", [["GO Setups", srcLabel("GO Setups")], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"], ["Equipe", "Da equipe"]], st.source, "Todas as origens")}
-      ${sel("fTime", [["with", "Só com tempo de volta"], ["without", "Sem tempo de volta"]], st.time, "Com ou sem tempo")}
-      ${sel("fInAcc", [["yes", "Já instalados no ACC"], ["no", "Ainda não instalados"]], st.inacc, "Instalados ou não")}
+      ${sel("fKind", [["Q", "Classificação (Q)"], ["R", "Corrida (R)"]], st.kind, "Q e R", "Tipo")}
+      ${sel("fSrc", [["GO Setups", srcLabel("GO Setups")], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"], ["Equipe", "Da equipe"]], st.source, "Todas as origens", "Origem")}
+      ${sel("fTime", [["with", "Só com tempo de volta"], ["without", "Sem tempo de volta"]], st.time, "Com ou sem tempo", "Tempo de volta")}
+      ${sel("fInAcc", [["yes", "Já instalados no ACC"], ["no", "Ainda não instalados"]], st.inacc, "Instalados ou não", "No ACC")}
     </div>
     <div class="cmp-bar" id="cmpBar" ${st.sel.length || st.cmp ? "" : "hidden"}>
       ${st.cmp ? `<span>Comparando <b class="va">A</b> ${esc(nm(st.cmp[0]))} <span class="sub">com</span> <b class="vb">B</b> ${esc(nm(st.cmp[1]))}</span><span class="spacer"></span>
@@ -1562,10 +1621,8 @@ async function renderSetups() {
     <div id="tSetups" style="margin-top:18px"></div>`;
   const reRender = () => renderSetups();
   const empty = () => { $("#sDetail").innerHTML = `<div class="sd-empty"><b>Escolha um setup</b><span>Clique em um da lista para ver os ajustes e os seus tempos. Marque a caixinha de dois setups para ver se os ajustes fizeram diferença.</span></div>`; };
-  const onSel = (id, fn) => { const e = $(id); if (e) e.onchange = (ev) => { fn(ev.target.value); st.page = 0; reRender(); }; };
-  onSel("#fCar", (v) => { st.car = v; st.track = ""; }); onSel("#fTrack", (v) => { st.track = v; });
-  onSel("#fKind", (v) => { st.kind = v; }); onSel("#fSrc", (v) => { st.source = v; });
-  onSel("#fTime", (v) => { st.time = v; }); onSel("#fInAcc", (v) => { st.inacc = v; });
+  const PICK = { fCar: (v) => { st.car = v; st.track = ""; }, fTrack: (v) => { st.track = v; }, fKind: (v) => { st.kind = v; }, fSrc: (v) => { st.source = v; }, fTime: (v) => { st.time = v; }, fInAcc: (v) => { st.inacc = v; } };
+  cbs.forEach((c) => pwCombo($("#" + c.id), { label: c.label, all: c.all_, options: c.opts.map(([v, t]) => ({ v, t })), value: c.val, onPick: (v) => { PICK[c.id](v); st.page = 0; reRender(); } }));
   $("#fMoreBtn").onclick = () => { st.moreOpen = $("#fMore").hidden; $("#fMore").hidden = !st.moreOpen; };
   view.querySelectorAll("th[data-sort]").forEach((th) => th.onclick = () => {
     const k = th.dataset.sort;
@@ -1711,7 +1768,7 @@ async function showSetup(id) {
     <div class="sd-actions">
       <button class="btn primary ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup<em class="tier">Pro</em></button>
       ${s.parent_id ? `<button class="btn" id="sVsParent" title="Ver se os ajustes funcionaram">Comparar com o original</button>` : ""}
-      ${others.length ? `<select id="sCmpWith" title="Compara o que você andou com cada setup"><option value="">Comparar com…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}${o.best_ms ? " · " + fmtLap(o.best_ms) : ""}</option>`).join("")}</select>` : ""}
+      ${others.length ? `<div id="sCmpWith"></div>` : ""}
     </div>
     <details class="sd-more"><summary>Opções do gerador</summary>
       <label class="sub" style="display:flex;align-items:center;gap:6px;margin-top:6px">Pressão alvo (psi) <input id="eTarget" type="number" step="0.1" value="26.5" style="width:70px"></label>
@@ -1727,7 +1784,9 @@ async function showSetup(id) {
   shareBox(id);
   const startCmp = (x, y) => { setupsState.cmp = [x, y]; setupsState.sel = [x, y]; renderSetups(); };
   const vp = $("#sVsParent"); if (vp) vp.onclick = () => startCmp(s.parent_id, id);
-  const cw = $("#sCmpWith"); if (cw) cw.onchange = (e) => { if (e.target.value) startCmp(id, +e.target.value); };
+  const cw = $("#sCmpWith");
+  if (cw) pwCombo(cw, { label: "", all: "Comparar com outro setup…", search: true, width: 360, title: "Compara o que você andou com cada setup",
+    options: others.map((o) => ({ v: o.id, t: o.name, s: o.best_ms ? fmtLap(o.best_ms) : "sem tempo" })), value: "", onPick: (v) => { if (v) startCmp(id, +v); } });
   $("#sDelBtn").onclick = () => {
     $("#sDel").innerHTML = `<div class="note warn"><b>Apagar “${esc(s.name)}”?</b>
       <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="sDelFile" checked> Apagar também o arquivo da pasta do ACC (guardo uma cópia de segurança em <code>setups_apagados</code>)</label>
