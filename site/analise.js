@@ -215,7 +215,7 @@ async function renderAnalysis(idA, idB) {
   stopAnalysis();
   view.innerHTML = `<div class="loading">Carregando as voltas…</div>`;
   const ids = [idA, idB].filter(Boolean);
-  const { data, error } = await sb.from("laps").select("*,profiles(name,avatar_url)").in("id", ids);
+  const { data, error } = await sb.from("laps").select("id,user_id,game,car,track,lap_time_ms,s1_ms,s2_ms,s3_ms,air_temp,road_temp,recorded_at,uploaded_at,telemetry,setup_name,clip_path,events,profiles(name,avatar_url)").in("id", ids);
   if (error || !data || !data.length || !data.find((r) => r.id === idA)) {
     view.innerHTML = `<div class="wrap page"><div class="panel empty"><b>Volta não encontrada</b><p>Ela pode ter sido substituída por um recorde novo.</p></div></div>`; return;
   }

@@ -13,7 +13,7 @@ const PLAN_FEATURES = [
   ["Overlays básicos: mapa simples, pedais minimalistas, delta só número, participantes compacto, pneus em 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego (uma por lado)", "free"],
   ["Overlays completos: gráfico de pedais com volante, delta com previsão e combustível, participantes com colunas e classes, pneus como no ACC, próxima curva completa, mapa com asfalto e modo seguir, radar visto de cima e circular", "pro"],
   ["Modelos de transmissão: pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo ao redor do carro", "team"],
-  ["Biblioteca de setups da equipe: o setup de cada melhor tempo dos pilotos reunido, com notas e instalação em 1 clique no ACC", "team"],
+  ["Setups da equipe: o setup de cada melhor tempo dos companheiros, com notas e instalação em 1 clique no ACC (para quem está na equipe)", "pro"],
   ["10 chaves do Pro para dividir com a equipe (todas vencem junto com o plano do dono), painel do dono e carrinhos por classe no radar", "team"],
   ["Sem anúncios no site", "pro"],
 ];

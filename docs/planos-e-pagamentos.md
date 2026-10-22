@@ -33,6 +33,7 @@ app / site (#/conta)       ──────────►  função license  
 | `overlay_styles_team` modelos de transmissão (pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo) | não | não | sim |
 | `voice_custom` personalização do engenheiro (velocidade, rádio, vozes, modos de falar, avisos) | não | sim | sim |
 | `overlay_custom` personalização completa das opções de cada overlay | não | sim | sim |
+| `team_setups` setups da equipe (baixar e compartilhar, só entre membros da mesma equipe) | não | sim | sim |
 | `seat_keys` / `team_seats` 10 chaves do Pro para dividir (mesmo prazo do plano do dono) | não | não | sim |
 | `team_admin` painel da equipe | não | não | sim |
 
@@ -42,12 +43,13 @@ Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/_
 (categorias de aviso), `voice/answers.py` (perguntas), `voice/humor.py` (personalidade), `voice/tts.py` (voz online) e
 `video.py` (vídeos guardados).
 
-### Plano Equipe: biblioteca de setups da equipe
-`supabase/equipe_setups.sql`. Reúne, por equipe, (1) o setup usado no melhor tempo de cada piloto (já vai junto com o recorde quando "Enviar o setup usado junto" está ligado) e (2) setups que alguém
-compartilha de propósito (app: Setups > detalhe > *Compartilhar com a equipe*, com nota). Ver e baixar: app (Setups > *Setups da equipe*, instala no ACC com um clique) e site (página da equipe).
-Só funciona se o **dono da equipe** tem o plano Equipe ativo (a checagem é no banco, nas funções `team_setup_library`, `team_setup_get`, `share_team_setup`).
+### Setups da equipe (Pro e Equipe)
+`supabase/equipe_setups.sql` e `supabase/equipe_setups_v2.sql`. **Só para quem está na mesma equipe E tem o plano Pro ou Equipe ativo** (assinatura, cortesia, chave de equipe ou teste). O plano Grátis não envia nem baixa setups.
+Reúne, por equipe, (1) o setup usado no melhor tempo de cada piloto (vai junto com o recorde quando "Enviar o setup usado junto" está ligado) e (2) setups que alguém compartilha de propósito
+(app: Setups > detalhe > *Compartilhar com a equipe*, com nota). Ver e baixar: app (Setups > *Setups da equipe*, instala no ACC com um clique; e o botão "⚙ setup" nas voltas) e site (página da equipe).
+A checagem é no banco: a coluna `laps.setup_json` não pode mais ser lida direto (antes qualquer pessoa logada lia); o acesso é por `lap_setup_get`, `team_setup_library`, `team_setup_get` e `share_team_setup`, que exigem ser da equipe e ter Pro/Equipe (`_has_pro`).
+Por isso o app envia o setup num segundo passo (PATCH) depois de enviar a volta.
 O app descobre o setup do recorde assim: o escolhido na sessão, senão o sugerido pela temperatura, senão o único/mais recente do carro e pista (`setups.detect_used`; o ACC não informa qual setup está carregado, por isso é uma estimativa).
-O botão "⚙ setup" na lista de voltas dos companheiros (download direto do setup daquela volta) continua para todas as equipes.
 
 ### Plano Equipe: chaves para dividir
 O dono do plano Equipe (assinatura ou cortesia) gera até 10 chaves `PWT-XXXXXXXX` em **Minha conta > Chaves da equipe** (site). Cada chave libera o **Pro** para quem a resgatar

@@ -432,20 +432,22 @@ class Team:
                "s3_ms": lap.get("s3_ms"), "air_temp": lap.get("air_temp"), "road_temp": lap.get("road_temp"),
                "recorded_at": (lap.get("recorded_at") or dt.datetime.now().isoformat()),
                "uploaded_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-               "telemetry": base64.b64encode(pack(tel)).decode(), "setup_name": None, "setup_json": None,
-               "clip_path": None, "events": lap.get("events") or []}
+               "telemetry": base64.b64encode(pack(tel)).decode(), "clip_path": None, "events": lap.get("events") or []}
         sid = sess.get("setup_id") or sess.get("suggested_setup_id")
         if not sid:
             from . import setups as _setups
             sid = _setups.detect_used(self.db, lap["car"], lap["track"])      # estimativa, para o setup do recorde ir junto
         setup = self.db.setup(sid) if sid else None
-        if setup and self.settings.get("team_share_setup"):
-            row["setup_name"], row["setup_json"] = setup["name"], json.dumps(setup["content"])
+        # setups da equipe são do Pro/Equipe: sem o plano, o setup não vai junto
+        share = bool(setup and self.settings.get("team_share_setup") and (self.settings.has is None or self.settings.has("team_setups")))
         self._rest("POST", "laps", {"on_conflict": "user_id,game,car,track"}, [row],
                    prefer="resolution=merge-duplicates,return=minimal")
+        if share:     # a coluna do setup não pode ser lida de volta pelo banco, então vai num segundo passo
+            self._rest("PATCH", "laps", {"user_id": f"eq.{me}", "game": f"eq.{game}", "car": f"eq.{lap['car']}", "track": f"eq.{lap['track']}"},
+                       {"setup_name": setup["name"], "setup_json": json.dumps(setup["content"])}, prefer="return=minimal")
         if self.settings.get("team_share_clip"):
             self._clip_async(lap, game)
-        return {"sent": True, "setup": bool(row["setup_name"])}
+        return {"sent": True, "setup": share}
 
     # --- clipe de vídeo da volta ------------------------------------------------
     def _clip_async(self, lap: dict, game: str):
@@ -571,7 +573,7 @@ class Team:
 
     # --- baixar a volta de um companheiro -------------------------------------
     def import_lap(self, remote_id: str) -> int:
-        rows = self._rest("GET", "laps", {"select": "*,profiles(name)", "id": f"eq.{remote_id}"}) or []
+        rows = self._rest("GET", "laps", {"select": "id,user_id,game,car,track,lap_time_ms,s1_ms,s2_ms,s3_ms,air_temp,road_temp,recorded_at,uploaded_at,telemetry,setup_name,clip_path,events,profiles(name)", "id": f"eq.{remote_id}"}) or []
         if not rows:
             raise TeamError("volta não encontrada na equipe")
         r = rows[0]
@@ -620,7 +622,7 @@ class Team:
     def import_library_item(self, team_id: str, kind: str, item_id: str) -> dict:
         r = self._rpc("team_setup_get", {"p_team": team_id, "p_kind": kind, "p_id": item_id}) or {}
         if not r.get("ok"):
-            raise TeamError({"plano": "A biblioteca de setups é do plano Equipe (o dono da equipe precisa ter o plano).", "membro": "Você não é desta equipe."}.get(r.get("error"), "Setup não encontrado."))
+            raise TeamError({"plano": "Os setups da equipe são do plano Pro ou Equipe. Veja o menu Plano.", "membro": "Você não é desta equipe."}.get(r.get("error"), "Setup não encontrado."))
         from . import setups
         return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {r.get('who') or 'Equipe'} - {r['name']}", json.loads(r["content"]))
 
@@ -629,11 +631,9 @@ class Team:
 
     def import_setup(self, remote_id: str) -> dict:
         """Salva no ACC (e na biblioteca) o setup que o companheiro usou nessa volta."""
-        rows = self._rest("GET", "laps", {"select": "car,track,setup_name,setup_json,profiles(name)", "id": f"eq.{remote_id}"}) or []
-        if not rows or not rows[0].get("setup_json"):
-            raise TeamError("Essa volta não tem setup.")
-        r = rows[0]
+        r = self._rpc("lap_setup_get", {"p_lap": remote_id}) or {}
+        if not r.get("ok"):
+            raise TeamError({"plano": "Os setups da equipe são do plano Pro ou Equipe. Veja o menu Plano.", "membro": "Esse setup é só para quem está na mesma equipe.",
+                             "nao_achou": "Essa volta não tem setup."}.get(r.get("error"), "Não foi possível baixar o setup."))
         from . import setups
-        driver = (r.get("profiles") or {}).get("name") or "Equipe"
-        return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {driver} - {r['setup_name']}",
-                                  json.loads(r["setup_json"]))
+        return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {r.get('who') or 'Equipe'} - {r['name']}", json.loads(r["content"]))

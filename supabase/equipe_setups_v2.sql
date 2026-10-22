@@ -1,0 +1,7 @@
+-- Setups da equipe: só para membros da equipe com Pro/Equipe ativo (migração "equipe_setups_v2_pro", já aplicada).
+-- * _has_pro(email): plano pro/team ativo (assinatura, cortesia, chave de equipe ou teste).
+-- * team_setup_library / team_setup_get / share_team_setup: trocam a checagem do "plano do dono" por _has_pro(auth.email()).
+-- * lap_setup_get(lap): download do setup de uma volta de companheiro (membro da mesma equipe + Pro/Equipe).
+-- * laps: revoga o SELECT geral e libera as colunas menos setup_json (antes qualquer pessoa logada lia os setups de todos).
+--   Consequências no app: select "*" em laps não funciona mais (usar a lista de colunas) e o setup vai num PATCH depois do upsert.
+-- * plans: recurso team_setups em pro e team.

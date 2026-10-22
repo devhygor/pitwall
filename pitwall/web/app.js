@@ -1535,7 +1535,7 @@ async function paintTeamSetups() {
   try { r = await api(`/api/team/setups?team_id=${tsState.team}`); } catch (e) { r = { ok: false, error: "erro", msg: e.message }; }
   if (!r.ok) {
     const msg = r.error === "plano"
-      ? `A <b>biblioteca de setups da equipe</b> é do plano <b>Equipe</b>: o dono desta equipe precisa ter o plano Equipe ativo. Com ele, o setup de cada melhor volta dos companheiros fica reunido aqui e dá para baixar para o ACC com um clique. <a class="lnk" href="#/plano">Ver o plano</a>`
+      ? `Os <b>setups da equipe</b> são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo. Com o plano, o setup de cada melhor volta dos companheiros fica reunido aqui e dá para baixar para o ACC com um clique. <a class="lnk" href="#/plano">Ver o plano</a>`
       : esc(r.msg || "Não deu para carregar agora.");
     box.innerHTML = head(teamSel) + `<div class="note" style="margin-top:8px">${msg}</div></div>`;
     const sel0 = $("#tsTeam"); if (sel0) sel0.onchange = (e) => { tsState.team = e.target.value; paintTeamSetups(); };
@@ -1583,7 +1583,7 @@ async function shareBox(setupId) {                       // botão "Compartilhar
     const out = $("#shOut"); out.textContent = "Enviando…";
     try {
       const r = await api("/api/team/setups/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: $("#shTeam").value, setup_id: setupId, note: $("#shNote").value }) });
-      out.textContent = r.ok ? "✓ Compartilhado com a equipe." : r.error === "plano" ? "A biblioteca da equipe é do plano Equipe (o dono da equipe precisa ter o plano)." : "Não foi possível compartilhar.";
+      out.textContent = r.ok ? "✓ Compartilhado com a equipe." : r.error === "plano" ? "Compartilhar setups com a equipe é do plano Pro ou Equipe." : "Não foi possível compartilhar.";
     } catch (e) { out.textContent = e.message; }
   };
 }

@@ -675,11 +675,12 @@ function bindRows(root) {
     location.hash = mine ? `#/compare/${mine.id}/${b.dataset.cmp}` : `#/compare/${b.dataset.cmp}`;
   });
   root.querySelectorAll("[data-setup]").forEach((b) => b.onclick = async () => {
-    const { data, error } = await sb.from("laps").select("setup_name,setup_json,car,track").eq("id", b.dataset.setup).maybeSingle();
-    if (error || !data || !data.setup_json) return;
-    const blob = new Blob([JSON.stringify(JSON.parse(data.setup_json), null, "\t")], { type: "application/json" });
+    let g = null;
+    try { g = await rpc("lap_setup_get", { p_lap: b.dataset.setup }); } catch (e) { /* abaixo */ }
+    if (!g || !g.ok) { alert(g && g.error === "plano" ? "Os setups da equipe são do plano Pro ou Equipe." : g && g.error === "membro" ? "Esse setup é só para quem está na mesma equipe." : "Não foi possível baixar o setup."); return; }
+    const blob = new Blob([JSON.stringify(JSON.parse(g.content), null, "\t")], { type: "application/json" });
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob); a.download = `${data.setup_name}.json`; a.click();
+    a.href = URL.createObjectURL(blob); a.download = `${(g.name || "setup").replace(/[^\w.-]+/g, "_")}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 }
@@ -692,7 +693,7 @@ async function loadTeamSetups(teamId) {
   try { r = await rpc("team_setup_library", { p_team: teamId }); } catch (e) { return; }
   if (!r) return;
   if (!r.ok) {
-    if (r.error === "plano") box.innerHTML = `<div class="panel"><h2>Setups da equipe</h2><p class="help">A biblioteca de setups é do plano <b>Equipe</b>: o dono da equipe precisa ter o plano ativo. Com ele, o setup de cada melhor tempo dos pilotos fica reunido aqui, com notas, e baixa com um clique. <a href="#/planos">Ver planos</a></p></div>`;
+    if (r.error === "plano") box.innerHTML = `<div class="panel"><h2>Setups da equipe</h2><p class="help">Os setups da equipe são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo. Com o plano, o setup de cada melhor tempo dos pilotos fica reunido aqui, com notas, e baixa com um clique. <a href="#/planos">Ver planos</a></p></div>`;
     return;
   }
   const items = r.items || [];
