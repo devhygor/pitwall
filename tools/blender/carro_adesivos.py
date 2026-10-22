@@ -243,7 +243,7 @@ def texto(nome, corpo, tam, x, z, mat, s):
 
 for s, lado in ((1, "L"), (-1, "R")):
     texto("pitwall_" + lado, "PITWALL", 0.085, -0.52, 0.335, M["white"], s)
-    texto("num_" + lado, "71", 0.150, -0.08, 0.368, M["black"], s)
+    texto("num_" + lado, "69", 0.150, -0.08, 0.368, M["black"], s)
 
 bpy.data.objects.remove(alvo, do_unlink=True)
 result = {"n": len([o for o in bpy.data.objects if o.name.startswith("LIV_")])}

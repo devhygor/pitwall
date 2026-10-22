@@ -84,7 +84,137 @@ const routes = [
 let current = { name: "", id: null };
 let plots = [];
 let lfmTimer = null;
-function route() {
+// Login obrigatório: o app só abre as telas com a conta Pitwall (Google) conectada, mesmo no plano Grátis.
+// A sessão fica salva no PC e abre sem internet; só pede de novo se o servidor invalidar a sessão ou a pessoa sair.
+const AUTH = { ok: false, user: null, tourDone: false };
+let loginHeroOff = null;
+const PW_LOGO = `<svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><defs><linearGradient id="pwgL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2ee59d"/><stop offset=".55" stop-color="#3b9cff"/><stop offset="1" stop-color="#b98cff"/></linearGradient></defs><rect x="3" y="3" width="26" height="26" rx="7" fill="none" stroke="url(#pwgL)" stroke-width="2.5"/><path d="M10 22V10h6.5a4 4 0 0 1 0 8H10" fill="none" stroke="url(#pwgL)" stroke-width="2.5" stroke-linejoin="round"/><circle cx="22" cy="22" r="2.4" fill="#b98cff"/></svg>`;
+const GOOGLE_SVG = `<svg viewBox="0 0 48 48" width="18" height="18"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>`;
+let routeSeq = 0;
+async function route() {
+  const seq = ++routeSeq;
+  const h = location.hash || "#/";
+  if (h !== "#/overlay") {       // a janelinha de delta ao vivo (#/overlay) não passa pelo login
+    try { const s = await api("/api/team/session"); AUTH.ok = !!s.logged_in; AUTH.user = s.user || null; }
+    catch (e) { /* backend ainda subindo: mantém o último estado */ }
+    if (seq !== routeSeq) return;
+    if (!AUTH.ok) return renderLogin();
+  }
+  document.body.classList.remove("gate");
+  if (loginHeroOff) { loginHeroOff(); loginHeroOff = null; }
+  routeInner();
+  if (AUTH.ok && !AUTH.tourDone && !h.startsWith("#/overlay")) { AUTH.tourDone = true; maybeTour(); }
+}
+async function renderLogin() {
+  plots.forEach((p) => p.destroy()); plots = [];
+  if (player) { player.destroy(); player = null; }
+  if (RP) { RP.destroy(); RP = null; }
+  if (overlayTimer) { clearTimeout(overlayTimer); overlayTimer = null; }
+  if (lfmTimer) { clearInterval(lfmTimer); lfmTimer = null; }
+  closeLapPicker();
+  current = { name: "login" };
+  document.body.classList.add("gate");
+  view.classList.remove("wide");
+  let saved = { email: "", has_password: false };
+  try { saved = (await api("/api/team/session")).saved || saved; } catch (e) { /* ok */ }
+  if (current.name !== "login") return;
+  view.innerHTML = `<div class="gate-split">
+    <section class="gate-left"><div class="gate-box">
+      <div class="gate-brand">${PW_LOGO}<span>Pitwall</span></div>
+      <h1 id="gTitle">Bem-vindo de volta</h1>
+      <p class="sub" id="gSub">Entre com a sua conta Pitwall. É a mesma do site e vale para todos os planos, inclusive o Grátis.</p>
+      <button class="btn google" id="gLogin">${GOOGLE_SVG} Continuar com Google</button>
+      <div class="gate-or" id="gOr">ou entre com e-mail e senha</div>
+      <form class="gate-form" id="gForm">
+        <label for="gEmail">E-mail</label>
+        <input class="field" id="gEmail" type="email" autocomplete="username" placeholder="seu@email.com" value="${esc(saved.email)}" required>
+        <label for="gPw">Senha</label>
+        <input class="field" id="gPw" type="password" autocomplete="current-password" placeholder="${saved.has_password ? "senha lembrada neste computador" : "sua senha"}">
+        <div id="gPw2Wrap" hidden>
+          <label for="gPw2">Repita a senha</label>
+          <input class="field" id="gPw2" type="password" autocomplete="new-password" placeholder="repita a senha">
+        </div>
+        <button class="btn primary gate-go" type="submit" id="gBtn">Entrar</button>
+        <div class="gate-row">
+          <label class="gate-rem"><input class="tgl" type="checkbox" id="gRem" ${saved.email ? "checked" : ""}> Lembrar de mim</label>
+          <a class="lnk" href="#" id="gForgot">Esqueci a senha</a>
+        </div>
+      </form>
+      <div class="gate-new"><span id="gNewTxt">Ainda não tem conta?</span> <button class="btn sm" type="button" id="gNew">Criar conta</button></div>
+      <div class="sub" id="gLoginOut" style="margin-top:12px"></div>
+    </div></section>
+    <section class="gate-hero"><div class="gate-car" id="gCar"></div>
+      <div class="gate-hero-txt"><h2>Cada décimo conta.</h2><p>Análise de voltas, setups, estratégia e engenheiro de voz para ACC e iRacing.</p></div>
+    </section>
+  </div>`;
+  if (loginHeroOff) { loginHeroOff(); loginHeroOff = null; }
+  import("/static/loginhero.js").then((m) => m.mountLoginHero($("#gCar"))).then((off) => {
+    if (current.name === "login") loginHeroOff = off; else off();
+  }).catch((e) => console.warn("carro 3D da tela de login indisponível:", e));
+
+  const out = (html, bad) => { const o = $("#gLoginOut"); o.innerHTML = html; o.style.color = bad ? "var(--bad, #ff5d5d)" : ""; };
+  let poll = null, signup = false;
+  const done = (s) => { AUTH.ok = true; AUTH.user = s.user; return route(); };
+  const setMode = (on) => {
+    signup = on; out("");
+    $("#gTitle").textContent = on ? "Criar sua conta" : "Bem-vindo de volta";
+    $("#gSub").textContent = on ? "Crie a conta com e-mail e senha, ou use o Google. Vale para todos os planos, inclusive o Grátis, e é a mesma do site."
+      : "Entre com a sua conta Pitwall. É a mesma do site e vale para todos os planos, inclusive o Grátis.";
+    $("#gOr").textContent = on ? "ou crie com e-mail e senha" : "ou entre com e-mail e senha";
+    $("#gPw2Wrap").hidden = !on; $("#gPw2").required = on; $("#gPw").required = on;
+    $("#gPw").placeholder = on ? "mínimo de 8 caracteres" : (saved.has_password ? "senha lembrada neste computador" : "sua senha");
+    $("#gPw").autocomplete = on ? "new-password" : "current-password";
+    $("#gBtn").textContent = on ? "Criar conta" : "Entrar";
+    $("#gForgot").style.visibility = on ? "hidden" : "";
+    $("#gNewTxt").textContent = on ? "Já tem conta?" : "Ainda não tem conta?";
+    $("#gNew").textContent = on ? "Entrar" : "Criar conta";
+  };
+  $("#gNew").onclick = () => setMode(!signup);
+  $("#gLogin").onclick = async () => {
+    try {
+      const r = await postJ("/api/team/login");
+      if (!r.opened) window.open(r.url, "_blank");
+      out(`Termine o login no navegador que abriu. Esta tela atualiza sozinha.<br>
+        <a class="lnk" href="${esc(r.url)}" target="_blank" rel="noopener">Não abriu? Clique aqui</a>`);
+    } catch (e) { out(esc(e.message), true); return; }
+    clearTimeout(poll);
+    const tick = async () => {
+      if (current.name !== "login") return;
+      try { const s = await api("/api/team/session"); if (s.logged_in) return done(s); } catch (e) { /* ok */ }
+      poll = setTimeout(tick, 1500);
+    };
+    tick();
+  };
+  $("#gForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = $("#gBtn"); btn.disabled = true; out(signup ? "Criando a conta…" : "Entrando…");
+    const email = $("#gEmail").value, password = $("#gPw").value, remember = $("#gRem").checked;
+    try {
+      if (signup) {
+        if (password !== $("#gPw2").value) throw new Error("As senhas não são iguais.");
+        const r = await postJ("/api/team/signup", { email, password, remember });
+        if (r.confirm) {
+          out(`Conta criada! Mandamos um e-mail de confirmação para <b>${esc(email.trim())}</b>. Clique no link dele e depois volte aqui e entre com a sua senha.`);
+          btn.disabled = false; setMode(false); $("#gEmail").value = email.trim(); $("#gLoginOut").innerHTML = `Conta criada! Mandamos um e-mail de confirmação para <b>${esc(email.trim())}</b>. Clique no link dele e depois entre aqui com a sua senha.`;
+          return;
+        }
+      } else {
+        await postJ("/api/team/login-password", { email, password, remember });
+      }
+      done(await api("/api/team/session"));
+    } catch (err) { out(esc(err.message), true); btn.disabled = false; }
+  };
+  $("#gForgot").onclick = async (e) => {
+    e.preventDefault();
+    const email = $("#gEmail").value.trim();
+    if (!email) { out("Digite o seu e-mail acima primeiro.", true); $("#gEmail").focus(); return; }
+    try {
+      await postJ("/api/team/send-link", { email });
+      out(`Mandamos um link para ${esc(email)}. Abra o e-mail e clique nele; depois, em <b>Perfil</b> no site, defina uma senha nova.`);
+    } catch (err) { out(esc(err.message), true); }
+  };
+}
+function routeInner() {
   plots.forEach((p) => p.destroy()); plots = [];
   if (player) { player.destroy(); player = null; }
   if (RP) { RP.destroy(); RP = null; }
@@ -2976,7 +3106,7 @@ async function renderTeam(tab) {
   view.querySelectorAll("[data-cancelreq]").forEach((b) => b.onclick = async () => {
     await postJ("/api/team/cancel-request", { team_id: b.dataset.cancelreq }); renderTeam();
   });
-  $("#tOutBtn").onclick = async () => { await postJ("/api/team/logout"); renderTeam(); };
+  $("#tOutBtn").onclick = async () => { await postJ("/api/team/logout"); AUTH.ok = false; route(); };
   $("#tSync").onclick = async () => {
     const b = $("#tSync"); b.disabled = true; b.textContent = "Sincronizando…";
     await postJ("/api/team/sync");
@@ -3933,10 +4063,10 @@ async function backupList() {
 }
 
 const loadFeats = () => api("/api/license").then((l) => { OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); }).catch(() => { /* sem licença: tratado como grátis */ });
-loadFeats().finally(() => { if (current && ["community", "team"].includes(current.name)) route(); });
+loadFeats().finally(() => { if (current && ["community", "team"].includes(current.name)) routeInner(); });
 setInterval(loadFeats, 300000);
 route();
-if (!location.hash.startsWith("#/overlay")) { pollLive(); maybeTour(); }
+if (!location.hash.startsWith("#/overlay")) pollLive();
 
 // ---------------------------------------------------------------- Low Fuel Motorsport (só leitura)
 const LIC_COL = { ROOKIE: "#9aa3b2", IRON: "#8d7b6a", BRONZE: "#cd7f32", SILVER: "#c8ced8", GOLD: "#ffcf3f",

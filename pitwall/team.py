@@ -15,6 +15,7 @@ import base64
 import datetime as dt
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
@@ -34,15 +35,45 @@ SUPABASE_KEY = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
                 "X_S_Mi4s8xzaFsDOkFsH2OJS7Sx8mTAnly_aaNHY4xA")
 SITE_URL = "https://pitwall.hygor.com.br/"
 
+log = logging.getLogger("pitwall.team")
+
 KEEP = ("d", "t", "speed", "gas", "brake", "steer", "gear", "rpm", "x", "z")
 
 
 class TeamError(Exception):
-    pass
+    def __init__(self, msg="", status: int | None = None, code: str = ""):
+        super().__init__(msg)
+        self.status = status      # HTTP do servidor (None = erro de rede/local)
+        self.code = code          # error_code do Supabase (ex.: refresh_token_not_found)
 
 
 def _b64url(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def _dpapi(data: bytes, protect: bool) -> bytes | None:
+    """Criptografa/decifra com a conta do Windows (DPAPI): o arquivo salvo só abre neste PC e neste usuário."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class BLOB(ctypes.Structure):
+            _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+        buf = ctypes.create_string_buffer(data, len(data))
+        src = BLOB(len(data), ctypes.cast(buf, ctypes.POINTER(ctypes.c_char)))
+        out = BLOB()
+        fn = ctypes.windll.crypt32.CryptProtectData if protect else ctypes.windll.crypt32.CryptUnprotectData
+        if not fn(ctypes.byref(src), None, None, None, None, 0, ctypes.byref(out)):
+            return None
+        try:
+            return ctypes.string_at(out.pbData, out.cbData)
+        finally:
+            ctypes.windll.kernel32.LocalFree(out.pbData)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def invite_code(text: str) -> str:
@@ -95,21 +126,43 @@ class Team:
                 "name": meta.get("full_name") or meta.get("name") or (u.get("email") or "").split("@")[0],
                 "avatar_url": meta.get("avatar_url") or meta.get("picture")}
 
+    @property
+    def _bak_path(self):
+        return self._auth_path.with_name("auth.json.bak")
+
     def _load(self) -> dict:
-        try:
-            return json.loads(self._auth_path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, ValueError):
-            return {}
+        # auth.json; se estiver cortado/corrompido (app fechado no meio da gravação), usa a cópia
+        for p in (self._auth_path, self._bak_path):
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(d, dict) and d.get("refresh_token"):
+                    return d
+            except (OSError, ValueError):
+                continue
+        return {}
 
     def _save(self):
         if self._auth:
-            self._auth_path.write_text(json.dumps(self._auth), encoding="utf-8")
+            # gravação atômica: escreve num temporário e troca, então nunca sobra um arquivo pela metade
+            tmp = self._auth_path.with_name("auth.json.tmp")
+            data = json.dumps(self._auth)
+            tmp.write_text(data, encoding="utf-8")
             try:
-                os.chmod(self._auth_path, 0o600)
+                os.chmod(tmp, 0o600)
             except OSError:
                 pass
-        elif self._auth_path.exists():
-            self._auth_path.unlink()
+            os.replace(tmp, self._auth_path)
+            try:
+                self._bak_path.write_text(data, encoding="utf-8")
+                os.chmod(self._bak_path, 0o600)
+            except OSError:
+                pass
+        else:
+            for p in (self._auth_path, self._bak_path):
+                try:
+                    p.unlink()
+                except FileNotFoundError:
+                    pass
 
     # --- HTTP -----------------------------------------------------------------
     def _http(self, method: str, url: str, body=None, headers: dict | None = None):
@@ -123,16 +176,116 @@ class Team:
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as e:
             txt = e.read().decode(errors="replace")
+            code = ""
             try:
                 j = json.loads(txt)
                 msg = j.get("message") or j.get("msg") or j.get("error_description") or j.get("error") or txt
+                code = str(j.get("error_code") or j.get("code") or j.get("error") or "")
             except ValueError:
                 msg = txt
             if e.code == 401:
-                raise TeamError("Sua sessão expirou. Entre de novo com o Google.") from None
-            raise TeamError(str(msg)[:300]) from None
+                raise TeamError("Sua sessão expirou. Entre de novo com o Google.", e.code, code) from None
+            raise TeamError(str(msg)[:300], e.code, code) from None
         except urllib.error.URLError as e:
             raise TeamError(f"Sem conexão com a nuvem do Pitwall: {e.reason}") from None
+
+    # --- e-mail e senha (lembrar neste PC) ---------------------------------------
+    @property
+    def _cred_path(self):
+        return self._auth_path.with_name("cred.bin")
+
+    def saved_credentials(self) -> dict:
+        """{'email', 'has_password'} do que a pessoa pediu para lembrar (a senha nunca sai do PC nem volta para a tela)."""
+        try:
+            d = json.loads(self._cred_path.read_text(encoding="utf-8"))
+            return {"email": d.get("email") or "", "has_password": bool(d.get("pw"))}
+        except (OSError, ValueError):
+            return {"email": "", "has_password": False}
+
+    def _saved_password(self) -> str | None:
+        try:
+            d = json.loads(self._cred_path.read_text(encoding="utf-8"))
+            raw = _dpapi(base64.b64decode(d.get("pw") or ""), False)
+            return raw.decode("utf-8") if raw else None
+        except (OSError, ValueError):
+            return None
+
+    def remember(self, email: str, password: str | None, keep_password: bool = True):
+        pw = ""
+        if password and keep_password:
+            enc = _dpapi(password.encode("utf-8"), True)
+            pw = base64.b64encode(enc).decode() if enc else ""
+        self._cred_path.write_text(json.dumps({"email": email, "pw": pw}), encoding="utf-8")
+
+    def forget_password(self):
+        c = self.saved_credentials()
+        if c["email"]:
+            self._cred_path.write_text(json.dumps({"email": c["email"], "pw": ""}), encoding="utf-8")
+
+    def forget_credentials(self):
+        try:
+            self._cred_path.unlink()
+        except FileNotFoundError:
+            pass
+
+    def login_password(self, email: str, password: str | None, remember: bool = False):
+        email = (email or "").strip()
+        if not email:
+            raise TeamError("Digite o seu e-mail.")
+        if not password:       # campo vazio + senha lembrada = usa a salva
+            password = self._saved_password() if self.saved_credentials()["email"].lower() == email.lower() else None
+        if not password:
+            raise TeamError("Digite a sua senha.")
+        try:
+            r = self._http("POST", f"{self.url}/auth/v1/token?grant_type=password", {"email": email, "password": password})
+        except TeamError as e:
+            if e.status in (400, 401, 422) and "invalid" in (e.code + str(e)).lower():
+                raise TeamError("E-mail ou senha incorretos. Se nunca definiu uma senha, entre com o Google ou peça o link por e-mail e crie uma em Perfil, no site.", e.status, e.code) from None
+            raise
+        self._set_session(r)
+        if remember:
+            self.remember(email, password)
+        else:
+            self.forget_credentials()
+        self.sync_soon()
+
+    def signup(self, email: str, password: str, remember: bool = False) -> dict:
+        """Cria a conta com e-mail e senha. Devolve {'logged_in': True} se já entrou, ou {'confirm': True}
+        quando o Supabase exige confirmar o e-mail antes (a pessoa confirma e depois entra com a senha)."""
+        email = (email or "").strip()
+        if not email or "@" not in email:
+            raise TeamError("Digite um e-mail válido.")
+        if len(password or "") < 8:
+            raise TeamError("A senha precisa ter pelo menos 8 caracteres.")
+        try:
+            r = self._http("POST", f"{self.url}/auth/v1/signup?redirect_to={urllib.parse.quote(SITE_URL, safe='')}",
+                           {"email": email, "password": password})
+        except TeamError as e:
+            txt = (e.code + " " + str(e)).lower()
+            if "already" in txt or "registered" in txt:
+                raise TeamError("Esse e-mail já tem conta. Entre com a senha, com o Google, ou use “Esqueci a senha”.", e.status, e.code) from None
+            if "weak" in txt or "password" in txt:
+                raise TeamError("Senha fraca demais. Use pelo menos 8 caracteres, misturando letras e números.", e.status, e.code) from None
+            raise
+        if r and r.get("access_token") and r.get("refresh_token"):
+            self._set_session(r)
+            if remember:
+                self.remember(email, password)
+            self.sync_soon()
+            return {"logged_in": True}
+        user = (r or {}).get("user") or r or {}
+        if user.get("identities") == []:      # e-mail já cadastrado: o Supabase não avisa, devolve um usuário "vazio"
+            raise TeamError("Esse e-mail já tem conta. Entre com a senha, com o Google, ou use “Esqueci a senha”.")
+        if remember:
+            self.remember(email, None)
+        return {"confirm": True}
+
+    def send_link(self, email: str):
+        email = (email or "").strip()
+        if not email:
+            raise TeamError("Digite o seu e-mail.")
+        self._http("POST", f"{self.url}/auth/v1/otp?redirect_to={urllib.parse.quote(SITE_URL + '#/perfil', safe='')}",
+                   {"email": email, "create_user": True})
 
     # --- login ----------------------------------------------------------------
     def login_url(self) -> str:
@@ -161,17 +314,41 @@ class Team:
         if not self.configured:
             raise TeamError("Entre com o Google para usar a equipe.")
         with self._lock:
-            if time.time() > self._auth.get("expires_at", 0) - 90:
+            for attempt in (1, 2):
+                if time.time() <= self._auth.get("expires_at", 0) - 90:
+                    break
                 try:
                     r = self._http("POST", f"{self.url}/auth/v1/token?grant_type=refresh_token",
                                    {"refresh_token": self._auth["refresh_token"]})
+                    self._set_session(r)
+                    break
                 except TeamError as e:
-                    if "expirou" in str(e) or "Invalid Refresh Token" in str(e) or "refresh" in str(e).lower():
-                        self._auth = {}
-                        self._save()
-                        raise TeamError("Sua sessão expirou. Entre de novo com o Google.") from None
-                    raise
-                self._set_session(r)
+                    # só desloga quando o servidor diz claramente que o refresh token não vale mais;
+                    # queda de rede, timeout ou erro 5xx mantêm a sessão para tentar de novo depois
+                    rejected = e.status in (400, 401, 403) and (
+                        e.status == 401 or "refresh_token" in e.code or e.code in ("invalid_grant", "session_not_found")
+                        or "refresh token" in str(e).lower())
+                    if not rejected:
+                        raise
+                    # outro processo pode já ter renovado (o token rotaciona): tenta o que está no disco
+                    disk = self._load()
+                    if attempt == 1 and disk.get("refresh_token") and disk["refresh_token"] != self._auth.get("refresh_token"):
+                        self._auth = disk
+                        continue
+                    saved = self._saved_password()
+                    em = self.saved_credentials()["email"]
+                    if saved and em and attempt == 1:
+                        try:     # senha lembrada: entra de novo sozinho, sem pedir nada
+                            self._set_session(self._http("POST", f"{self.url}/auth/v1/token?grant_type=password",
+                                                         {"email": em, "password": saved}))
+                            log.info("sessão renovada com a senha lembrada")
+                            continue
+                        except TeamError:
+                            pass
+                    log.warning("sessão descartada: servidor recusou o refresh token (%s %s: %s)", e.status, e.code, e)
+                    self._auth = {}
+                    self._save()
+                    raise TeamError("Sua sessão expirou. Entre de novo com o Google.", e.status, e.code) from None
             return self._auth["access_token"]
 
     def logout(self):
@@ -183,6 +360,7 @@ class Team:
             pass
         self._auth = {}
         self._save()
+        self.forget_password()
 
     def _storage_put(self, bucket: str, path: str, data: bytes, content_type: str) -> str:
         """Envia um arquivo para o armazenamento (substitui se já existir) e devolve a URL pública."""

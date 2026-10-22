@@ -1319,3 +1319,36 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .sc3d-pt.rec { border-color: #ffc94d; background: rgba(40,28,0,.6); } .sc3d-pt.rec .d { background: #ffc94d; box-shadow: 0 0 6px rgba(255,201,77,.9); }
 .sc3d-pt.on { border-color: #4da3ff; background: rgba(40,110,255,.5); box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 0 6px rgba(77,163,255,.35); } .sc3d-pt.on .d { background: #bfe0ff; }
 .sc3d-pt.chg .d { background: #ffc94d; }
+
+/* tela de login obrigatória (antes de qualquer tela do app): formulário à esquerda, carro Pitwall à direita */
+body.gate { --nav: 0px; overflow: hidden; }
+body.gate .sidenav { display: none; }
+.gate-split { position: fixed; inset: 0; z-index: 60; display: grid; grid-template-columns: minmax(340px, 38%) 1fr; background: #04070b; }
+.gate-left { display: flex; align-items: center; justify-content: center; padding: 32px; overflow-y: auto; background: linear-gradient(90deg, #04070b 80%, rgba(4,7,11,0)); position: relative; z-index: 2; }
+.gate-box { width: 100%; max-width: 360px; margin: auto; }
+.gate-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; font-weight: 700; font-size: 22px; }
+.gate-brand span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gate-box h1 { margin: 0 0 6px; font-size: 24px; }
+.gate-box .btn.google { display: flex; justify-content: center; width: 100%; box-sizing: border-box; margin-top: 18px; }
+.gate-or { margin: 18px 0 12px; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.gate-or::before, .gate-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.gate-form { display: flex; flex-direction: column; gap: 6px; }
+.gate-form > label, .gate-form [hidden] + label, #gPw2Wrap label { font-size: 13px; color: var(--muted); margin-top: 6px; display: block; }
+.gate-form .field { width: 100%; box-sizing: border-box; background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; color: var(--text); font: inherit; }
+.gate-form .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,229,157,.15); }
+#gPw2Wrap[hidden] { display: none; }
+.gate-go { width: 100%; margin-top: 14px; padding: 11px; border-radius: 99px; }
+.gate-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; font-size: 13px; }
+.gate-rem { display: flex; align-items: center; gap: 10px; color: var(--muted); cursor: pointer; }
+.gate-new { margin-top: 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.gate-hero { position: relative; overflow: hidden; background:
+  radial-gradient(900px 620px at 85% 0%, rgba(46,229,157,.5), transparent 62%),
+  radial-gradient(700px 520px at 100% 70%, rgba(59,156,255,.22), transparent 65%),
+  radial-gradient(600px 460px at 40% 100%, rgba(185,140,255,.14), transparent 65%), #05090d; }
+.gate-car { position: absolute; inset: 0; opacity: 0; transition: opacity .8s; }
+.gate-car.on { opacity: 1; }
+.gate-car canvas { width: 100%; height: 100%; display: block; }
+.gate-hero-txt { position: absolute; left: 40px; right: 40px; bottom: 36px; pointer-events: none; }
+.gate-hero-txt h2 { margin: 0 0 6px; font-size: 30px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gate-hero-txt p { margin: 0; color: var(--muted); max-width: 460px; }
+@media (max-width: 800px) { .gate-split { grid-template-columns: 1fr; } .gate-hero { display: none; } }

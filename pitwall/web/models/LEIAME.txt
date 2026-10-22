@@ -2,7 +2,7 @@ pitwall_gt.glb — carro padrão do editor visual de setup.
 
 Origem: modelado do zero no Blender 5.2, por scripts em Python (tools/blender/), pelo dono do projeto (Hygor) com o Claude, em 2026-10-22.
 Nenhum modelo, textura, logo ou arquivo de terceiros foi usado: a carroceria é gerada por seções suavizadas, e as rodas, o aerofólio,
-o splitter, os faróis, as grades e a pintura Pitwall (faixas de carbono, fio neon, número 71 e o nome PITWALL) são feitos pelos scripts.
+o splitter, os faróis, as grades e a pintura Pitwall (faixas de carbono, fio neon, número 69 e o nome PITWALL) são feitos pelos scripts.
 Os carros de GT3 reais (uma Ferrari e uma BMW) serviram só de inspiração para as proporções e o clima; o desenho é próprio e
 não copia a forma nem os logos de nenhum deles. Por isso não há restrição de licença a cuidar neste arquivo.
 

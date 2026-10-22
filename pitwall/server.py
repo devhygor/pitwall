@@ -474,6 +474,26 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         _publish_lfm()          # com a conta do Pitwall conectada, mantém o LFM do perfil em dia sem precisar abrir a tela LFM
         return _team().status()
 
+    @app.get("/api/team/session")
+    def team_session():
+        """Só lê a sessão salva (sem rede): usado pela tela de login ao abrir o app, funciona offline."""
+        t = _team()
+        return {"logged_in": bool(t.configured), "user": t.user, "saved": t.saved_credentials()}
+
+    @app.post("/api/team/login-password")
+    def team_login_password(body: dict = Body(...)):
+        _team_call(lambda: _team().login_password(body.get("email", ""), body.get("password"), bool(body.get("remember"))))
+        return {"ok": True}
+
+    @app.post("/api/team/signup")
+    def team_signup(body: dict = Body(...)):
+        return _team_call(lambda: _team().signup(body.get("email", ""), body.get("password", ""), bool(body.get("remember"))))
+
+    @app.post("/api/team/send-link")
+    def team_send_link(email: str = Body(..., embed=True)):
+        _team_call(lambda: _team().send_link(email))
+        return {"ok": True}
+
     @app.get("/api/profile")
     def my_profile():
         if not _team().configured:
