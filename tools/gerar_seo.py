@@ -285,10 +285,10 @@ body{margin:0;background:radial-gradient(900px 500px at 15% -10%,#0f2a24 0%,tran
 a{color:var(--sodium)}a:hover{text-decoration:none}
 .wrap{max-width:900px;margin:0 auto;padding:0 20px}
 header{border-bottom:1px solid var(--line);background:rgba(10,14,20,.85);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5}
-header .wrap{display:flex;align-items:center;gap:18px;height:60px;max-width:1100px}
+header .wrap{display:flex;align-items:center;gap:14px;height:60px;max-width:1160px}
 .brand{font:italic 800 26px "Barlow Condensed",sans-serif;color:var(--text);text-decoration:none;letter-spacing:.5px}
-.brand b{color:var(--sodium)}nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto;font-size:15px}
-nav a{color:var(--fog);text-decoration:none;padding:6px 10px;border-radius:8px}nav a:hover,nav a.on{color:var(--text);background:var(--panel)}
+.brand b{color:var(--sodium)}nav{display:flex;gap:2px;flex-wrap:nowrap;margin-left:auto;font-size:14px;white-space:nowrap}
+nav a{color:var(--fog);text-decoration:none;padding:6px 8px;border-radius:8px}nav a:hover,nav a.on{color:var(--text);background:var(--panel)}
 .btn{display:inline-block;background:var(--sodium);color:#04140d;font-weight:700;padding:10px 18px;border-radius:12px;text-decoration:none;white-space:nowrap}
 .btn.q{background:transparent;color:var(--text);border:1px solid var(--line)}
 .crumbs{font-size:14px;color:var(--fog);padding:22px 0 0}.crumbs a{color:var(--fog)}
@@ -305,6 +305,7 @@ details p{margin:10px 0 2px;color:#c9d3e6}
 .rel a:hover{border-color:var(--sodium)}.rel small{display:block;color:var(--fog);margin-top:4px}
 footer{margin-top:60px;border-top:1px solid var(--line);padding:28px 0 40px;color:var(--fog);font-size:15px}
 footer .cols{display:flex;gap:22px;flex-wrap:wrap}footer a{color:var(--fog);text-decoration:none}footer a:hover{color:var(--text)}
+@media(max-width:1060px){header nav{display:none}header .wrap{justify-content:space-between}}
 @media(max-width:760px){nav{display:none}header .wrap{justify-content:space-between}}
 """
 
