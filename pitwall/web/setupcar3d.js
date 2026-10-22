@@ -150,11 +150,78 @@ function makeLivery(P, key) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.wrapS = THREE.ClampToEdgeWrapping; return t;
 }
 
+
+// ------------------------------------------------------------------ pintura Pitwall: verde neon metálico, carbono, faixas em ângulo e brilho
+function makePitwallLivery(P, key) {
+  const W = 2048, H = 1024, c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+  const U = (u) => u * W, V = (v) => H * (1 - v);
+  const dark = "#070a0e", neon = "#3dffa4", emerald = "#00cf6e", deep = "#00924f";
+  // base: verde forte com degradê (mais claro no teto, mais fundo nas laterais) e flocos metálicos
+  const base = g.createLinearGradient(0, V(0.5), 0, V(0)); base.addColorStop(0, "#2dff9c"); base.addColorStop(0.5, emerald); base.addColorStop(1, deep);
+  g.fillStyle = base; g.fillRect(0, 0, W, H);
+  const rr = (() => { let x = 7; return () => ((x = (x * 16807) % 2147483647) / 2147483647); })();
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${rr() > 0.5 ? "255,255,255" : "0,60,30"},${0.04 + rr() * 0.12})`; g.fillRect(rr() * W, rr() * H, 1 + rr() * 2.2, 1 + rr() * 2.2); }
+  // saia, assoalho e traseira em carbono
+  g.fillStyle = dark;
+  const skirt = (vMid, sgn) => {
+    g.beginPath(); g.moveTo(U(0), V(vMid));
+    [[0, 0.09], [0.16, 0.07], [0.38, 0.05], [0.58, 0.055], [0.8, 0.1], [1, 0.16]].forEach(([u, d]) => g.lineTo(U(u), V(vMid + sgn * d)));
+    g.lineTo(U(1), V(vMid + sgn * 0.4)); g.lineTo(U(0), V(vMid + sgn * 0.4)); g.closePath(); g.fill();
+  };
+  skirt(1.0, -1); skirt(0.5, 1); g.fillRect(0, V(0.9), W, V(0.6) - V(0.9));
+  // linha de neon acompanhando a saia
+  g.lineWidth = 8; g.strokeStyle = neon; g.shadowColor = neon; g.shadowBlur = 14;
+  for (const [vm, sg] of [[1.0, -1], [0.5, 1]]) { g.beginPath(); [[0, 0.1], [0.16, 0.078], [0.38, 0.058], [0.58, 0.063], [0.8, 0.11], [1, 0.17]].forEach(([u, d], k) => { const x = U(u), y = V(vm + sg * d); k ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); }
+  g.shadowBlur = 0;
+  // faixas do capô ao teto: carbono com fio de neon e cortes em ângulo
+  const bar = (v, w, col) => { g.fillStyle = col; g.fillRect(U(0.02), V(v + w / 2), U(0.96), V(v - w / 2) - V(v + w / 2)); };
+  bar(0.25, 0.13, dark); bar(0.25, 0.012, neon);
+  g.fillStyle = dark; for (const sgn of [-1, 1]) for (let k = 0; k < 4; k++) {
+    const u0 = 0.06 + k * 0.045, v0 = 0.25 + sgn * 0.065; g.beginPath(); g.moveTo(U(u0), V(v0)); g.lineTo(U(u0 + 0.05), V(v0 + sgn * 0.045)); g.lineTo(U(u0 + 0.06), V(v0 + sgn * 0.045)); g.lineTo(U(u0 + 0.011), V(v0)); g.closePath(); g.fill();
+  }
+  // "estilhaços" diagonais nas laterais (em cima da porta até a coxa traseira)
+  const shard = (vm, flip) => {
+    g.save(); g.translate(0, 0);
+    for (let k = 0; k < 5; k++) {
+      const u0 = 0.18 + k * 0.055, w = 0.07 - k * 0.008;
+      g.fillStyle = k % 2 ? dark : "rgba(0,0,0,.35)"; g.beginPath();
+      const v0 = vm + (flip ? -0.015 : 0.015);
+      g.moveTo(U(u0), V(v0 + 0.0)); g.lineTo(U(u0 + w), V(v0 + (flip ? -0.0 : 0.0))); g.lineTo(U(u0 + w + 0.03), V(v0 + (flip ? -0.09 : 0.09))); g.lineTo(U(u0 + 0.03), V(v0 + (flip ? -0.09 : 0.09))); g.closePath(); g.fill();
+    }
+    g.restore();
+  };
+  shard(0.045, false); shard(0.955, true); shard(0.545, false);
+  // saídas de ar, linhas das portas
+  g.fillStyle = "#04070a";
+  if (P.layout === "front") for (let k = 0; k < 5; k++) g.fillRect(U(0.74 + k * 0.022), V(0.25 + 0.075), U(0.012), V(0.25 - 0.075) - V(0.25 + 0.075));
+  else for (let k = 0; k < 7; k++) g.fillRect(U(0.1 + k * 0.022), V(0.25 + 0.065), U(0.012), V(0.25 - 0.065) - V(0.25 + 0.065));
+  g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 3;
+  const cab = P.cab, ux = (x) => (x + 2.32) / 4.64;
+  for (const [a, b] of [[0.93, 1.07], [0.43, 0.57]]) for (const xx of [cab[0] + 0.35, cab[1] - 0.55]) {
+    const u = ux(xx); [[a, Math.min(b, 1)], [0, Math.max(0, b - 1)]].forEach(([v0, v1]) => { if (v1 > v0) { g.beginPath(); g.moveTo(U(u), V(v0)); g.lineTo(U(u), V(v1)); g.stroke(); } });
+  }
+  // número, nome e roundel
+  const num = { porsche: "91", ferrari: "71", lamborghini: "63", mclaren: "59", audi: "29", honda: "30", bmw: "46", mercedes: "88", aston: "7", ford: "64", corvette: "3", nissan: "23", lexus: "14", bentley: "8" }[key] || "9";
+  const side = (cv, flip) => {
+    g.save(); g.translate(U(0.42), V(cv)); if (flip) g.scale(-1, -1);
+    g.fillStyle = "#f4f7fa"; g.beginPath(); g.arc(0, 0, 80, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 9; g.strokeStyle = neon; g.beginPath(); g.arc(0, 0, 80, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = "#070a0e"; g.font = "italic 800 94px system-ui, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(num, 0, 6); g.restore();
+    g.save(); g.translate(U(0.6), V(cv + (flip ? 0.12 : -0.115))); if (flip) g.scale(-1, -1);
+    g.fillStyle = "#ffffff"; g.font = "italic 800 72px system-ui, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("PITWALL", 0, 0);
+    g.fillStyle = neon; g.fillRect(-150, 40, 300, 7); g.restore();
+  };
+  side(0.0, false); side(1.0, false); side(0.5, true);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+
 // ------------------------------------------------------------------ montagem do carro
 function buildCar(key, scene) {
   const P = PROFILES[key] || PROFILES.generic;
-  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: makeLivery(P, key), metalness: 0.3, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 });
-  const paintPlain = new THREE.MeshPhysicalMaterial({ color: P.paint, metalness: 0.3, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 });
+  const liveries = { pitwall: makePitwallLivery(P, key), brand: makeLivery(P, key) };
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: liveries.pitwall, metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.03 });
+  const paintPlain = new THREE.MeshPhysicalMaterial({ color: "#00cf6e", metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.03 });
+  const setScheme = (name) => { const pw = name === "pitwall"; paint.map = liveries[pw ? "pitwall" : "brand"]; paint.needsUpdate = true; paintPlain.color.set(pw ? "#00cf6e" : P.paint); };
   const carbon = mat({ color: "#0e1116", metalness: 0.4, roughness: 0.45 });
   const glass = new THREE.MeshPhysicalMaterial({ color: "#0f1b28", metalness: 0.55, roughness: 0.06, clearcoat: 1, opacity: 0.78, transparent: true, depthWrite: false });
   const dark = mat({ color: "#07090c", roughness: 0.8 });
@@ -363,7 +430,7 @@ function buildCar(key, scene) {
   }
   const floor = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.02, 1.5), carbon); floor.position.set(0, 0.12, 0); body.add(floor);
 
-  return { root, body, P, paint, paintPlain, glass, cabinMeshes, bodyMats, flares, splitter, wing: wingPivot, wingGroup: wing, corners, ducts, shell, carbon, dark, metal, steel, lowerStrip, wheelRim, dashLed, hw: HW, top: TOP };
+  return { root, body, P, paint, paintPlain, setScheme, glass, cabinMeshes, bodyMats, flares, splitter, wing: wingPivot, wingGroup: wing, corners, ducts, shell, carbon, dark, metal, steel, lowerStrip, wheelRim, dashLed, hw: HW, top: TOP };
 }
 
 // ------------------------------------------------------------------ suspensão (visível no modo raio-x)
@@ -430,7 +497,7 @@ function makeRestyle(model, car) {
     const on = mode === "pitwall";
     for (const [m, o] of mats) {
       if (!on) { m.map = o.map; if (o.color) m.color.copy(o.color); m.metalness = o.metal; m.roughness = o.rough; if (o.cc !== undefined) m.clearcoat = o.cc; }
-      else if (o.kind === "paint") { m.map = null; m.color.set("#0f9f66"); m.metalness = 0.35; m.roughness = 0.28; if ("clearcoat" in m) m.clearcoat = 1; }
+      else if (o.kind === "paint") { m.map = null; m.color.set("#00c46a"); m.metalness = 0.55; m.roughness = 0.22; if ("clearcoat" in m) { m.clearcoat = 1; m.clearcoatRoughness = 0.03; } }
       else { m.map = null; m.color.set("#15171b"); m.roughness = 0.9; m.metalness = 0; }
       m.needsUpdate = true;
     }
@@ -597,7 +664,7 @@ export async function createStage(host, opts) {
     sus.grp.visible = on;
   }
   setXray(false);
-  if (car.isModel) car.restyle(opts.paint || "pitwall");
+  if (car.isModel) car.restyle(opts.paint || "pitwall"); else car.setScheme(opts.paint || "pitwall");
 
   // ----- pontos clicáveis (3D -> tela)
   const spotPos = { aero_f: [2.3, 0.28, 0], aero_r: [-2.2, 1.22, 0], w0: [WB.front, 0.78, -fzTop()], w1: [WB.front, 0.78, fzTop()], w2: [WB.rear, 0.78, -rzTop()], w3: [WB.rear, 0.78, rzTop()],
@@ -649,7 +716,7 @@ export async function createStage(host, opts) {
   }
   apply(); frame();
   return {
-    isModel: !!car.isModel, setPaint(mode) { if (car.isModel) car.restyle(mode); },
+    isModel: !!car.isModel, setPaint(mode) { if (car.isModel) car.restyle(mode); else car.setScheme(mode === "pitwall" ? "pitwall" : "brand"); },
     setEdits(e) { for (const k of Object.keys(edits)) delete edits[k]; Object.assign(edits, e); apply(); },
     setXray, view, els, destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); host.innerHTML = ""; },
     get xray() { return xray; }, renderer, scene, camera, car, sus,

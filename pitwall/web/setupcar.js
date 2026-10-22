@@ -280,7 +280,7 @@
     const paintTools = () => {
       const t = $q("#sc3dTools"); if (!stage) return;
       t.innerHTML = `${[["car", "Carro"], ["front", "Frente"], ["side", "Lateral"], ["rear", "Traseira"], ["top", "Topo"]].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}
-        ${stage.isModel ? `<button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura original do modelo e a pintura Pitwall (sem decalques de marcas)">🎨 Pintura ${paintMode === "pitwall" ? "Pitwall" : "original"}</button>` : ""}
+        <button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura Pitwall (verde neon e carbono) e ${stage.isModel ? "a pintura original do modelo (com os decalques dele)" : "a cor da marca"}">🎨 Pintura ${paintMode === "pitwall" ? "Pitwall" : stage.isModel ? "original" : "da marca"}</button>
         <button type="button" class="${stage.xray ? "on" : ""}" id="sc3dX" title="Mostra molas, amortecedores, braços e barras estabilizadoras (o carro fica transparente)">🔧 Suspensão</button>`;
       t.querySelectorAll("[data-v]").forEach((b) => b.onclick = () => stage.view(b.dataset.v));
       $q("#sc3dX").onclick = () => { stage.setXray(!stage.xray); paintTools(); };
