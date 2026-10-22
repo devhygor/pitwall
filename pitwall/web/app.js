@@ -63,6 +63,7 @@ const routes = [
   [/^#\/overlays$/, () => renderOverlays()],
   [/^#\/engineer$/, () => renderVoiceEngineer()],
   [/^#\/plano$/, () => renderPlano()],
+  [/^#\/guia$/, () => renderGuia()],
 ];
 let current = { name: "", id: null };
 let plots = [];
@@ -82,7 +83,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : h.startsWith("#/guia") ? "guia" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -2152,6 +2153,10 @@ async function renderSettings() {
       </div>
 
       <section class="set-sec" data-sec="geral">
+        <div class="set-card"><h2>Guia do Pitwall</h2>
+          ${setRow("Tour pelas funções", "Repassa cada parte do aplicativo explicando para que serve.", `<button class="btn" id="cTour">Rever o tour</button>`)}
+          ${setRow("O que falta configurar", "Lista do que já está pronto e do que ainda falta, com atalhos.", `<a class="btn" href="#/guia">Abrir Primeiros passos</a>`)}
+        </div>
         <div class="set-card"><h2>Inicialização</h2>
           ${au.supported ? `
           ${setRow("Iniciar com o Windows, em segundo plano", "Fica só com um ícone perto do relógio, esperando o jogo, e grava sozinho. Quando começar a gravar aparece uma notificação. Clique no ícone para abrir esta tela ou use “Sair” no menu dele.", `<input id="cAuto" class="tgl" type="checkbox" ${au.enabled ? "checked" : ""}>`)}
@@ -2208,6 +2213,7 @@ async function renderSettings() {
       setTimeout(draw, 300);
     };
     ["#cVid", "#cMon", "#cEnc", "#cFps", "#cBr", "#cKeep"].forEach((id) => $(id).addEventListener("change", save));
+    $("#cTour").onclick = () => startTour(0);
     const lnk = $("#cLnk");
     if (lnk) lnk.onclick = async () => {
       const r = await api("/api/shortcuts", { method: "POST" });
@@ -3141,7 +3147,7 @@ function ovPanel(n, S) {
     g += ovGroup("Faixa ideal", ovSlider(n, "tmin", "Temp. mínima", c.tmin, 40, 120, 1, " °C") + ovSlider(n, "tmax", "Temp. máxima", c.tmax, 50, 140, 1, " °C") +
       ovSlider(n, "pmin", "Pressão mínima", c.pmin, 20, 35, 0.1, " psi") + ovSlider(n, "pmax", "Pressão máxima", c.pmax, 20, 35, 0.1, " psi") +
       ovSlider(n, "bmin", "Freio mínimo", c.bmin, 100, 700, 10, " °C") + ovSlider(n, "bmax", "Freio máximo", c.bmax, 400, 1100, 10, " °C"),
-      "abaixo = azul, dentro = verde, acima = vermelho") .replace("</section>", `<div class="ovreset"><button type="button" class="btn sm" id="tyReset">Restaurar padrão</button>
+      "a cor muda aos poucos: verde forte no ideal, esquentando para amarelo e vermelho; esfriando para azul") .replace("</section>", `<div class="ovreset"><button type="button" class="btn sm" id="tyReset">Restaurar padrão</button>
         <span class="sub">Padrão do ACC (1.9 em diante, todas as classes): 70–100 °C e 26,0–27,0 psi com o pneu quente. No iRacing a faixa muda de carro para carro: ajuste à mão. A faixa do freio (350–800 °C) é uma estimativa minha, sem fonte oficial: ajuste ao seu carro.</span></div></section>`);
   } else if (n === "delta") {
     g += ovGroup("Modelo", ovSeg(n, "dstyle", [["classic", "Clássico"], ["minimal", "Só o número", OV_P], ["bar", "Barra larga", OV_T]], c.dstyle || "classic"));
@@ -3494,7 +3500,7 @@ async function backupList() {
 }
 
 route();
-if (!location.hash.startsWith("#/overlay")) { pollLive(); }
+if (!location.hash.startsWith("#/overlay")) { pollLive(); maybeTour(); }
 
 // ---------------------------------------------------------------- Low Fuel Motorsport (só leitura)
 const LIC_COL = { ROOKIE: "#9aa3b2", IRON: "#8d7b6a", BRONZE: "#cd7f32", SILVER: "#c8ced8", GOLD: "#ffcf3f",

@@ -32,6 +32,11 @@ function pickStyle(group, key, def) {
 async function loadFeatures() {
   try { const l = await getJSON("/api/license"); FEATS.clear(); for (const f of l.features || []) FEATS.add(f.id); } catch (e) { /* mantém o que tinha */ }
 }
+const heatCol = (v, lo, hi, l = 52) => {          // 0 = ideal (verde forte); esquenta aos poucos até o vermelho e esfria até o azul
+  const c = (lo + hi) / 2, h = Math.max(1e-6, (hi - lo) / 2), d = (v - c) / h, e = (x) => x * x * (3 - 2 * x);
+  const hue = d >= 0 ? 140 - 140 * e(clamp(d / 1.7, 0, 1)) : 140 + 70 * e(clamp(-d / 1.7, 0, 1));
+  return `hsl(${Math.round(hue)} 78% ${l}%)`;
+};
 let edit = false;
 let lastSize = "";
 
@@ -737,9 +742,9 @@ function tyresACC() {
       ${prs(2)}<div></div>${prs(3)}</div><div class="ta-pads" id="pads"></div></div>`;
   const q = (s, el = root) => el.querySelector(s);
   const hsl = (h, l = 52) => `hsl(${Math.round(h)} 78% ${l}%)`;
-  const tcol = (t) => t <= 0 ? "#3a4352" : t < cfg.tmin ? hsl(205 - clamp((t - (cfg.tmin - 20)) / 20, 0, 1) * 65) : t <= cfg.tmax ? hsl(140) : hsl(140 - clamp((t - cfg.tmax) / 25, 0, 1) * 140);
-  const pcol = (p) => p <= 0 ? "var(--muted)" : p < cfg.pmin ? hsl(205, 66) : p > cfg.pmax ? hsl(8, 68) : "#fff";
-  const bcol = (b) => b <= 0 ? "#3a4352" : b < cfg.bmin ? hsl(205 - clamp((b - (cfg.bmin - 200)) / 200, 0, 1) * 65) : b <= cfg.bmax ? hsl(172, 60) : hsl(140 - clamp((b - cfg.bmax) / 200, 0, 1) * 140);
+  const tcol = (t) => t <= 0 ? "#3a4352" : heatCol(t, cfg.tmin, cfg.tmax);
+  const pcol = (p) => p <= 0 ? "var(--muted)" : heatCol(p, cfg.pmin, cfg.pmax, 62);
+  const bcol = (b) => b <= 0 ? "#3a4352" : heatCol(b, cfg.bmin, cfg.bmax);
   const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
   const preview = () => { const t = performance.now() / 1000;
     return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [26.8, 26.1, 26.8, 26.3], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)),
@@ -831,8 +836,8 @@ function deltaOverlay() {
 function tyresMini(row) {
   root.innerHTML = `<div class="card tymini ${row ? "row" : ""} shadow">${[0, 1, 2, 3].map((i) => `<div class="tm" data-w="${i}"><b class="num tt">—</b><small class="num tp">—</small>${row ? `<div class="tb"><i></i></div><div class="tw"><i></i></div>` : ""}</div>`).join("")}</div>`;
   const hsl = (h, l = 52) => `hsl(${Math.round(h)} 78% ${l}%)`;
-  const tcol = (t) => t <= 0 ? "#3a4352" : t < cfg.tmin ? hsl(205 - clamp((t - (cfg.tmin - 20)) / 20, 0, 1) * 65) : t <= cfg.tmax ? hsl(140) : hsl(140 - clamp((t - cfg.tmax) / 25, 0, 1) * 140);
-  const bcol = (b) => b <= 0 ? "#3a4352" : b < cfg.bmin ? hsl(205 - clamp((b - (cfg.bmin - 200)) / 200, 0, 1) * 65) : b <= cfg.bmax ? hsl(172, 60) : hsl(140 - clamp((b - cfg.bmax) / 200, 0, 1) * 140);
+  const tcol = (t) => t <= 0 ? "#3a4352" : heatCol(t, cfg.tmin, cfg.tmax);
+  const bcol = (b) => b <= 0 ? "#3a4352" : heatCol(b, cfg.bmin, cfg.bmax);
   const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
   const preview = () => { const t = performance.now() / 1000;
     return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [26.8, 26.1, 26.8, 26.3], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)), wear: [0.12, 0.14, 0.1, 0.1] }; };
@@ -869,12 +874,10 @@ function tyresCards() {
       <div class="ty-br" title="Temperatura do disco de freio"><small>FREIO</small><b class="num">—</b><div class="bar"><i></i></div></div>
       <div class="ty-pad num" title="Vida restante da pastilha"></div></div>`).join("");
   const hsl = (h, l = 52) => `hsl(${Math.round(h)} 78% ${l}%)`;
-  const tcol = (t) => t <= 0 ? "#3a4352" : t < cfg.tmin ? hsl(205 - clamp((t - (cfg.tmin - 20)) / 20, 0, 1) * 65)
-    : t <= cfg.tmax ? hsl(140) : hsl(140 - clamp((t - cfg.tmax) / 25, 0, 1) * 140);
-  const pcol = (p) => p <= 0 ? "var(--muted)" : p < cfg.pmin ? hsl(205, 66) : p > cfg.pmax ? hsl(8, 68) : hsl(140, 62);
+  const tcol = (t) => t <= 0 ? "#3a4352" : heatCol(t, cfg.tmin, cfg.tmax);
+  const pcol = (p) => p <= 0 ? "var(--muted)" : heatCol(p, cfg.pmin, cfg.pmax, 62);
   // freio: abaixo da faixa = azul (frio), dentro = verde, acima = laranja e depois vermelho (risco de fade)
-  const bcol = (b) => b <= 0 ? "#3a4352" : b < cfg.bmin ? hsl(205 - clamp((b - (cfg.bmin - 200)) / 200, 0, 1) * 65)
-    : b <= cfg.bmax ? hsl(140) : hsl(140 - clamp((b - cfg.bmax) / 200, 0, 1) * 140);
+  const bcol = (b) => b <= 0 ? "#3a4352" : heatCol(b, cfg.bmin, cfg.bmax);
   const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
   const preview = () => { const t = performance.now() / 1000;
     return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [27.2, 27.4, 26.9, 27.1], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)),

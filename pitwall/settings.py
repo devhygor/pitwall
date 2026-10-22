@@ -34,6 +34,7 @@ def merged_overlays(cur) -> dict:
 
 
 DEFAULTS = {
+    "tour_done": False,         # já viu o tour de boas-vindas
     "video_enabled": True,      # grava a tela durante as sessões
     "video_monitor": 0,         # índice do monitor (0 = principal)
     "video_fps": 30,
