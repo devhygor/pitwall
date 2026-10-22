@@ -270,3 +270,17 @@ grant execute on function public.check_coupon(text, text), public.redeem_code(te
   public.admin_create_coupon(text, text, int, text, text, int, int, int, text),
   public.admin_generate_codes(int, text, int, int, text), public.admin_set_coupon_active(text, boolean),
   public.admin_set_commission(uuid, text, text), public.admin_affiliates() to authenticated;
+
+-- prévia pública do desconto de um código (a página de planos mostra o preço riscado antes do login)
+create or replace function public.coupon_preview(p_code text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare c public.coupons;
+begin
+  select * into c from public.coupons where code = upper(trim(p_code));
+  if c.code is null or not c.active or c.kind <> 'discount' then return null; end if;
+  if c.expires_at is not null and c.expires_at < now() then return null; end if;
+  if c.max_uses is not null and c.uses >= c.max_uses then return null; end if;
+  return jsonb_build_object('code', c.code, 'percent_off', c.percent_off, 'duration', c.duration, 'plan', c.plan_code);
+end $$;
+revoke all on function public.coupon_preview(text) from public;
+grant execute on function public.coupon_preview(text) to anon, authenticated;

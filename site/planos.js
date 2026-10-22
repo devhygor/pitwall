@@ -37,6 +37,18 @@ async function renderPlans() {
   const [{ data: plans }, { data: prices }] = await Promise.all([
     sb.from("plans").select("*").order("sort"), sb.from("prices").select("*").eq("active", true)]);
   let period = store.get("pw.period") === "year" ? "year" : "month";
+  // descontos que a pessoa já tem: o código do link/afiliado (guardado em ?ref=) e o acumulado das indicações dela
+  const refCode = store.get("pw.ref"), cpOff = {}, cpDur = {};
+  let rwPct = 0, myRefCode = "";
+  if (session) { try { const r = await rpc("my_referral"); if (r && r.ok) { rwPct = r.pct || 0; myRefCode = r.code; } } catch (e) { /* ok */ } }
+  if (refCode && refCode !== myRefCode) {
+    for (const p of ["pro", "team"]) {
+      try {
+        const r = session ? await rpc("check_coupon", { p_code: refCode, p_plan: p }) : await rpc("coupon_preview", { p_code: refCode });
+        if (r && (session ? r.ok && r.kind === "discount" : r.plan == null || r.plan === p)) { cpOff[p] = r.percent_off || 0; cpDur[p] = r.duration; }
+      } catch (e) { /* ok */ }
+    }
+  }
   const price = (code, per, fundador) => (prices || []).filter((p) => p.plan_code === code && p.period === per && (fundador ? p.label : !p.label))[0];
   const draw = () => {
     store.set("pw.period", period);
@@ -51,7 +63,7 @@ async function renderPlans() {
         <p class="plans-note">Pagamento por Pix, cartão ou boleto, com renovação automática. Cancele quando quiser. Emitimos nota fiscal. O teste grátis de 10 dias não pede cartão.</p>
       </div></section>`;
     view.querySelectorAll("[data-per]").forEach((b) => b.onclick = () => { period = b.dataset.per; draw(); });
-    view.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => buy(b.dataset.buy, b.dataset.price));
+    view.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => buy(b.dataset.buy, b.dataset.price, +b.dataset.base, b.dataset.per));
     view.querySelectorAll("[data-trial]").forEach((b) => b.onclick = () => startTrialSite(b.dataset.trial));
   };
   const planCard = (pl) => {
@@ -66,15 +78,26 @@ async function renderPlans() {
     // com preço Fundador ativo, é ele que o botão cobra: mostramos esse valor e o normal ao lado
     let amount = pl.code === "free" ? "R$ 0" : fund ? brl(fund.amount_cents) : std ? brl(period === "year" ? std.amount_cents / 12 : std.amount_cents) : "—";
     let sub = pl.code === "free" ? "para sempre" : fund ? `por mês${std ? ` · depois ${brl(std.amount_cents)}` : ""}` : period === "year" && std ? `${brl(std.amount_cents)} por ano` : "por mês";
+    // desconto: preço normal riscado e o valor com desconto, com quanto a pessoa economiza
+    let was = "", discTxt = "";
+    const cpP = cpOff[pl.code] || 0, offPct = pl.code === "free" || cur ? 0 : Math.min(60, cpP + rwPct), baseC = fund ? fund.amount_cents : std ? (period === "year" ? std.amount_cents / 12 : std.amount_cents) : 0;
+    if (offPct > 0 && baseC) {
+      was = `<s class="was">${brl(baseC)}</s>`;
+      amount = brl(Math.max(500 / (period === "year" ? 12 : 1), Math.round(baseC * (100 - offPct) / 100)));
+      const parts = [];
+      if (cpP) parts.push(`${cpP}% com o código ${esc(refCode)}${cpDur[pl.code] === "forever" ? "" : " no 1º pagamento"}`);
+      if (rwPct) parts.push(`${rwPct}% das suas indicações (próxima assinatura)`);
+      discTxt = `<div class="disc-badge"><b>−${offPct}%</b> ${parts.join(" + ")}</div>`;
+    }
     let btn;
     if (pl.code === "free") btn = `<a class="btn quiet" href="${esc(PITWALL.download)}">Baixar grátis</a>`;
     else if (cur) btn = `<span class="btn quiet" aria-disabled="true">Seu plano atual</span>`;
     else if (!session) btn = `<button class="btn go" data-go="entrar" id="needLogin">Entrar para assinar</button>`;
-    else btn = `<button class="btn go" data-buy="${pl.code}" data-price="${(fund || std || {}).id || ""}">${fund ? "Assinar com preço Fundador" : "Assinar"}</button>`;
+    else btn = `<button class="btn go" data-buy="${pl.code}" data-price="${(fund || std || {}).id || ""}" data-base="${(fund || std || {}).amount_cents || 0}" data-per="${period}">${fund ? "Assinar com preço Fundador" : "Assinar"}</button>`;
     return `<article class="plan ${pl.code === "pro" ? "hot" : ""}">
       ${pl.code === "pro" ? `<span class="plan-badge">Mais escolhido</span>` : ""}
       <h2>${esc(pl.name)}</h2><p class="plan-desc">${esc(pl.description)}</p>
-      <div class="plan-price"><b>${amount}</b><span>${sub}</span></div>
+      <div class="plan-price">${was}<b>${amount}</b><span>${sub}</span></div>${discTxt}
       ${fund ? `<div class="fundador"><b>Preço Fundador</b>: o valor de hoje não sobe para quem assinar agora.</div>` : ""}
       <ul>${feats}</ul>
       ${btn}
@@ -101,7 +124,9 @@ async function startTrialSite(plan) {
   } catch (e) { alert(e.message); }
 }
 
-async function buy(plan, priceId) {
+async function buy(plan, priceId, baseCents, per) {
+  let rwBuy = 0;
+  try { const r = await rpc("my_referral"); if (r && r.ok) rwBuy = r.pct || 0; } catch (e) { /* ok */ }
   const html = `<div class="modal" id="buyModal"><div class="modal-box">
     <h2>Assinar o plano ${esc(PLAN_NAME[plan] || plan)}</h2>
     <p class="sub">Precisamos do nome e do CPF ou CNPJ para emitir a cobrança e a nota fiscal. O acesso é liberado no e-mail <b>${pii(session.user.email, "email")}</b>.</p>
@@ -109,6 +134,7 @@ async function buy(plan, priceId) {
     <label>CPF ou CNPJ<input id="bDoc" type="text" inputmode="numeric" autocomplete="off" placeholder="somente números"></label>
     <label>Cupom ou código de afiliado (opcional)<input id="bCoupon" type="text" autocomplete="off" value="${esc(store.get("pw.ref") || "")}" placeholder="ex.: MEUCODIGO"></label>
     <div class="modal-ok" id="bCpHint"></div>
+    <div class="buy-price" id="bPrice"></div>
     <div class="modal-err" id="bErr"></div>
     <div class="modal-actions"><button class="btn quiet" id="bCancel">Cancelar</button><button class="btn go" id="bGo">Ir para o pagamento</button></div>
   </div></div>`;
@@ -119,12 +145,22 @@ async function buy(plan, priceId) {
   const checkCp = async () => {
     const code = $("#bCoupon").value.trim();
     const h = $("#bCpHint"); h.className = "modal-ok"; h.textContent = "";
-    if (!code) return;
+    // resumo do valor da primeira cobrança: preço normal riscado, o que a pessoa economiza e o total
+    const showPrice = (cpPct, cpTxt) => {
+      const total = Math.min(60, (cpPct || 0) + rwBuy), pr = $("#bPrice");
+      if (!pr || !baseCents) return;
+      const final = total > 0 ? Math.max(500, Math.round(baseCents * (100 - total) / 100)) : baseCents;
+      pr.innerHTML = total > 0 ? `<div class="bp-row"><span>${per === "year" ? "Plano anual" : "Plano mensal"}</span><s class="was">${brl(baseCents)}</s></div>
+        ${cpPct ? `<div class="bp-row sub"><span>${cpTxt}</span><b>−${cpPct}%</b></div>` : ""}${rwBuy ? `<div class="bp-row sub"><span>Desconto das suas indicações</span><b>−${rwBuy}%</b></div>` : ""}
+        <div class="bp-row tot"><span>Primeiro pagamento</span><b>${brl(final)}</b></div><div class="sub">Você economiza ${brl(baseCents - final)} (−${total}%).</div>` : `<div class="bp-row tot"><span>Primeiro pagamento</span><b>${brl(baseCents)}</b></div>`;
+    };
+    if (!code) { showPrice(0); return; }
     try {
       const r = await rpc("check_coupon", { p_code: code, p_plan: plan });
-      if (!r.ok) { h.className = "modal-err"; h.textContent = CP_ERR[r.error] || "Código inválido."; return; }
+      if (!r.ok) { h.className = "modal-err"; h.textContent = CP_ERR[r.error] || "Código inválido."; showPrice(0); return; }
       if (r.kind === "grant") { h.className = "modal-err"; h.textContent = CP_ERR.use_no_checkout; return; }
       h.textContent = `✓ ${r.percent_off}% de desconto ${r.duration === "forever" ? "em todas as cobranças" : "no primeiro pagamento"}.`;
+      showPrice(r.percent_off, `Código ${code.toUpperCase()}`);
     } catch (e) { /* segue sem mostrar */ }
   };
   $("#bCoupon").addEventListener("input", () => { clearTimeout(cpT); cpT = setTimeout(checkCp, 350); });

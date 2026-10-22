@@ -627,3 +627,11 @@ html { scroll-padding-top: 76px; }
 .eye { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .6; cursor: pointer; flex: none; }
 .eye:hover { opacity: 1; background: rgba(255,255,255,.08); }
 .pii-field { display: inline-flex; align-items: center; gap: 6px; }
+
+/* preço riscado e desconto */
+.plan-price .was { font: 600 20px/1 var(--display); color: var(--fog); text-decoration: line-through; margin: 0 8px 0 0; }
+.disc-badge { margin: 8px 0; padding: 7px 12px; border-radius: 10px; font-size: 13px; background: rgba(62,224,143,.12); border: 1px solid rgba(62,224,143,.45); }
+.disc-badge b { color: #3ee08f; margin-right: 4px; }
+.buy-price { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.05); }
+.bp-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; } .bp-row.sub { font-size: 13px; opacity: .85; }
+.bp-row .was { text-decoration: line-through; color: var(--fog); } .bp-row.tot b { font-size: 20px; color: #3ee08f; } .bp-row.tot { border-top: 1px solid rgba(255,255,255,.1); margin-top: 4px; padding-top: 6px; }
