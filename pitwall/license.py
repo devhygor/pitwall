@@ -34,7 +34,7 @@ FEATURE_NAMES = {
     "voice_basic": "Engenheiro de voz básico", "voice_full": "Engenheiro de voz completo", "voice_online": "Voz online",
     "voice_personality": "Personalidade do engenheiro", "spotter": "Observador (carros ao lado)",
     "video_unlimited": "Vídeos sem limite", "setups_unlimited": "Setups sem limite", "team_multi": "Várias equipes",
-    "no_ads": "Sem anúncios", "team_admin": "Painel da equipe", "overlay_styles": "Modelos extras de overlay",
+    "no_ads": "Sem anúncios", "team_admin": "Painel da equipe", "overlay_styles": "Overlays completos",
     "overlay_styles_team": "Modelos de transmissão (overlay)", "team_seats": "Pro para até 10 integrantes",
 }
 PLAN_NAMES = {"free": "Grátis", "pro": "Pro", "team": "Equipe"}

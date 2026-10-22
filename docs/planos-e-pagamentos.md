@@ -29,12 +29,12 @@ app / site (#/conta)       ──────────►  função license  
 | `spotter` carros ao lado | não | sim | sim |
 | `video_unlimited` (grátis guarda 5 sessões) | não | sim | sim |
 | `no_ads` sem anúncios no site | não | sim | sim |
-| `overlay_styles` modelos extras de overlay (pedais minimalista/horizontal, delta só número, participantes compacto, pneus minimalista, curva em linha, mapa neon) | não | sim | sim |
+| `overlay_styles` overlays completos (pedais com gráfico/horizontal, delta completo, participantes completo, pneus ACC/cartões, curva completa/compacta, mapa asfalto/neon e modo seguir) | não | sim | sim |
 | `overlay_styles_team` modelos de transmissão (pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa) | não | não | sim |
 | `team_seats` Pro incluído para até 10 integrantes da equipe do dono | não | não | sim |
 | `team_admin` painel da equipe | não | não | sim |
 
-Os modelos clássicos de cada overlay são sempre grátis; sem o recurso, o overlay volta sozinho ao clássico (`pickStyle` em `overlay.js`). Esquema em `supabase/planos_v2.sql`.
+Escada dos overlays: Grátis = versão simples de cada um (mapa clássico/fino, pedais minimalistas, delta só número, participantes compacto, pneus 4 quadrados, curva em linha); Pro = os completos; Equipe = transmissão. Sem o recurso, o overlay cai sozinho para a versão simples (`pickStyle`/`STYLE_FALLBACK` em `overlay.js`). Esquema em `supabase/planos_v2.sql`.
 
 Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/__init__.py` (spotter), `voice/events.py`
 (categorias de aviso), `voice/answers.py` (perguntas), `voice/humor.py` (personalidade), `voice/tts.py` (voz online) e

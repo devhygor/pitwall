@@ -24,7 +24,7 @@ const STATUS_NAME = { active: "Ativa", pending: "Aguardando pagamento", past_due
 const FEATURE_NAME = { voice_basic: "Engenheiro de voz básico", voice_full: "Engenheiro de voz completo", voice_online: "Voz online",
   voice_personality: "Personalidade do engenheiro", spotter: "Observador (carros ao lado)", video_unlimited: "Vídeos sem limite",
   setups_unlimited: "Setups sem limite", team_multi: "Várias equipes", no_ads: "Sem anúncios", team_admin: "Painel da equipe",
-  overlay_styles: "Modelos extras de overlay", overlay_styles_team: "Modelos de transmissão (overlay)", team_seats: "Pro para até 10 integrantes" };
+  overlay_styles: "Overlays completos", overlay_styles_team: "Modelos de transmissão (overlay)", team_seats: "Pro para até 10 integrantes" };
 const CP_ERR = { invalido: "Código inválido.", expirado: "Esse código expirou.", esgotado: "Esse código já foi usado.", proprio: "Você não pode usar o seu próprio código.",
   plano_diferente: "Esse código não vale para este plano.", use_no_checkout: "Esse é um código de presente: resgate em Minha conta.", ja_usado: "Você já resgatou esse código.", login: "Entre com o Google primeiro." };
 (function () { const m = (location.search + location.hash).match(/[?&]ref=([A-Za-z0-9_-]{3,40})/); if (m) store.set("pw.ref", m[1].toUpperCase()); })();   // link de afiliado: ?ref=CODIGO
@@ -57,8 +57,8 @@ async function renderPlans() {
     const std = price(pl.code, period), fund = pl.code === "pro" && period === "month" ? price("pro", "month", true) : null;
     const cur = myPlan.plan === pl.code;
     const LISTS = {
-      free: ["Gravar, analisar e comparar voltas", "Replay e overlays no jogo", "Engenheiro de voz: avisos e perguntas básicas", "Compare com amigos em 1 equipe", "Vídeos das últimas 5 sessões"],
-      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box)", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Modelos extras de overlay: minimalistas, horizontais, neon, em linha", "Várias equipes", "Sem anúncios no site"],
+      free: ["Gravar, analisar e comparar voltas", "Replay e overlays básicos no jogo (mapa simples, pedais, delta, pneus e curva enxutos)", "Engenheiro de voz: avisos e perguntas básicas", "Compare com amigos em 1 equipe", "Vídeos das últimas 5 sessões"],
+      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box)", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Overlays completos: pedais com gráfico, delta com combustível, participantes com classes, pneus como no ACC, curva completa, mapa com asfalto", "Várias equipes", "Sem anúncios no site"],
       team: ["Tudo do plano Pro, e mais:", "Pro incluído para até 10 pilotos da sua equipe", "Modelos de transmissão: torre de participantes, painel do piloto, delta em barra larga, pneus em faixa", "Painel do dono para gerenciar os pilotos", "Até 3 computadores por licença"],
     };
     const feats = (LISTS[pl.code] || (pl.features || []).map((f) => FEATURE_NAME[f] || f)).map((t, i) => `<li${i === 0 && /^Tudo do/.test(t) ? ' class="all"' : ""}>${esc(t)}</li>`).join("");

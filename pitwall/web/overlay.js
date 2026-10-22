@@ -23,11 +23,15 @@ let cfg = { ...DEFAULT_CFG };
 // modelos extras de overlay: Pro (overlay_styles) e Equipe (overlay_styles_team); sem o recurso, volta para o modelo clássico
 const FEATS = new Set();
 const F_PRO = "overlay_styles", F_TEAM = "overlay_styles_team";
-const STYLE_NEED = { map: { neon: F_PRO }, pedals: { minimal: F_PRO, horizontal: F_PRO, driver: F_TEAM }, delta: { minimal: F_PRO, bar: F_TEAM },
-  standings: { compact: F_PRO, tower: F_TEAM }, tyres: { minimal: F_PRO, row: F_TEAM }, corner: { line: F_PRO } };
+// escada dos planos: Grátis = versões simples; Pro = os modelos completos; Equipe = modelos de transmissão
+const STYLE_NEED = {
+  map: { asphalt: F_PRO, neon: F_PRO }, mapmode: { follow: F_PRO, follow_rot: F_PRO },
+  pedals: { classic: F_PRO, horizontal: F_PRO, driver: F_TEAM }, delta: { classic: F_PRO, bar: F_TEAM },
+  standings: { classic: F_PRO, tower: F_TEAM }, tyres: { acc: F_PRO, cards: F_PRO, row: F_TEAM }, corner: { full: F_PRO, compact: F_PRO } };
+const STYLE_FALLBACK = { map: "classic", mapmode: "full", pedals: "minimal", delta: "minimal", standings: "compact", tyres: "minimal", corner: "line" };
 function pickStyle(group, key, def) {
   const v = cfg[key] || def, need = (STYLE_NEED[group] || {})[v];
-  return !need || FEATS.has(need) ? v : def;
+  return !need || FEATS.has(need) ? v : STYLE_FALLBACK[group];
 }
 async function loadFeatures() {
   try { const l = await getJSON("/api/license"); FEATS.clear(); for (const f of l.features || []) FEATS.add(f.id); } catch (e) { /* mantém o que tinha */ }
@@ -243,7 +247,7 @@ function mapOverlay() {
     const mySp = me ? me.spline : previewing ? (t / 14) % 1 : null;
     const at = (sp) => P[Math.round((((sp % 1) + 1) % 1) * n) % n];
     // modo: pista inteira, seguindo o carro (norte para cima) ou seguindo e girando (a frente sempre para cima)
-    const mode = cfg.mapmode === "follow" || cfg.mapmode === "follow_rot" ? cfg.mapmode : "full";
+    const mode = cfg.mapmode === "follow" || cfg.mapmode === "follow_rot" ? pickStyle("mapmode", "mapmode", "full") : "full";
     const Z = mode === "full" || mySp == null ? 1 : clamp(cfg.fzoom, 150, 900) / 100, sc = 1 / Z;
     let rotA = 0;
     ctx.save();
@@ -260,7 +264,7 @@ function mapOverlay() {
     }
     // textos e marcas que precisam ficar em pé mesmo com o mapa girando
     const upright = (x, y, fn) => { ctx.save(); ctx.translate(x, y); ctx.rotate(-rotA); ctx.scale(sc, sc); fn(); ctx.restore(); };
-    const style = ["asphalt", "thin", "classic", "neon"].includes(cfg.mapstyle) ? pickStyle("map", "mapstyle", "asphalt") : "asphalt";
+    const style = ["asphalt", "thin", "classic", "neon"].includes(cfg.mapstyle) ? pickStyle("map", "mapstyle", "asphalt") : pickStyle("map", "_", "asphalt");
     const lw = (style === "thin" ? 3.2 : style === "neon" ? 3.6 : clamp(cfg.width, 3, 20)) * sc;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const trace = (a, b) => { ctx.beginPath(); ctx.moveTo(P[a][0], P[a][1]); for (let i = a + 1; i <= b; i++) ctx.lineTo(P[i % n][0], P[i % n][1]); };
@@ -797,7 +801,7 @@ function tyresACC() {
 function tyresOverlay() {
   let style = null, impl = null;
   const pick = () => {
-    const s = ["cards", "minimal", "row"].includes(cfg.tystyle) ? pickStyle("tyres", "tystyle", "acc") : "acc";
+    const s = pickStyle("tyres", ["acc", "cards", "minimal", "row"].includes(cfg.tystyle) ? "tystyle" : "_", "acc");
     if (s !== style) { style = s; impl = s === "cards" ? tyresCards() : s === "minimal" ? tyresMini(false) : s === "row" ? tyresMini(true) : tyresACC(); lastSize = ""; }
     return impl;
   };
