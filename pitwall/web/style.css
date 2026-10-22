@@ -1142,3 +1142,11 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .gen-box { padding: 12px; border-radius: 12px; background: rgba(255,255,255,.04); margin-bottom: 14px; }
 .tsx-wrap { max-height: 340px; overflow: auto; }
 .sdetail .eng { grid-template-columns: 1fr; }
+
+/* listas suspensas legíveis no tema escuro (a lista aberta saía branca com letra clara) */
+select { color-scheme: dark; }
+select option, select optgroup { background: var(--panel, #121821); color: var(--text, #e8eef9); }
+.cm-row select { min-width: 230px; background: var(--panel-2, #1a2230); color: var(--text, #e8eef9); border: 1px solid var(--line, #26303f); border-radius: 8px; padding: 7px 10px; font-size: 14px; }
+.cm-row select:disabled { opacity: .8; }
+.cm-row span { font-size: 14px; }
+.ovslide > span { white-space: nowrap; }
