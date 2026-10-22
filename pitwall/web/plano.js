@@ -5,16 +5,18 @@ const PLAN_FEATURES = [
   ["Gravar, analisar e comparar voltas, replay e overlays", "free"],
   ["Engenheiro de voz: avisos e perguntas básicas (combustível, posição, voltas, bandeiras)", "free"],
   ["Engenheiro de voz completo: pneus, freios, rivais, clima, box e muito mais", "pro"],
+  ["Personalização do engenheiro: velocidade, efeito de rádio, escolha de voz, modos de falar, quais avisos e personalidade", "pro"],
+  ["Personalização completa dos overlays: ajustes, colunas, faixas de cor, unidades e mais opções em cada um", "pro"],
   ["Voz online (mais natural) e personalidade (humor, bronca, elogio)", "pro"],
   ["Observador: carros ao lado, três de lado, livre", "pro"],
   ["Vídeos das voltas sem limite (grátis guarda as últimas 5 sessões)", "pro"],
   ["Overlays básicos: mapa simples, pedais minimalistas, delta só número, participantes compacto, pneus em 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego (uma por lado)", "free"],
   ["Overlays completos: gráfico de pedais com volante, delta com previsão e combustível, participantes com colunas e classes, pneus como no ACC, próxima curva completa, mapa com asfalto e modo seguir, radar visto de cima e circular", "pro"],
   ["Modelos de transmissão: pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo ao redor do carro", "team"],
-  ["Pro incluído para até 10 pilotos da sua equipe e painel do dono", "team"],
+  ["10 chaves do Pro para dividir com a equipe (todas vencem junto com o plano do dono), painel do dono e carrinhos por classe no radar", "team"],
   ["Sem anúncios no site", "pro"],
 ];
-const SRC_NAMES = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", free: "", dev: "Desenvolvimento" };
+const SRC_NAMES = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", team: "Chave da equipe", free: "", dev: "Desenvolvimento" };
 
 async function renderPlano() {
   current = { name: "plano" };
@@ -61,8 +63,8 @@ async function renderPlano() {
       </div>
 
       <div class="set-card"><h2>Código de presente</h2>
-        ${setRow("Ganhou um código?", "Códigos de sorteios e parcerias liberam o Pro por alguns dias. Precisa estar com o Google ligado (botão acima).",
-          `<div class="eng-inline"><input id="pGift" type="text" placeholder="PW-XXXXXXXX" style="min-width:200px"><button class="btn" id="pGiftBtn">Resgatar</button></div>`)}
+        ${setRow("Ganhou um código?", "Códigos de sorteios e parcerias liberam o Pro por alguns dias, e a chave da equipe (PWT-…) libera o Pro até o fim do plano de quem te passou a chave. Precisa estar com o Google ligado (botão acima).",
+          `<div class="eng-inline"><input id="pGift" type="text" placeholder="PW-… ou PWT-… (chave da equipe)" style="min-width:230px"><button class="btn" id="pGiftBtn">Resgatar</button></div>`)}
       </div>
 
       <div class="set-card"><h2>O que cada plano libera</h2>
@@ -101,7 +103,7 @@ async function renderPlano() {
   $("#pGiftBtn").onclick = async () => {
     try {
       const r = await post("/api/license/redeem", { code: $("#pGift").value });
-      alert(`Pronto! Você ganhou o plano ${r.plan === "team" ? "Equipe" : "Pro"} por ${r.days} dias.`);
+      alert(r.seat ? `Chave da equipe ativada! Você tem o Pro até ${new Date(r.ends_at).toLocaleDateString("pt-BR")}, o mesmo prazo do plano do dono da equipe.` : `Pronto! Você ganhou o plano ${r.plan === "team" ? "Equipe" : "Pro"} por ${r.days} dias.`);
     } catch (e) { alert(e.message); }
     renderPlano();
   };

@@ -31,7 +31,9 @@ app / site (#/conta)       ──────────►  função license  
 | `no_ads` sem anúncios no site | não | sim | sim |
 | `overlay_styles` overlays completos (pedais com gráfico/horizontal, delta completo, participantes completo, pneus ACC/cartões, curva completa/compacta, mapa asfalto/neon e modo seguir, radar visto de cima e circular) | não | sim | sim |
 | `overlay_styles_team` modelos de transmissão (pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo) | não | não | sim |
-| `team_seats` Pro incluído para até 10 integrantes da equipe do dono | não | não | sim |
+| `voice_custom` personalização do engenheiro (velocidade, rádio, vozes, modos de falar, avisos) | não | sim | sim |
+| `overlay_custom` personalização completa das opções de cada overlay | não | sim | sim |
+| `seat_keys` / `team_seats` 10 chaves do Pro para dividir (mesmo prazo do plano do dono) | não | não | sim |
 | `team_admin` painel da equipe | não | não | sim |
 
 Escada dos overlays: Grátis = versão simples de cada um (mapa clássico/fino, pedais minimalistas, delta só número, participantes compacto, pneus 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego; o modelo "carro com ondas" é Pro); Pro = os completos; Equipe = transmissão. Sem o recurso, o overlay cai sozinho para a versão simples (`pickStyle`/`STYLE_FALLBACK` em `overlay.js`). Esquema em `supabase/planos_v2.sql`.
@@ -39,6 +41,12 @@ Escada dos overlays: Grátis = versão simples de cada um (mapa clássico/fino, 
 Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/__init__.py` (spotter), `voice/events.py`
 (categorias de aviso), `voice/answers.py` (perguntas), `voice/humor.py` (personalidade), `voice/tts.py` (voz online) e
 `video.py` (vídeos guardados).
+
+### Plano Equipe: chaves para dividir
+O dono do plano Equipe (assinatura ou cortesia) gera até 10 chaves `PWT-XXXXXXXX` em **Minha conta > Chaves da equipe** (site). Cada chave libera o **Pro** para quem a resgatar
+(site: *Tenho um código*; app: menu *Plano*). **Todas vencem junto com o plano do dono**: ativar no último dia não dá dias a mais. O dono pode revogar uma chave e passar para outra pessoa.
+Esquema em `supabase/chaves_equipe.sql` (substitui o antigo "Pro automático para quem entra na equipe").
+Gratuito x Pro nas personalizações: tabela `OPT_LOCK` em `pitwall/web/carshapes.js` (overlays) e `VOICE_LOCK_KEYS` em `pitwall/settings.py` (engenheiro).
 
 ## Segurança (o que dá e o que não dá)
 

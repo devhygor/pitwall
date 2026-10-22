@@ -22,14 +22,14 @@ const dt = (iso) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-di
 const dtt = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 const days = (iso) => iso ? Math.ceil((new Date(iso) - Date.now()) / 86400000) : null;
 const PLAN_NAME = { free: "Grátis", pro: "Pro", team: "Equipe" };
-const SRC_NAME = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", free: "" };
+const SRC_NAME = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", team: "Chave da equipe", free: "" };
 const STATUS_NAME = { active: "Ativa", pending: "Aguardando pagamento", past_due: "Atrasada", canceled: "Cancelada", expired: "Expirada",
   paid: "Pago", overdue: "Vencido", refunded: "Reembolsado", failed: "Falhou" };
 const FEATURE_NAME = { voice_basic: "Engenheiro de voz básico", voice_full: "Engenheiro de voz completo", voice_online: "Voz online",
   voice_personality: "Personalidade do engenheiro", spotter: "Observador (carros ao lado)", video_unlimited: "Vídeos sem limite",
   setups_unlimited: "Setups sem limite", team_multi: "Várias equipes", no_ads: "Sem anúncios", team_admin: "Painel da equipe",
-  overlay_styles: "Overlays completos", overlay_styles_team: "Modelos de transmissão (overlay)", team_seats: "Pro para até 10 integrantes" };
-const CP_ERR = { invalido: "Código inválido.", expirado: "Esse código expirou.", esgotado: "Esse código já foi usado.", proprio: "Você não pode usar o seu próprio código.",
+  overlay_styles: "Overlays completos", overlay_styles_team: "Modelos de transmissão (overlay)", team_seats: "Pro para a equipe (chaves)" };
+const CP_ERR = { ja_tem_chave: "Você já usa uma chave de equipe.", ja_pago: "Você já tem um plano pago.", sem_plano: "Você precisa do plano Equipe ativo.", limite: "Você já criou todas as chaves. Revogue uma para criar outra.", invalido: "Código inválido.", expirado: "Esse código expirou.", esgotado: "Esse código já foi usado.", proprio: "Você não pode usar o seu próprio código.",
   plano_diferente: "Esse código não vale para este plano.", so_novos: "O desconto do link de indicação vale só para quem ainda não assinou.", use_no_checkout: "Esse é um código de presente: resgate em Minha conta.", ja_usado: "Você já resgatou esse código.", login: "Entre com o Google primeiro." };
 (function () { const m = (location.search + location.hash).match(/[?&]ref=([A-Za-z0-9_-]{3,40})/); if (m) store.set("pw.ref", m[1].toUpperCase()); })();   // link de afiliado: ?ref=CODIGO
 const loginGoogle = (back) => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + (back || "") } });
@@ -75,8 +75,8 @@ async function renderPlans() {
     const cur = myPlan.plan === pl.code;
     const LISTS = {
       free: ["Gravar, analisar e comparar voltas", "Replay e overlays básicos no jogo (mapa simples, pedais, delta, pneus e curva enxutos)", "Engenheiro de voz: avisos e perguntas básicas", "Compare com amigos em 1 equipe", "Vídeos das últimas 5 sessões"],
-      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box)", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Overlays completos: pedais com gráfico, delta com combustível, participantes com classes, pneus como no ACC, curva completa, mapa com asfalto, radar visto de cima e circular", "Várias equipes", "Sem anúncios no site"],
-      team: ["Tudo do plano Pro, e mais:", "Pro incluído para até 10 pilotos da sua equipe", "Modelos de transmissão: torre de participantes, painel do piloto, delta em barra larga, pneus em faixa", "Painel do dono para gerenciar os pilotos", "Até 3 computadores por licença"],
+      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box) e totalmente personalizável", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Personalização completa de todos os overlays", "Overlays completos: pedais com gráfico, delta com combustível, participantes com classes, pneus como no ACC, curva completa, mapa com asfalto, radar visto de cima e circular", "Várias equipes", "Sem anúncios no site"],
+      team: ["Tudo do plano Pro, e mais:", "10 chaves do Pro para dividir com a equipe: todas vencem junto com o seu plano", "Modelos de transmissão: torre de participantes, painel do piloto, delta em barra larga, pneus em faixa", "Painel do dono para gerenciar os pilotos", "Até 3 computadores por licença"],
     };
     const feats = (LISTS[pl.code] || (pl.features || []).map((f) => FEATURE_NAME[f] || f)).map((t, i) => `<li${i === 0 && /^Tudo do/.test(t) ? ' class="all"' : ""}>${esc(t)}</li>`).join("");
     // com preço Fundador ativo, é ele que o botão cobra: mostramos esse valor e o normal ao lado
@@ -196,6 +196,23 @@ async function buy(plan, priceId, baseCents, per) {
 }
 
 // ---------------------------------------------------------------- minha conta
+// chaves do plano Equipe: o dono divide com a equipe; todas valem até o fim do plano dele
+function seatsPanel(s) {
+  if (!s || !s.ok) return "";
+  if (!s.is_owner) {
+    return s.holder ? `<div class="panel"><h2>Chave da equipe</h2><p>Seu Pro vem da chave de <b>${esc(s.holder.owner)}</b> e vale até <b>${dt(s.holder.ends_at)}</b>, o mesmo prazo do plano dele.</p>
+      <p class="sub">O prazo é o mesmo para todos: ativar a chave mais tarde não dá dias a mais.</p></div>` : "";
+  }
+  const keys = s.keys || [], free = s.capacity - keys.length;
+  return `<div class="panel seats"><h2>Chaves da equipe (${keys.length}/${s.capacity})</h2>
+    <p class="sub">Divida o plano Equipe: cada chave libera o <b>Pro</b> para uma pessoa. <b>Todas vencem junto com o seu plano (${dt(s.ends_at)})</b>: quem ativar no último dia não ganha dias a mais. Para trocar de pessoa, revogue a chave e passe outra.</p>
+    ${keys.length ? `<table class="tbl"><tbody>${keys.map((k) => `<tr><td><code>${pii(k.code, "key")}</code></td>
+      <td>${k.redeemed_email ? `${pii(k.redeemed_email, "email")}<br><small class="sub">ativada em ${dt(k.redeemed_at)}</small>` : `<span class="sub">livre</span>`}</td>
+      <td><button class="btn small quiet" data-seatcopy="${esc(k.code)}">Copiar</button> <button class="btn small quiet" data-seatrev="${k.id}">Revogar</button></td></tr>`).join("")}</tbody></table>`
+      : `<p class="sub">Nenhuma chave criada ainda.</p>`}
+    <div class="row-actions">${free > 0 ? `<button class="btn go small" id="seatNew">Gerar chave (${free} restante${free === 1 ? "" : "s"})</button>` : `<span class="sub">Todas as chaves foram criadas.</span>`}</div></div>`;
+}
+
 async function renderAccount() {
   view.innerHTML = `<div class="loading">Carregando…</div>`;
   await loadTrialDays();
@@ -217,6 +234,8 @@ async function renderAccount() {
   const left = days(a.ends_at);
   const far = a.ends_at && new Date(a.ends_at).getFullYear() > 2100;
   const { data: pays } = await sb.from("payments").select("*").order("created_at", { ascending: false }).limit(20);
+  let seats = null;
+  try { seats = await rpc("my_seats"); } catch (e) { /* ok */ }
   view.innerHTML = `
     <section class="sect"><div class="wrap acct">
       <span class="eyebrow">Minha conta</span>
@@ -237,9 +256,10 @@ async function renderAccount() {
             <p class="sub">No Pitwall: menu <b>Plano</b> &gt; “Tenho uma chave”. Se entrar com o mesmo e-mail do Google, não precisa da chave.</p>`
             : `<p class="sub">A chave aparece aqui quando você tiver um plano pago, uma cortesia ou o teste grátis.</p>`}
         </div>
+        ${seatsPanel(seats)}
         <div class="panel"><h2>Tenho um código</h2>
-          <p class="sub">Ganhou um código de presente (sorteio, parceiro)? Resgate aqui e o plano é liberado na hora.</p>
-          <div class="adm-form"><input id="rdCode" type="text" placeholder="PW-XXXXXXXX" autocomplete="off"><button class="btn go small" id="rdGo">Resgatar</button></div>
+          <p class="sub">Ganhou um código de presente (sorteio, parceiro) ou uma chave de equipe (PWT-…)? Resgate aqui e o plano é liberado na hora.</p>
+          <div class="adm-form"><input id="rdCode" type="text" placeholder="PW-… ou PWT-…" autocomplete="off"><button class="btn go small" id="rdGo">Resgatar</button></div>
           <div class="modal-err" id="rdMsg"></div>
         </div>
         <div class="panel"><h2>Computadores (${(a.devices || []).length}/${a.max_devices || 1})</h2>
@@ -258,10 +278,17 @@ async function renderAccount() {
     try {
       const r = await rpc("redeem_code", { p_code: $("#rdCode").value });
       if (!r.ok) { m.textContent = CP_ERR[r.error] || "Não foi possível resgatar."; return; }
-      alert(`Pronto! Você ganhou o plano ${PLAN_NAME[r.plan] || r.plan} por ${r.days} dias. Abra o Pitwall e entre com este e-mail do Google para liberar.`);
+      alert(r.seat ? `Chave da equipe ativada! Você tem o Pro até ${dt(r.ends_at)}, o mesmo prazo do plano de quem te passou a chave. Abra o Pitwall e entre com este e-mail do Google para liberar.`
+        : `Pronto! Você ganhou o plano ${PLAN_NAME[r.plan] || r.plan} por ${r.days} dias. Abra o Pitwall e entre com este e-mail do Google para liberar.`);
       renderAccount();
     } catch (e) { m.textContent = e.message; }
   };
+  const sn = $("#seatNew"); if (sn) sn.onclick = async () => { const r = await rpc("create_seat_key"); if (!r.ok) alert(CP_ERR[r.error] || "Não foi possível criar a chave."); renderAccount(); };
+  view.querySelectorAll("[data-seatcopy]").forEach((b) => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.seatcopy); b.textContent = "Copiada!"; });
+  view.querySelectorAll("[data-seatrev]").forEach((b) => b.onclick = async () => {
+    if (!confirm("Revogar esta chave? Quem a usa perde o Pro agora, e você pode passar uma chave nova para outra pessoa.")) return;
+    await rpc("revoke_seat_key", { p_id: b.dataset.seatrev }); renderAccount();
+  });
   const t = $("#aTrial"); if (t) t.onclick = () => startTrialSite("pro");
   const t2 = $("#aTrialTeam"); if (t2) t2.onclick = () => startTrialSite("team");
   const c = $("#copyKey"); if (c) c.onclick = async () => { await navigator.clipboard.writeText(a.license_key); c.textContent = "Copiado!"; };

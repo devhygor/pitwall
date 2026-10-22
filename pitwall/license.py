@@ -35,7 +35,7 @@ FEATURE_NAMES = {
     "voice_personality": "Personalidade do engenheiro", "spotter": "Observador (carros ao lado)",
     "video_unlimited": "Vídeos sem limite", "setups_unlimited": "Setups sem limite", "team_multi": "Várias equipes",
     "no_ads": "Sem anúncios", "team_admin": "Painel da equipe", "overlay_styles": "Overlays completos", "overlay_custom": "Personalização completa dos overlays", "voice_custom": "Personalização do engenheiro", "seat_keys": "Chaves para a equipe",
-    "overlay_styles_team": "Modelos de transmissão (overlay)", "team_seats": "Pro para até 10 integrantes",
+    "overlay_styles_team": "Modelos de transmissão (overlay)", "team_seats": "Pro para a equipe (chaves)",
 }
 PLAN_NAMES = {"free": "Grátis", "pro": "Pro", "team": "Equipe"}
 UPGRADE_URL = "https://pitwall.hygor.com.br/#/planos"

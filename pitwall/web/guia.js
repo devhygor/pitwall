@@ -34,7 +34,7 @@ const TOUR = [
     p: ["Com o engenheiro ligado ele avisa sozinho de combustível, pneus e bandeiras e responde às suas perguntas. A aba Downloads mostra e limpa o que foi baixado."],
     acts: [["Ligar o engenheiro", () => { const c = q1("#eEnable"); if (c && !c.checked) c.click(); }]] },
   { t: "Planos", hash: "#/plano", target: ".plan-hero", side: "bottom", p: [
-    "Gravar e analisar é grátis. O Pro libera o engenheiro completo, voz online, vídeos sem limite e os overlays completos; o Equipe inclui o Pro para até 10 pilotos. Há um teste grátis, sem cartão." ] },
+    "Gravar e analisar é grátis. O Pro libera o engenheiro completo, voz online, vídeos sem limite e os overlays completos; o Equipe inclui 10 chaves do Pro para dividir com a equipe. Há um teste grátis, sem cartão." ] },
   { t: "Falta pouco", hash: "#/guia", target: ".gd-prog", side: "bottom", p: [
     "Esta página lista o que já está configurado e o que falta, cada item com um atalho. Ela fica sempre no menu lateral. Bom treino!" ] },
 ];

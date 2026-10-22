@@ -779,7 +779,8 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         if not r.get("ok"):
             msgs = {"invalido": "Código inválido.", "expirado": "Esse código expirou.", "esgotado": "Esse código já foi usado.",
                     "ja_usado": "Você já resgatou esse código.", "use_no_checkout": "Esse código é de desconto: use na hora de assinar, no site.",
-                    "login": "Entre com o Google primeiro."}
+                    "login": "Entre com o Google primeiro.", "ja_tem_chave": "Você já usa uma chave de equipe.", "ja_pago": "Você já tem um plano pago.",
+                    "proprio": "Essa chave é do seu próprio plano."}
             raise HTTPException(400, msgs.get(r.get("error"), "Não foi possível resgatar o código."))
         _lic().refresh()
         return {**r, "status": _lic().status()}
