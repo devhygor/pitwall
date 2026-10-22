@@ -33,7 +33,7 @@ app / site (#/conta)       ──────────►  função license  
 | `overlay_styles_team` modelos de transmissão (pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo) | não | não | sim |
 | `voice_custom` personalização do engenheiro (velocidade, rádio, vozes, modos de falar, avisos) | não | sim | sim |
 | `overlay_custom` personalização completa das opções de cada overlay | não | sim | sim |
-| `team_setups` setups da equipe (baixar e compartilhar, só entre membros da mesma equipe) | não | sim | sim |
+| `team_setups` ver e baixar os setups dos companheiros (só da mesma equipe; todos podem enviar o seu) | não | sim | sim |
 | `seat_keys` / `team_seats` 10 chaves do Pro para dividir (mesmo prazo do plano do dono) | não | não | sim |
 | `team_admin` painel da equipe | não | não | sim |
 
@@ -44,7 +44,7 @@ Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/_
 `video.py` (vídeos guardados).
 
 ### Setups da equipe (Pro e Equipe)
-`supabase/equipe_setups.sql` e `supabase/equipe_setups_v2.sql`. **Só para quem está na mesma equipe E tem o plano Pro ou Equipe ativo** (assinatura, cortesia, chave de equipe ou teste). O plano Grátis não envia nem baixa setups.
+`supabase/equipe_setups.sql` e `supabase/equipe_setups_v2.sql`. **Ver e baixar**: só quem está na mesma equipe E tem o plano Pro ou Equipe ativo (assinatura, cortesia, chave de equipe ou teste). **Enviar** (o setup vai com o recorde e dá para compartilhar com nota): qualquer membro, inclusive no Grátis.
 Reúne, por equipe, (1) o setup usado no melhor tempo de cada piloto (vai junto com o recorde quando "Enviar o setup usado junto" está ligado) e (2) setups que alguém compartilha de propósito
 (app: Setups > detalhe > *Compartilhar com a equipe*, com nota). Ver e baixar: app (Setups > *Setups da equipe*, instala no ACC com um clique; e o botão "⚙ setup" nas voltas) e site (página da equipe).
 A checagem é no banco: os setups das voltas ficam na tabela fechada `lap_setups` (antes qualquer pessoa logada lia a coluna `laps.setup_json`); o acesso é por `lap_setup_get`, `team_setup_library`, `team_setup_get` e `share_team_setup`, que exigem ser da equipe e ter Pro/Equipe (`_has_pro`).

@@ -1526,7 +1526,7 @@ async function paintTeamSetups() {
   const head = (inner) => `<div class="panel tsetups"><div class="row"><h2 style="margin:0">Setups da equipe</h2><span class="spacer"></span>${inner || ""}</div>`;
   let st;
   try { st = await api("/api/team/status"); } catch (e) { box.innerHTML = ""; return; }
-  if (!st.logged_in) { box.innerHTML = head() + `<div class="sub" style="margin-top:8px">Entre com o Google (menu Equipe) para ver os setups usados nos melhores tempos dos seus companheiros e baixar com um clique.</div></div>`; return; }
+  if (!st.logged_in) { box.innerHTML = head() + `<div class="sub" style="margin-top:8px">Entre com o Google (menu Equipe) para ver os setups usados nos melhores tempos dos seus companheiros e baixar com um clique. Mesmo no plano Grátis, o seu setup vai junto com os seus recordes para a equipe.</div></div>`; return; }
   const teams = st.teams || [];
   if (!teams.length) { box.innerHTML = head() + `<div class="sub" style="margin-top:8px">Você ainda não está em nenhuma equipe. Crie ou entre numa no menu Equipe.</div></div>`; return; }
   if (!teams.some((t) => t.id === tsState.team)) tsState.team = teams[0].id;
@@ -1535,7 +1535,7 @@ async function paintTeamSetups() {
   try { r = await api(`/api/team/setups?team_id=${tsState.team}`); } catch (e) { r = { ok: false, error: "erro", msg: e.message }; }
   if (!r.ok) {
     const msg = r.error === "plano"
-      ? `Os <b>setups da equipe</b> são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo. Com o plano, o setup de cada melhor volta dos companheiros fica reunido aqui e dá para baixar para o ACC com um clique. <a class="lnk" href="#/plano">Ver o plano</a>`
+      ? `Os <b>setups da equipe</b> são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo (todo mundo pode <i>enviar</i> o seu, mas ver e baixar os dos companheiros é do plano). Com o plano, o setup de cada melhor volta dos companheiros fica reunido aqui e dá para baixar para o ACC com um clique. <a class="lnk" href="#/plano">Ver o plano</a>`
       : esc(r.msg || "Não deu para carregar agora.");
     box.innerHTML = head(teamSel) + `<div class="note" style="margin-top:8px">${msg}</div></div>`;
     const sel0 = $("#tsTeam"); if (sel0) sel0.onchange = (e) => { tsState.team = e.target.value; paintTeamSetups(); };
@@ -1583,7 +1583,7 @@ async function shareBox(setupId) {                       // botão "Compartilhar
     const out = $("#shOut"); out.textContent = "Enviando…";
     try {
       const r = await api("/api/team/setups/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: $("#shTeam").value, setup_id: setupId, note: $("#shNote").value }) });
-      out.textContent = r.ok ? "✓ Compartilhado com a equipe." : r.error === "plano" ? "Compartilhar setups com a equipe é do plano Pro ou Equipe." : "Não foi possível compartilhar.";
+      out.textContent = r.ok ? "✓ Compartilhado com a equipe." : "Não foi possível compartilhar.";
     } catch (e) { out.textContent = e.message; }
   };
 }

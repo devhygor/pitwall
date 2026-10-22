@@ -693,7 +693,7 @@ async function loadTeamSetups(teamId) {
   try { r = await rpc("team_setup_library", { p_team: teamId }); } catch (e) { return; }
   if (!r) return;
   if (!r.ok) {
-    if (r.error === "plano") box.innerHTML = `<div class="panel"><h2>Setups da equipe</h2><p class="help">Os setups da equipe são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo. Com o plano, o setup de cada melhor tempo dos pilotos fica reunido aqui, com notas, e baixa com um clique. <a href="#/planos">Ver planos</a></p></div>`;
+    if (r.error === "plano") box.innerHTML = `<div class="panel"><h2>Setups da equipe</h2><p class="help">Os setups da equipe são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo: todo mundo pode <i>enviar</i> o seu (o app envia junto com os recordes), mas ver e baixar os dos companheiros é do plano. Com o plano, o setup de cada melhor tempo dos pilotos fica reunido aqui, com notas, e baixa com um clique. <a href="#/planos">Ver planos</a></p></div>`;
     return;
   }
   const items = r.items || [];

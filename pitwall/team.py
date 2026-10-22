@@ -438,8 +438,8 @@ class Team:
             from . import setups as _setups
             sid = _setups.detect_used(self.db, lap["car"], lap["track"])      # estimativa, para o setup do recorde ir junto
         setup = self.db.setup(sid) if sid else None
-        # setups da equipe são do Pro/Equipe: sem o plano, o setup não vai junto
-        share = bool(setup and self.settings.get("team_share_setup") and (self.settings.has is None or self.settings.has("team_setups")))
+        # enviar o setup é para todos (inclusive Grátis); ver e baixar os setups dos outros é do Pro/Equipe
+        share = bool(setup and self.settings.get("team_share_setup"))
         self._rest("POST", "laps", {"on_conflict": "user_id,game,car,track"}, [row],
                    prefer="resolution=merge-duplicates,return=minimal")
         if share:     # a coluna do setup não pode ser lida de volta pelo banco, então vai num segundo passo
