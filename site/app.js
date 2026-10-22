@@ -83,17 +83,25 @@ function markTop() {
   document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === top));
 }
 
+function bindBurger() {
+  const b = $("#burger"), n = document.querySelector("#me .topnav"); if (!b || !n) return;
+  const set = (o) => { n.classList.toggle("open", o); b.setAttribute("aria-expanded", o); };
+  b.onclick = (e) => { e.stopPropagation(); set(!n.classList.contains("open")); };
+  n.onclick = () => set(false);
+  document.addEventListener("click", () => set(false));
+}
 function renderMe() {
   const el = $("#me");
   if (!session) {
-    el.innerHTML = `<nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#engenheiro" data-go="engenheiro">Engenheiro</a><a href="#equipe" data-go="equipe">Equipe</a><a href="#/planos" data-top="planos">Planos</a></nav>
+    el.innerHTML = `<button class="burger" id="burger" type="button" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><nav class="topnav pub"><a href="#analise" data-go="analise">Comparar</a><a href="#overlays" data-go="overlays">Overlays</a><a href="#engenheiro" data-go="engenheiro">Engenheiro</a><a href="#equipe" data-go="equipe">Equipe</a><a href="#/planos" data-top="planos">Planos</a></nav>
       <a class="btn small quiet" href="#entrar" data-go="entrar" id="goLogin">Entrar</a>`;
+    bindBurger();
     return;
   }
   const u = profile || {};
-  el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/indicar" data-top="indicar">Indique e ganhe</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAffiliate !== "undefined" && isAffiliate ? `<a href="#/afiliado" data-top="afiliado">Painel do afiliado</a>` : ""}${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
+  el.innerHTML = `<button class="burger" id="burger" type="button" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/indicar" data-top="indicar">Indique e ganhe</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAffiliate !== "undefined" && isAffiliate ? `<a href="#/afiliado" data-top="afiliado">Painel do afiliado</a>` : ""}${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
     <button class="btn small quiet" id="logout">Sair</button>`;
-  markTop();
+  markTop(); bindBurger();
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
 }
 
