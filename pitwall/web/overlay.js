@@ -81,6 +81,8 @@ function reportSize() {
 function applyCfg(settings) {
   const o = (settings.overlays || {})[NAME] || {};
   cfg = { ...DEFAULT_CFG, ...o };
+  if (!FEATS.has(OPT_FEATURE)) for (const [k, v] of Object.entries(OPT_LOCK[NAME] || {})) cfg[k] = Array.isArray(v) ? [...v] : v;      // sem o plano, a opção fica no valor básico
+  if (!FEATS.has(OPT_FEATURE_TEAM)) for (const k of Object.keys(OPT_LOCK_TEAM[NAME] || {})) cfg[k] = OPT_LOCK_TEAM[NAME][k];
   edit = PREVIEW ? false : !!settings.overlay_edit;
   document.body.classList.toggle("edit", edit);
   handles();
@@ -587,47 +589,10 @@ function pedalsOverlay() {
   return { onData() {}, onCfg };
 }
 
-// carro visto de cima (frente para cima): rodas, carroceria, para-brisa, vidro traseiro, faróis e lanternas
-function drawCar(ctx, cx, cy, h, col, o = {}) {
-  const w = h * 0.46, x = cx - w / 2, y = cy - h / 2;
-  ctx.save(); ctx.lineJoin = "round";
-  if (o.glow) { ctx.shadowColor = o.glow; ctx.shadowBlur = 14; }
-  ctx.fillStyle = "#0b0d10";                                                   // rodas
-  for (const fy of [0.13, 0.67]) {
-    ctx.beginPath(); ctx.roundRect(x - w * 0.05, y + h * fy, w * 0.17, h * 0.2, w * 0.05); ctx.fill();
-    ctx.beginPath(); ctx.roundRect(x + w * 0.88, y + h * fy, w * 0.17, h * 0.2, w * 0.05); ctx.fill();
-  }
-  const g = ctx.createLinearGradient(x, 0, x + w, 0);                          // carroceria com volume
-  g.addColorStop(0, col); g.addColorStop(0.5, o.hi || col); g.addColorStop(1, col);
-  ctx.fillStyle = g; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineWidth = Math.max(1, h * 0.03);
-  ctx.beginPath(); ctx.roundRect(x + w * 0.07, y, w * 0.86, h, [w * 0.44, w * 0.44, w * 0.24, w * 0.24]); ctx.fill(); ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "rgba(255,255,255,.22)";                                    // capô
-  ctx.beginPath(); ctx.roundRect(x + w * 0.38, y + h * 0.04, w * 0.24, h * 0.24, w * 0.1); ctx.fill();
-  ctx.fillStyle = "rgba(8,16,30,.9)";                                          // para-brisa e vidro traseiro
-  ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.3); ctx.lineTo(x + w * 0.8, y + h * 0.3); ctx.lineTo(x + w * 0.72, y + h * 0.48); ctx.lineTo(x + w * 0.28, y + h * 0.48); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(x + w * 0.26, y + h * 0.66, w * 0.48, h * 0.12, w * 0.08); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.fillRect(x + w * 0.3, y + h * 0.5, w * 0.4, h * 0.14);   // teto
-  ctx.fillStyle = "#fff6c8";                                                   // faróis
-  ctx.beginPath(); ctx.roundRect(x + w * 0.14, y + h * 0.045, w * 0.2, h * 0.05, w * 0.03); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(x + w * 0.66, y + h * 0.045, w * 0.2, h * 0.05, w * 0.03); ctx.fill();
-  ctx.fillStyle = "#ff3b4e";                                                   // lanternas
-  ctx.beginPath(); ctx.roundRect(x + w * 0.14, y + h * 0.93, w * 0.22, h * 0.035, w * 0.02); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(x + w * 0.64, y + h * 0.93, w * 0.22, h * 0.035, w * 0.02); ctx.fill();
-  if (o.label != null) { ctx.fillStyle = o.labelCol || "#fff"; ctx.font = `800 ${Math.max(8, h * 0.2)}px Segoe UI`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(o.label), cx, y + h * 0.58); }
-  ctx.restore();
-}
-const carSVG = (col) => `<svg viewBox="0 0 46 100" width="40" height="86" aria-hidden="true"><g stroke="rgba(0,0,0,.75)" stroke-width="1.6" stroke-linejoin="round">
-  <rect x="0" y="14" width="8" height="19" rx="2.5" fill="#0b0d10"/><rect x="38" y="14" width="8" height="19" rx="2.5" fill="#0b0d10"/><rect x="0" y="66" width="8" height="19" rx="2.5" fill="#0b0d10"/><rect x="38" y="66" width="8" height="19" rx="2.5" fill="#0b0d10"/>
-  <rect x="3.5" y="1" width="39" height="98" rx="19" fill="${col}"/></g>
-  <rect x="17" y="5" width="12" height="24" rx="5" fill="rgba(255,255,255,.22)"/><path d="M9.5 30h27l-3.5 18H13z" fill="rgba(8,16,30,.9)"/><rect x="14" y="66" width="18" height="12" rx="4" fill="rgba(8,16,30,.9)"/>
-  <rect x="14" y="50" width="18" height="14" fill="rgba(255,255,255,.12)"/><rect x="7" y="5" width="9" height="5" rx="1.5" fill="#fff6c8"/><rect x="30" y="5" width="9" height="5" rx="1.5" fill="#fff6c8"/>
-  <rect x="7" y="93" width="10" height="3.5" rx="1" fill="#ff3b4e"/><rect x="29" y="93" width="10" height="3.5" rx="1" fill="#ff3b4e"/></svg>`;
-
 // ------------------------------------------------------------------ RADAR (carros ao lado, atrás e à frente)
 function radarOverlay() {
   root.innerHTML = `<div class="card radar shadow"><canvas id="cv"></canvas>
-    <div class="rd-sides" id="sd"><i class="L"></i><div class="mycar">${carSVG("#e8f0ff")}</div><i class="R"></i></div><div class="rd-gap" id="gp"></div><div class="rd-note" id="nt"></div></div>`;
+    <div class="rd-sides" id="sd"><i class="L"></i><canvas class="mycar" id="mc" width="64" height="104"></canvas><i class="R"></i></div><div class="rd-gap" id="gp"></div><div class="rd-note" id="nt"></div></div>`;
   const card = root.firstChild, cv = root.querySelector("#cv"), ctx = cv.getContext("2d"), sd = root.querySelector("#sd"), gp = root.querySelector("#gp"), nt = root.querySelector("#nt");
   const SIZE = { top: [170, 250], circle: [230, 230], halo: [250, 250], sides: [0, 0] };
   const hsl = (h, a = 1) => `hsl(${Math.round(h)} 85% 55% / ${a})`;
@@ -635,9 +600,9 @@ function radarOverlay() {
   const alongside = (c) => Math.abs(c.fwd) < 6 && Math.abs(c.side) > 0.8 && Math.abs(c.side) < 6;
   function preview() {                                                                           // sem o jogo: carros de exemplo se movendo
     const t = performance.now() / 1000, cars = [
-      { id: 1, n: 12, fwd: 22 * Math.sin(t * 0.5), side: 3.4 }, { id: 2, n: 44, fwd: -4 + 3 * Math.sin(t * 0.8), side: -3.4 },
-      { id: 3, n: 7, fwd: -28 + 8 * Math.sin(t * 0.3), side: 0.4 }, { id: 4, n: 31, fwd: 30 + 6 * Math.sin(t * 0.4), side: -0.3 }];
-    return { cars, left: alongside(cars[1]) ? 1 : 0, right: alongside(cars[0]) ? 1 : 0, source: "preview", calibrated: true };
+      { id: 1, n: 12, fwd: 22 * Math.sin(t * 0.5), side: 3.4, cls: "GT3" }, { id: 2, n: 44, fwd: -4 + 3 * Math.sin(t * 0.8), side: -3.4, cls: "GT4" },
+      { id: 3, n: 7, fwd: -28 + 8 * Math.sin(t * 0.3), side: 0.4, cls: "Hypercar" }, { id: 4, n: 31, fwd: 30 + 6 * Math.sin(t * 0.4), side: -0.3, cls: "Formula" }];
+    return { cars, left: alongside(cars[1]) ? 1 : 0, right: alongside(cars[0]) ? 1 : 0, source: "preview", calibrated: true, me: { cls: "GT3" } };
   }
   function draw() {
     const style = pickStyle("radar", "rstyle", "top"), R = clamp(+cfg.range || 40, 15, 90), D = live() ? (data.radar || null) : previewing ? preview() : null;
@@ -651,7 +616,10 @@ function radarOverlay() {
     gp.style.display = cfg.gap && style !== "sides" && D ? "" : "none";
     gp.innerHTML = `<span>▲ ${ahead ? Math.round(ahead.fwd) + " m" : "—"}</span><span>▼ ${behind ? Math.round(-behind.fwd) + " m" : "—"}</span>`;
     sd.style.display = style === "sides" ? "" : "none";
+    const kindOf = (c) => { const b = carKindOf(c || {}); return FEATS.has(F_TEAM) && cfg.carmap && cfg.carmap[b] ? cfg.carmap[b] : b; };
+    const myKind = kindOf(D && D.me);
     if (style === "sides") {
+      const mc = root.querySelector("#mc"), mx = mc.getContext("2d"); mx.clearRect(0, 0, mc.width, mc.height); drawCar(mx, 32, 52, 92, "#e8f0ff", { kind: myKind, hi: "#fff" });
       sd.querySelector(".L").className = "L" + (L ? " on" : ""); sd.querySelector(".R").className = "R" + (Rr ? " on" : "");
       sd.classList.toggle("wide", L > 0 && Rr > 0);
       sd.querySelector(".L").dataset.n = L > 1 ? L : ""; sd.querySelector(".R").dataset.n = Rr > 1 ? Rr : "";
@@ -670,9 +638,9 @@ function radarOverlay() {
       ctx.strokeStyle = "rgba(255,255,255,.1)"; ctx.beginPath(); ctx.moveTo(10, cy - R / 2 * ky); ctx.lineTo(W - 10, cy - R / 2 * ky); ctx.moveTo(10, cy + R / 2 * ky); ctx.lineTo(W - 10, cy + R / 2 * ky); ctx.stroke();
       for (const c of cars) {
         const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = hsl(heat(d, R * 0.8));
-        drawCar(ctx, x, y, 42, col, { glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null, hi: hsl(heat(d, R * 0.8), 1) });
+        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null, hi: hsl(heat(d, R * 0.8), 1) });
       }
-      drawCar(ctx, cx, cy, 46, "#e8f0ff", { glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
+      drawCar(ctx, cx, cy, 46, "#e8f0ff", { kind: myKind, glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
     } else if (style === "circle") {
       const cx = W / 2, cy = H / 2, k = (W / 2 - 12) / R;
       ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 1.5;
@@ -683,9 +651,9 @@ function radarOverlay() {
         const x = cx + clamp(c.side * 2.2, -R, R) * k * 0.62, y = cy - c.fwd * k, d = Math.hypot(c.fwd, c.side * 1.5);
         if (Math.hypot(x - cx, y - cy) > W / 2 - 8) continue;
         const col = hsl(heat(d, R * 0.8));
-        drawCar(ctx, x, y, 30, col, { glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null });
+        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null });
       }
-      drawCar(ctx, cx, cy, 38, "#e8f0ff", { glow: "#3ee08f", hi: "#ffffff" });
+      drawCar(ctx, cx, cy, 38, "#e8f0ff", { kind: myKind, glow: "#3ee08f", hi: "#ffffff" });
     } else {                                                                                         // halo: oito setores ao redor do carro acendem conforme a proximidade
       const cx = W / 2, cy = H / 2, r0 = W / 2 - 38, sec = new Array(8).fill(0), near = new Array(8).fill(1e9);
       for (const c of cars) {
@@ -699,7 +667,7 @@ function radarOverlay() {
         if (v > 0.5) { ctx.shadowColor = hsl(0); ctx.shadowBlur = 16; }
         ctx.beginPath(); ctx.arc(cx, cy, r0, a - Math.PI / 8 + 0.07, a + Math.PI / 8 - 0.07); ctx.stroke(); ctx.shadowBlur = 0;
       }
-      drawCar(ctx, cx, cy, 84, "#e8f0ff", { hi: "#ffffff" });
+      drawCar(ctx, cx, cy, 84, "#e8f0ff", { kind: myKind, hi: "#ffffff" });
     }
   }
   const loop = () => { draw(); requestAnimationFrame(loop); };

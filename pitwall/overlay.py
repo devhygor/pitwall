@@ -233,8 +233,10 @@ class OverlayHub:
                     out["live"] = {"speed": round(f.speed), "brake": round(last[3], 3) if last else 0, "gas": round(last[2], 3) if last else 0}
                 if "radar" in want:
                     sp = self.spotter
+                    mine = next((c for c in f.cars if c.get("id") == f.player_id), None) or {}
                     out["radar"] = {"source": sp.source, "calibrated": sp.tf is not None or sp.source == "iracing",
-                                    "left": sp.left, "right": sp.right, "cars": list(sp.radar)}
+                                    "left": sp.left, "right": sp.right, "cars": list(sp.radar),
+                                    "me": {"cls": mine.get("cls"), "brand": mine.get("brand"), "model": mine.get("model"), "car": f.car}}
                 if "cars" in want:
                     out["standings"] = self._standings(f)
                     out["me"] = {"spline": f.norm_pos, "x": f.x, "z": f.z, "id": f.player_id}

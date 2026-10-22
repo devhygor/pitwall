@@ -3067,15 +3067,30 @@ OV_COLS.splice(3, 0, ["car", "Carro (símbolo / abreviação)"]);
 OV_COLS.splice(6, 0, ["trend", "Tendência (aproximando / afastando)"]);
 
 // peças da tela de opções
-const ovChip = (n, k, label, v, tip) => `<button type="button" class="ovchip ${v ? "on" : ""}" data-ov="${n}" data-k="${k}" data-chip="1" title="${esc(tip || "")}"><i></i>${label}</button>`;
 const OV_FEATS = new Set();
-const OV_TIER = { overlay_styles: "Pro", overlay_styles_team: "Equipe" };
-const ovSeg = (n, k, opts, val, num) => `<div class="ovseg">${opts.map(([v, t, need]) => {
-  const lock = need && !OV_FEATS.has(need);
-  return `<button type="button" class="${String(val) === String(v) ? "on" : ""} ${lock ? "locked" : ""}" data-ov="${n}" data-k="${k}" data-val="${v}" ${num ? 'data-num="1"' : ""} ${need ? `data-need="${need}"` : ""}>${t}${need ? `<em class="tier ${need === "overlay_styles_team" ? "team" : ""}">${lock ? "🔒 " : ""}${OV_TIER[need]}</em>` : ""}</button>`;
-}).join("")}</div>`;
+const OV_TIER = { overlay_styles: "Pro", overlay_styles_team: "Equipe", overlay_custom: "Pro" };
+// opções com plano: sem o recurso a opção fica travada no valor básico (tabela OPT_LOCK em carshapes.js)
+const ovLocked = (n, k) => !!(OPT_LOCK[n] && k in OPT_LOCK[n] && !OV_FEATS.has(OPT_FEATURE));
+const ovTag = (need, lock) => `<em class="tier ${need === "overlay_styles_team" ? "team" : ""}">${lock ? "🔒 " : ""}${OV_TIER[need]}</em>`;
+const ovChip = (n, k, label, v, tip) => {
+  const lk = ovLocked(n, k);
+  if (lk) v = !!OPT_LOCK[n][k];
+  return `<button type="button" class="ovchip ${v ? "on" : ""} ${lk ? "locked" : ""}" data-ov="${n}" data-k="${k}" data-chip="1" ${lk ? `data-need="${OPT_FEATURE}"` : ""} title="${esc(tip || "")}"><i></i>${label}${lk ? ovTag(OPT_FEATURE, true) : ""}</button>`;
+};
+const ovSeg = (n, k, opts, val, num) => {
+  const kl = ovLocked(n, k);
+  if (kl) val = OPT_LOCK[n][k];
+  return `<div class="ovseg">${opts.map(([v, t, need]) => {
+    const lockKey = kl && String(v) !== String(OPT_LOCK[n][k]), nd = need || (lockKey ? OPT_FEATURE : ""), lock = nd && !OV_FEATS.has(nd);
+    return `<button type="button" class="${String(val) === String(v) ? "on" : ""} ${lock ? "locked" : ""}" data-ov="${n}" data-k="${k}" data-val="${v}" ${num ? 'data-num="1"' : ""} ${nd ? `data-need="${nd}"` : ""}>${t}${nd ? ovTag(nd, lock) : ""}</button>`;
+  }).join("")}</div>`;
+};
 const OV_P = "overlay_styles", OV_T = "overlay_styles_team";
-const ovSlider = (n, k, label, v, min, max, step, unit) => `<label class="ovslide"><span>${label}</span><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}"><output data-unit="${unit}">${v}${unit}</output></label>`;
+const ovSlider = (n, k, label, v, min, max, step, unit) => {
+  const lk = ovLocked(n, k);
+  if (lk) v = OPT_LOCK[n][k];
+  return `<label class="ovslide ${lk ? "locked" : ""}" ${lk ? `data-need="${OPT_FEATURE}"` : ""}><span>${label}${lk ? ovTag(OPT_FEATURE, true) : ""}</span><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}" ${lk ? "disabled" : ""}><output data-unit="${unit}">${v}${unit}</output></label>`;
+};
 const ovGroup = (title, body, hint) => `<section class="ovg"><h3>${title}${hint ? `<small>${hint}</small>` : ""}</h3>${body}</section>`;
 
 function ovPanel(n, S) {
@@ -3123,6 +3138,12 @@ function ovPanel(n, S) {
       "mostra se há carro ao lado, atrás ou à frente de você");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "gap", "Distância do carro à frente e atrás", c.gap, "Metros até o carro mais próximo na sua linha")}
       ${ovChip(n, "numbers", "Número dos carros", c.numbers)}</div>` + ovSlider(n, "range", "Alcance do radar", c.range || 40, 20, 80, 5, " m"));
+    const cm = c.carmap || {}, cmLock = !OV_FEATS.has(OV_T);
+    g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => `<div class="cm-row"><canvas data-prev="${k}" width="56" height="88"></canvas>
+        <span>${t}</span><select data-carmap="${k}" ${cmLock ? "disabled" : ""}>${CAR_KINDS.map(([v, tt]) => `<option value="${v}" ${(cm[k] || k) === v ? "selected" : ""}>${tt}</option>`).join("")}</select></div>`).join("")}
+      ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe o desenho sozinho pela classe do carro. No plano Equipe você escolhe o carrinho de cada classe.</div>`
+        : `<div class="sub">O radar escolhe o desenho pela classe de cada carro (ACC e iRacing). Aqui você troca o carrinho de cada classe. <button type="button" class="btn xs" id="cmReset">Voltar ao automático</button></div>`}</div>`,
+      "ex.: mostrar todos os GT3 como carro de turismo");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
       "se o radar mostrar o carro do lado errado, ligue isto (vale também para o aviso falado do engenheiro)");
     g += `<p class="sub" style="margin:8px 0 0">No ACC o radar usa a posição dos carros; na primeira volta ele calibra sozinho. No iRacing a distância vem da pista e o lado, do aviso do próprio jogo (por isso o iRacing mostra os carros à frente e atrás só na sua linha).</p>`;
@@ -3150,7 +3171,7 @@ function ovPanel(n, S) {
     g += ovGroup("Aparência do símbolo", ovSeg(n, "logomode", [["color", "Colorido (logo original)"], ["mono", "Branco, sem cor"], ["chip", "Com etiqueta clara"]], c.logomode || "color"),
       "colorido e branco ficam sem fundo; só a etiqueta clara tem fundo");
     g += ovGroup("Nome do piloto", ovSeg(n, "name", [["short", "Sigla"], ["last", "Sobrenome"], ["full", "Nome completo"]], c.name));
-    g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => `<button type="button" class="ovchip ${c.cols.includes(k) ? "on" : ""}" data-col="${k}"><i></i>${t}</button>`).join("")}</div>
+    g += ovGroup("Colunas", `<div class="ovchips">${OV_COLS.map(([k, t]) => { const lk = ovLocked("standings", "cols"), on = (lk ? OPT_LOCK.standings.cols : c.cols).includes(k); return `<button type="button" class="ovchip ${on ? "on" : ""} ${lk ? "locked" : ""}" data-col="${k}" ${lk ? `data-need="${OPT_FEATURE}"` : ""}><i></i>${t}</button>`; }).join("")}${ovLocked("standings", "cols") ? ovTag(OPT_FEATURE, true) : ""}</div>
       <p class="sub" style="margin:8px 0 0">Nos tempos de diferença, “−” é quem está à frente de você e “+” quem está atrás. Na corrida a diferença vem da distância na pista; no treino e na classificação, da melhor volta de cada um. Roxo = a melhor volta da sessão (da classe, se houver mais de uma); na coluna Última, roxo mostra quem acabou de fazer a melhor volta e verde, quem acabou de fazer a melhor dele.</p>`);
   } else if (n === "tyres") {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "temp", "Temperatura", c.temp, "Temperatura do núcleo do pneu; a cor mostra se está fria, ideal ou quente")}
@@ -3318,7 +3339,9 @@ function bindOverlayPanel(box, n, put, putModes) {
         if (key === "trend_secs") box.querySelectorAll('button[data-k="trend_secs"]').forEach((x) => x.classList.toggle("on", +x.dataset.val === +el.value));
       };
     } else if (el.dataset.chip) {
-      el.onclick = () => { el.classList.toggle("on"); send(name, key, el.classList.contains("on")); };
+      el.onclick = () => {
+        if (el.dataset.need && !OV_FEATS.has(el.dataset.need)) { toast(`Esta opção é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano.`); return; }
+        el.classList.toggle("on"); send(name, key, el.classList.contains("on")); };
     } else if (el.dataset.val !== undefined) {
       el.onclick = async () => {
         if (el.dataset.need && !OV_FEATS.has(el.dataset.need)) {
@@ -3343,8 +3366,20 @@ function bindOverlayPanel(box, n, put, putModes) {
       };
     }
   });
+  box.querySelectorAll("canvas[data-prev]").forEach((cv) => {                       // prévia dos carrinhos
+    const x = cv.getContext("2d"), sel = box.querySelector(`select[data-carmap="${cv.dataset.prev}"]`);
+    const paint = () => { x.clearRect(0, 0, cv.width, cv.height); drawCar(x, 28, 44, 76, "#e8f0ff", { kind: sel ? sel.value : cv.dataset.prev, hi: "#fff" }); };
+    paint(); if (sel) sel.addEventListener("change", paint);
+  });
+  box.querySelectorAll("select[data-carmap]").forEach((sel) => sel.onchange = () => {
+    const map = {}; box.querySelectorAll("select[data-carmap]").forEach((x) => { if (x.value !== x.dataset.carmap) map[x.dataset.carmap] = x.value; });
+    put({ overlays: { radar: { carmap: Object.keys(map).length ? map : null } } });
+  });
+  const cmr = box.querySelector("#cmReset"); if (cmr) cmr.onclick = () => { put({ overlays: { radar: { carmap: null } } }); box.querySelectorAll("select[data-carmap]").forEach((x) => { x.value = x.dataset.carmap; x.dispatchEvent(new Event("change")); }); };
   box.querySelectorAll("[data-swap]").forEach((el) => el.onclick = () => { el.classList.toggle("on"); put({ eng_spotter_swap: el.classList.contains("on") }); });
+  box.querySelectorAll(".ovslide.locked").forEach((el) => el.onclick = () => toast(`Esta opção é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano.`));
   box.querySelectorAll("[data-col]").forEach((el) => el.onclick = () => {
+    if (el.dataset.need && !OV_FEATS.has(el.dataset.need)) { toast(`Escolher as colunas é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano.`); return; }
     el.classList.toggle("on");
     const cols = OV_COLS.map(([k2]) => k2).filter((k2) => box.querySelector(`[data-col="${k2}"]`).classList.contains("on"));
     put({ overlays: { standings: { cols } } });

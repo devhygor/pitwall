@@ -286,3 +286,5 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .bs.b-icon path { stroke: rgba(255,255,255,.16); }
 .bs.warn.b-icon .a1, .bs.warn.b-icon .a2 { stroke: #ffb02e; filter: drop-shadow(0 0 5px rgba(255,170,30,.9)); }
 .bs.danger.b-icon path { stroke: #ff3b4e; filter: drop-shadow(0 0 6px rgba(255,59,78,.95)); animation: pulse .4s ease-in-out infinite; }
+
+.rd-sides canvas.mycar { width: 32px; height: 52px; display: block; }

@@ -1122,3 +1122,10 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .pii .piiv { font-variant-numeric: tabular-nums; word-break: break-all; }
 .eye { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .6; cursor: pointer; flex: none; }
 .eye:hover { opacity: 1; background: rgba(255,255,255,.08); }
+
+/* opções de overlay com plano e carrinhos do radar */
+.ovchip.locked, .ovslide.locked { opacity: .65; cursor: pointer; }
+.carmap { display: flex; flex-direction: column; gap: 8px; }
+.cm-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.04); }
+.cm-row canvas { width: 28px; height: 44px; }
+.carmap.locked .cm-row { opacity: .7; }

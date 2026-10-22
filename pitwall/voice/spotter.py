@@ -115,7 +115,8 @@ class Spotter:
             fwd = dx * hx + dz * hz
             side = dx * rx + dz * rz
             if abs(fwd) <= 65 and abs(side) <= 18:
-                self.radar.append({"id": r.get("id"), "n": r.get("number"), "fwd": round(fwd, 1), "side": round(side, 1)})
+                self.radar.append({"id": r.get("id"), "n": r.get("number"), "fwd": round(fwd, 1), "side": round(side, 1),
+                                   "cls": r.get("cls"), "brand": r.get("brand"), "model": r.get("model")})
             if abs(dx) > 14 or abs(dz) > 14:
                 continue
             if -6.5 < fwd < 4.5 and 1.0 < abs(side) < 5.5:
@@ -139,7 +140,7 @@ class Spotter:
                 continue
             d = ((float(c.get("spline", 0)) - float(me.get("spline", 0)) + 0.5) % 1.0 - 0.5) * L
             if abs(d) <= 65:
-                near.append({"id": c.get("id"), "n": c.get("number"), "fwd": round(d, 1), "side": 0.0})
+                near.append({"id": c.get("id"), "n": c.get("number"), "fwd": round(d, 1), "side": 0.0, "cls": c.get("cls"), "brand": c.get("brand"), "model": c.get("model")})
         for want, sign in ((self.left, -1), (self.right, 1)):       # quem está ao lado: os mais próximos na linha do seu carro
             for c in sorted((x for x in near if abs(x["fwd"]) < 7 and x["side"] == 0.0), key=lambda x: abs(x["fwd"]))[:want]:
                 c["side"] = sign * 3.4
