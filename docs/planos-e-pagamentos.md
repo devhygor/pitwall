@@ -103,6 +103,7 @@ Esquema em `supabase/afiliados_v1.sql` (já aplicado). Painel: `#/admin` > **Afi
 * **Comissão:** calculada sobre o valor realmente pago, sem descontar a taxa do Asaas. Fica "em espera" 7 dias; depois "aprovada". Reembolso cancela.
   Quem se indica (e-mail igual ao do afiliado) não gera comissão. O pagamento ao afiliado é manual (Pix): marque como paga no painel.
 * O desconto nunca deixa a cobrança abaixo de R$ 5,00.
+* **Painel do afiliado** (`#/afiliado` no site, aparece no menu quando o login do Google tem o e-mail cadastrado no afiliado; esquema em `supabase/afiliado_painel.sql`): link, clientes (e-mails mascarados), comissões em espera/aprovadas/pagas e a chave Pix, que ele mesmo edita.
 
 ## Indique e ganhe (link de indicação para todos)
 

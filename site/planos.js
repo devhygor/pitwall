@@ -3,13 +3,14 @@
    (planos/preços públicos, my_account, start_trial, admin_*, e as funções de borda "checkout" e "license"). */
 "use strict";
 
-let isAdmin = false, myPlan = { plan: "free", features: [] };
+let isAffiliate = false, isAdmin = false, myPlan = { plan: "free", features: [] };
 
 async function loadAccountFlags() {
-  isAdmin = false; myPlan = { plan: "free", features: [] };
+  isAdmin = false; isAffiliate = false; myPlan = { plan: "free", features: [] };
   if (!session) { window.PITWALL_NO_ADS = false; return; }
   try { isAdmin = !!(await rpc("is_admin")); } catch (e) { /* ok */ }
   try { myPlan = (await rpc("my_account")) || myPlan; } catch (e) { /* ok */ }
+  try { isAffiliate = !!(await rpc("my_affiliate")); } catch (e) { /* ok */ }
   window.PITWALL_NO_ADS = (myPlan.features || []).includes("no_ads");
 }
 
@@ -274,6 +275,52 @@ async function renderReferral() {
         </div>
       </div></div></section>`;
   $("#refCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#refCopy").textContent = "Copiado!"; };
+}
+
+// ---------------------------------------------------------------- painel do afiliado (comissão em dinheiro)
+async function renderAffiliate() {
+  view.innerHTML = `<div class="loading">Carregando…</div>`;
+  let a;
+  try { a = await rpc("my_affiliate"); } catch (e) { view.innerHTML = `<div class="wrap"><p class="modal-err">${esc(e.message)}</p></div>`; return; }
+  if (!a) { view.innerHTML = `<section class="sect"><div class="wrap"><h1 class="plans-h">Painel do afiliado</h1><p class="lede">Este e-mail não está cadastrado como afiliado. Se você combinou uma parceria, fale com a gente para cadastrar o e-mail que você usa no Google.</p></div></section>`; return; }
+  const link = `https://pitwall.hygor.com.br/?ref=${a.code}`;
+  const ST = { pending: "Em espera", approved: "Aprovada, a pagar", paid: "Paga", canceled: "Cancelada" };
+  const SUB = { active: "Ativa", past_due: "Atrasada", canceled: "Cancelada", expired: "Expirada" };
+  view.innerHTML = `
+    <section class="sect"><div class="wrap acct">
+      <span class="eyebrow">Painel do afiliado</span>
+      <h1 class="plans-h">Olá, ${esc(a.name)}</h1>
+      <p class="lede">Você ganha <b>${a.commission_pct}%</b> de cada pagamento dos clientes que vierem pelo seu link${a.commission_mode === "first" ? " (só do primeiro pagamento)" : ", todo mês enquanto eles continuarem assinando"}. Quem usa o seu código ganha <b>${a.discount_pct}% de desconto</b>${a.discount_duration === "forever" ? "" : " no primeiro pagamento"}.</p>
+      <div class="acct-grid">
+        <div class="panel"><h2>Seu link</h2>
+          <code class="lickey">${esc(link)}</code>
+          <div class="row-actions"><button class="btn go small" id="afCopy">Copiar link</button></div>
+          <p class="sub">Seu código: <b>${esc(a.code)}</b> (o cliente também pode digitar no checkout).</p>
+        </div>
+        <div class="panel"><h2>Resumo</h2>
+          <div class="ref-stats"><div><b>${a.clients_total}</b><span>clientes trazidos</span></div><div><b>${a.clients_active}</b><span>assinaturas ativas</span></div></div>
+          <table class="tbl"><tbody>
+            <tr><td>Em espera (7 dias de segurança)</td><td><b>${brl(a.cents_pending)}</b></td></tr>
+            <tr><td>Aprovada, a receber</td><td><b>${brl(a.cents_approved)}</b></td></tr>
+            <tr><td>Já paga a você</td><td><b>${brl(a.cents_paid)}</b></td></tr></tbody></table>
+        </div>
+        <div class="panel"><h2>Como você recebe</h2>
+          <p class="sub">O pagamento é feito por Pix, manualmente, para a chave abaixo. A comissão fica 7 dias em espera e depois é aprovada; reembolso cancela a comissão.</p>
+          <div class="adm-form"><input id="afPix" type="text" placeholder="Sua chave Pix" value="${esc(a.pix_key || "")}"><button class="btn small" id="afPixSave">Salvar</button></div>
+          <div class="modal-err" id="afMsg"></div>
+        </div>
+        <div class="panel"><h2>Comissões</h2>
+          ${(a.commissions || []).length ? `<table class="tbl"><tbody>${a.commissions.map((m) => `<tr><td>${dt(m.at)}</td><td class="sub">${esc(m.who)}</td><td>${brl(m.amount_cents)}</td><td>${esc(ST[m.status] || m.status)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Nenhuma comissão ainda.</p>`}
+        </div>
+        <div class="panel"><h2>Clientes</h2>
+          ${(a.clients || []).length ? `<table class="tbl"><tbody>${a.clients.map((c) => `<tr><td>${esc(c.who)}</td><td>${esc(PLAN_NAME[c.plan] || c.plan)} ${c.period === "year" ? "anual" : "mensal"}</td><td>${esc(SUB[c.status] || c.status)}</td><td class="sub">${dt(c.at)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Ninguém assinou pelo seu link ainda.</p>`}
+        </div>
+      </div></div></section>`;
+  $("#afCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#afCopy").textContent = "Copiado!"; };
+  $("#afPixSave").onclick = async () => {
+    const m = $("#afMsg");
+    try { await rpc("set_my_affiliate_pix", { p_pix: $("#afPix").value }); m.style.color = "var(--good, #3ee08f)"; m.textContent = "Chave salva."; } catch (e) { m.style.color = ""; m.textContent = e.message; }
+  };
 }
 
 // ---------------------------------------------------------------- painel do administrador

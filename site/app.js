@@ -48,6 +48,7 @@ function route() {
   if (!session) return renderLanding();
   if (h.startsWith("#/conta")) { markTop(); return renderAccount(); }
   if (h.startsWith("#/indicar")) { markTop(); return renderReferral(); }
+  if (h.startsWith("#/afiliado")) { markTop(); return renderAffiliate(); }
   if (h.startsWith("#/admin")) { markTop(); return renderAdmin(); }
   if ((m = h.match(/^#\/team\/([0-9a-f-]{36})/))) return renderTeam(m[1]);
   if ((m = h.match(/^#\/compare\/([0-9a-f-]{36})(?:\/([0-9a-f-]{36}))?/))) return renderAnalysis(m[1], m[2]);
@@ -59,7 +60,7 @@ window.addEventListener("hashchange", route);
 
 function markTop() {
   const h = location.hash || "#/";
-  const top = h.startsWith("#/ranking") ? "ranking" : h.startsWith("#/planos") ? "planos" : h.startsWith("#/conta") ? "conta" : h.startsWith("#/indicar") ? "indicar" : h.startsWith("#/admin") ? "admin" : (h === "#/" || h === "#") ? "home" : "";
+  const top = h.startsWith("#/ranking") ? "ranking" : h.startsWith("#/planos") ? "planos" : h.startsWith("#/conta") ? "conta" : h.startsWith("#/indicar") ? "indicar" : h.startsWith("#/afiliado") ? "afiliado" : h.startsWith("#/admin") ? "admin" : (h === "#/" || h === "#") ? "home" : "";
   document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === top));
 }
 
@@ -71,7 +72,7 @@ function renderMe() {
     return;
   }
   const u = profile || {};
-  el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/indicar" data-top="indicar">Indique e ganhe</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
+  el.innerHTML = `<nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/indicar" data-top="indicar">Indique e ganhe</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAffiliate !== "undefined" && isAffiliate ? `<a href="#/afiliado" data-top="afiliado">Painel do afiliado</a>` : ""}${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
     <button class="btn small quiet" id="logout">Sair</button>`;
   markTop();
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
