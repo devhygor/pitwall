@@ -232,6 +232,28 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def setup_import():
         return setups.import_folder(db)
 
+    def _model_file(car: str, brand: str):
+        import re as _re
+        from .db import data_dir
+        d = data_dir() / "models"
+        for name in (car, brand):
+            if name and _re.fullmatch(r"[a-z0-9_]+", name) and (d / f"{name}.glb").is_file():
+                return d / f"{name}.glb"
+        return None
+
+    @app.get("/api/model3d/info")
+    def model3d_info(car: str = "", brand: str = ""):
+        f = _model_file(car.lower(), brand.lower())
+        return {"found": bool(f), "name": f.stem if f else None, "size": f.stat().st_size if f else 0}
+
+    @app.get("/api/model3d/file")
+    def model3d_file(car: str = "", brand: str = ""):
+        from fastapi.responses import FileResponse
+        f = _model_file(car.lower(), brand.lower())
+        if not f:
+            raise HTTPException(404, "sem modelo 3D local")
+        return FileResponse(f, media_type="model/gltf-binary", headers={"Cache-Control": "max-age=600"})
+
     @app.get("/api/setups/performance")
     def setup_performance(a: int, b: int):
         try:

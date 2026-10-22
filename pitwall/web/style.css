@@ -1309,3 +1309,5 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .sc3d-canvas { display: block; touch-action: none; }
 .sc-main { grid-template-rows: minmax(0, 1fr); } .sc-stage { min-height: 0; } .sc-svgwrap.is3d { min-height: 360px; }
 @media (max-width: 1000px) { .sc-main { grid-template-rows: auto auto; } .sc-svgwrap.is3d { height: 52vh; } }
+
+.sc3d-load { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 12px; background: rgba(14,19,28,.9); border: 1px solid var(--line); color: var(--text); z-index: 7; }

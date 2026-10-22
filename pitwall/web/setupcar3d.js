@@ -410,6 +410,66 @@ function helix(a, b, coils, radius, wire, mat0) {
   m.position.copy(a); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()); m.castShadow = true; return m;
 }
 
+
+// ------------------------------------------------------------------ modelo .glb do próprio usuário (opcional)
+// Procura rodas/discos/suspensão pelos nomes (WHEEL_LF, DISC_RF, SUSP_LR...), alinha o modelo às medidas do editor
+// e prende as peças em pivôs para a cambagem, a convergência e a altura mexerem de verdade.
+async function adoptModel(url, onProgress) {
+  const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+  const gltf = await new GLTFLoader().loadAsync(url, (e) => { if (onProgress && e.total) onProgress(e.loaded / e.total); });
+  const model = gltf.scene, root = new THREE.Group(), body = new THREE.Group();
+  const align = new THREE.Group(); align.add(model); root.add(align);
+  model.updateMatrixWorld(true);
+  const find = (rx) => { let r = null; model.traverse((o) => { if (!r && rx.test(o.name)) r = o; }); return r; };
+  const wn = { LF: find(/^WHEEL_LF/), RF: find(/^WHEEL_RF/), LR: find(/^WHEEL_LR/), RR: find(/^WHEEL_RR/) };
+  if (!wn.LF || !wn.RF || !wn.LR || !wn.RR) throw new Error("rodas não encontradas no modelo");
+  const ctr = (o) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+  const c = Object.fromEntries(Object.entries(wn).map(([k, o]) => [k, ctr(o)]));
+  const fwd = new THREE.Vector3().addVectors(c.LF, c.RF).sub(new THREE.Vector3().addVectors(c.LR, c.RR)).setY(0).normalize();     // trás -> frente
+  const right = new THREE.Vector3().subVectors(c.RF, c.LF).setY(0).normalize();                                                      // esquerda -> direita
+  const up = new THREE.Vector3(0, 1, 0);
+  right.sub(fwd.clone().multiplyScalar(right.dot(fwd))).normalize();
+  // se o sistema for espelhado em relação ao nosso (frente x cima != direita), refletimos o eixo lateral
+  const mirrored = new THREE.Vector3().crossVectors(fwd, up).dot(right) < 0;
+  const B = new THREE.Matrix4().makeBasis(fwd, up, mirrored ? right.clone().negate() : right);
+  const T = B.clone().transpose();
+  align.applyMatrix4(T);
+  if (mirrored) align.scale.z *= -1;
+  align.updateMatrixWorld(true);
+  const c2 = Object.fromEntries(Object.entries(wn).map(([k, o]) => [k, ctr(o)]));
+  const wbModel = (c2.LF.x + c2.RF.x) / 2 - (c2.LR.x + c2.RR.x) / 2;
+  const k = (WB.front - WB.rear) / wbModel;
+  align.scale.multiplyScalar(k); align.updateMatrixWorld(true);
+  const c3 = Object.fromEntries(Object.entries(wn).map(([kk, o]) => [kk, ctr(o)]));
+  const box = new THREE.Box3().setFromObject(align);
+  align.position.set(WB.front - (c3.LF.x + c3.RF.x) / 2, -box.min.y, -(c3.LF.z + c3.RF.z + c3.LR.z + c3.RR.z) / 4);
+  align.updateMatrixWorld(true);
+  // pivôs das rodas: roda + disco + suspensão giram juntos (cambagem/convergência)
+  const corners = [], moved = new Set();
+  const order = [["LF", 0], ["RF", 1], ["LR", 2], ["RR", 3]];
+  for (const [key, idx] of order) {
+    const wheel = wn[key], disc = find(new RegExp("^DISC_" + key)), susp = find(new RegExp("^SUSP_" + key));
+    const ce = ctr(wheel), piv = new THREE.Group(); piv.position.copy(ce); root.add(piv); piv.updateMatrixWorld(true);
+    for (const o of [wheel, disc, susp]) if (o) { piv.attach(o); moved.add(o); }
+    let tire = null, discMesh = null;
+    wheel.traverse((o) => { if (!tire && /^GEO_TIRE/.test(o.name)) tire = o; });
+    (disc || piv).traverse((o) => { if (!discMesh && o.isMesh) discMesh = o; });
+    if (discMesh) { discMesh.material = discMesh.material.clone(); discMesh.material.emissive = new THREE.Color("#ff5a1a"); discMesh.material.emissiveIntensity = 0; }
+    const dummy = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial());       // pontos que o editor atualiza e que o modelo não tem
+    corners.push({ piv, ax: ce.x, z: ce.z, side: Math.sign(ce.z) || 1, front: ce.x > 0, g: piv, tire: tire || dummy, ring: dummy, disc: discMesh || dummy, cal: dummy, barrel: dummy });
+  }
+  // todo o resto é a carroceria (sobe, desce e inclina com a altura)
+  root.add(body);
+  for (const ch of [...align.children]) body.attach(ch);
+  const materials = new Set();
+  body.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => materials.add(m)); } });
+  corners.forEach((cn) => cn.piv.traverse((o) => { if (o.isMesh) { o.castShadow = true; (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => materials.add(m)); } }));
+  const wingGroup = new THREE.Group(), wing = new THREE.Group(), splitter = new THREE.Group();
+  const keep = new Map(); materials.forEach((m) => keep.set(m, { t: m.transparent, o: m.opacity, d: m.depthWrite }));
+  return { isModel: true, root, body, P: PROFILES.generic, corners, wing, wingGroup, splitter, ducts: [], dashLed: { material: { emissiveIntensity: 1 } }, modelMats: keep,
+    paint: null, paintPlain: null, carbon: null, dark: null, bodyMats: [], cabinMeshes: [], glass: null };
+}
+
 // ------------------------------------------------------------------ palco (cena, câmera, pontos, ao vivo)
 export async function createStage(host, opts) {
   const { brand, items, spots, onHover, onSelect } = opts;
@@ -441,7 +501,10 @@ export async function createStage(host, opts) {
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
   const glow2 = new THREE.Mesh(new THREE.RingGeometry(3.7, 3.74, 120), new THREE.MeshBasicMaterial({ color: "#2ee59d", transparent: true, opacity: 0.22 })); glow2.rotation.x = -Math.PI / 2; glow2.position.y = 0.004; scene.add(glow2);
 
-  const car = buildCar(brand, scene); scene.add(car.root);
+  let car = null;
+  if (opts.modelUrl) { try { car = await adoptModel(opts.modelUrl, opts.onProgress); } catch (e) { console.warn("modelo 3D local indisponível, usando o carro por código:", e); } }
+  if (!car) car = buildCar(brand, scene); else car.P = PROFILES[brand] || PROFILES.generic;
+  scene.add(car.root);
   const sus = buildSuspension(car); sus.grp.visible = false; car.root.add(sus.grp);
   // peças da suspensão ficam presas ao corpo (sobem e descem com ele)? Só os pontos de fixação: mantemos no mundo (chassi) e movemos o corpo.
 
@@ -477,7 +540,7 @@ export async function createStage(host, opts) {
       const toeD = del(`basicSetup.alignment.toe[${i}]`);
       c.piv.rotation.y = (toeD * 0.06 * Math.PI / 180) * (c.side > 0 ? 1 : -1) * 2.5;
       const p = cur(`basicSetup.tyres.tyrePressure[${i}]`, 56), psi = 20.3 + p * 0.1, k = 1 + (psi - 26.5) * 0.006;
-      c.tire.scale.set(k, 1, k);                                                       // lateral do pneu: mais pressão = mais "cheio"
+      if (!car.isModel) c.tire.scale.set(k, 1, k);                                                       // lateral do pneu: mais pressão = mais "cheio"
       const col = new THREE.Color().setHSL(lerp(0.58, 0.0, clamp((psi - 25) / 3, 0, 1)), 0.9, 0.5); c.ring.material.color.copy(col); c.ring.material.emissive.copy(col);
       const share = c.front ? bias : 1 - bias; c.disc.material.emissiveIntensity = clamp(share * (0.5 + torque / 40) - 0.2, 0, 1.2);
       // suspensão deste canto
@@ -499,6 +562,7 @@ export async function createStage(host, opts) {
 
   function setXray(on) {
     xray = on; sus.grp.visible = true;
+    if (car.isModel) { car.modelMats.forEach((st, m) => { m.transparent = on ? true : st.t; m.opacity = on ? Math.min(st.o, 0.1) : st.o; m.depthWrite = on ? false : st.d; m.needsUpdate = true; }); sus.grp.visible = on; return; }
     for (const m of [car.paint, car.paintPlain, car.carbon, car.dark, ...(car.bodyMats || [])]) { m.transparent = true; m.depthWrite = !on; m.opacity = on ? 0.10 : 1; }
     car.cabinMeshes.forEach((m) => { if (m.material === car.glass) { m.material.opacity = on ? 0.05 : 0.78; } });
     car.corners.forEach((c) => { c.tire.material.transparent = true; c.tire.material.opacity = on ? 0.4 : 1; c.tire.material.depthWrite = !on; });
