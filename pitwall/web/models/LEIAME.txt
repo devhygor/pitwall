@@ -1,13 +1,14 @@
 pitwall_gt.glb — carro padrão do editor visual de setup.
 
-Origem: ORIGEM A CONFIRMAR pelo dono do projeto (Hygor) — informado primeiro como gerado por IA e depois como modelado no Blender.
+Origem: gerado com o Meshy (IA) pelo dono do projeto (Hygor), em 2026-10-22, no plano PAGO do Meshy, que dá licença para uso comercial.
 Arquivo de partida (2026-10-22):
 "FErrariBrazilian_GT_Racer_1022155043_generate.glb" (só geometria, sem textura nem logos). Reduzido e suavizado com
 tools/decimar_modelo.py (700 mil triângulos, ~17 MB, 24 passos de suavização). A pintura, os vidros, pneus, aros e os
 decalques (número e PITWALL) são aplicados por código.
 
-Termos de uso: se foi gerado por IA, valem os termos da ferramenta e do plano usados; se foi modelado no Blender, vale a autoria do dono.
-PENDENTE: anotar aqui como foi feito (ferramenta/plano e data, ou guardar o arquivo .blend como prova de autoria).
+Termos de uso: valem os termos do Meshy para o plano pago usado na geração (uso comercial permitido).
+Guarde como prova: o comprovante/fatura do plano da data, um print dos termos de licença do Meshy e o histórico da geração na conta.
+PENDENTE (opcional): anotar aqui o nome do plano e a data exata da geração.
 
 Cuidado de marca: o prompt citava "Ferrari". O modelo não tem logos, mas não anuncie o carro como Ferrari nem use o nome
 na interface ou no marketing.
