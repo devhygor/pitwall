@@ -34,7 +34,7 @@ app / site (#/conta)       ──────────►  função license  
 | `voice_custom` personalização do engenheiro (velocidade, rádio, vozes, modos de falar, avisos) | não | sim | sim |
 | `overlay_custom` personalização completa das opções de cada overlay | não | sim | sim |
 | `team_setups` ver e baixar os setups dos companheiros (só da mesma equipe; todos podem enviar o seu) | não | sim | sim |
-| `seat_keys` / `team_seats` 10 chaves do Pro para dividir (mesmo prazo do plano do dono) | não | não | sim |
+| `seat_keys` / `team_seats` Pro para 10 pessoas: o dono + 9 chaves (mesmo prazo do plano do dono) | não | não | sim |
 | `team_admin` painel da equipe (sem uso próprio hoje) | não | não | sim |
 
 Escada dos overlays: Grátis = versão simples de cada um (mapa clássico/fino, pedais minimalistas, delta só número, participantes compacto, pneus 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego; o modelo "carro com ondas" é Pro); Pro = os completos; Equipe = transmissão. Sem o recurso, o overlay cai sozinho para a versão simples (`pickStyle`/`STYLE_FALLBACK` em `overlay.js`). Esquema em `supabase/planos_v2.sql`.
@@ -51,10 +51,10 @@ A checagem é no banco: os setups das voltas ficam na tabela fechada `lap_setups
 Um gatilho move o `setup_json` recebido para `lap_setups`, então versões antigas do app continuam enviando normalmente (só não baixam setups até atualizar).
 O app descobre o setup do recorde assim: o escolhido na sessão, senão o sugerido pela temperatura, senão o único/mais recente do carro e pista (`setups.detect_used`; o ACC não informa qual setup está carregado, por isso é uma estimativa).
 
-**Resumo atual:** o plano **Equipe = Pro + 10 chaves do Pro para dividir** (mesmo prazo do dono). Todo o resto (overlays completos e de transmissão, personalização, setups da equipe, engenheiro completo) é do **Pro**; quem está na equipe com Pro já vê os setups dos companheiros. Não há teste grátis do Equipe (seria igual ao do Pro e não dá chaves).
+**Resumo atual:** o plano **Equipe = Pro para 10 pessoas: o dono + 9 chaves** (mesmo prazo do dono). Todo o resto (overlays completos e de transmissão, personalização, setups da equipe, engenheiro completo) é do **Pro**; quem está na equipe com Pro já vê os setups dos companheiros. Não há teste grátis do Equipe (seria igual ao do Pro e não dá chaves).
 
 ### Plano Equipe: chaves para dividir
-O dono do plano Equipe (assinatura ou cortesia) gera até 10 chaves `PWT-XXXXXXXX` em **Minha conta > Chaves da equipe** (site). Cada chave libera o **Pro** para quem a resgatar
+O dono do plano Equipe (assinatura ou cortesia) gera até 9 chaves `PWT-XXXXXXXX` (a 10ª vaga é a dele mesmo) em **Minha conta > Chaves da equipe** (site). Cada chave libera o **Pro** para quem a resgatar
 (site: *Tenho um código*; app: menu *Plano*). **Todas vencem junto com o plano do dono**: ativar no último dia não dá dias a mais. O dono pode revogar uma chave e passar para outra pessoa.
 Esquema em `supabase/chaves_equipe.sql` (substitui o antigo "Pro automático para quem entra na equipe").
 Gratuito x Pro nas personalizações: tabela `OPT_LOCK` em `pitwall/web/carshapes.js` (overlays) e `VOICE_LOCK_KEYS` em `pitwall/settings.py` (engenheiro).

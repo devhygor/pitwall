@@ -28,7 +28,7 @@ function priceStats(prices) {
     const year12 = mc ? mc * 12 : null;
     out[code] = { m: mc, y: yc, f: fc, year12, saveC: mc && yc ? year12 - yc : null, savePct: mc && yc ? Math.round((1 - yc / year12) * 1000) / 10 : null, yMonth: yc ? yc / 12 : null };
   }
-  const P = out.pro, T = out.team, PEOPLE = 11;                                   // dono + 10 chaves
+  const P = out.pro, T = out.team, PEOPLE = 10;                                   // o plano Equipe vale Pro para 10 pessoas: o dono + 9 chaves
   const bundle = (pc, tc) => (pc && tc ? { all: pc * PEOPLE, save: pc * PEOPLE - tc, pct: Math.round((1 - tc / (pc * PEOPLE)) * 100), per: tc / PEOPLE, min: Math.ceil(tc / pc) } : null);
   out.people = PEOPLE; out.bm = bundle(P.m, T.m); out.by = bundle(P.y, T.y);
   out.diff = { m: P.m && T.m ? T.m - P.m : null, y: P.y && T.y ? T.y - P.y : null,
@@ -97,7 +97,7 @@ async function renderPlans() {
     const LISTS = {
       free: ["Gravar, analisar e comparar voltas", "Replay e overlays básicos no jogo (mapa simples, pedais, delta, pneus e curva enxutos)", "Engenheiro de voz: avisos e perguntas básicas", "Compare com amigos em 1 equipe", "Vídeos das últimas 5 sessões"],
       pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box) e totalmente personalizável", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Personalização completa de todos os overlays", "Todos os modelos dos overlays: pedais com gráfico e painel do piloto, delta completo e em barra larga, participantes completo e em torre, pneus como no ACC e em faixa, curva completa, mapa com asfalto, radar (de cima, circular e halo) com carrinhos por classe", "Setups da equipe: baixe o setup do melhor tempo dos companheiros e compartilhe os seus", "Várias equipes", "Sem anúncios no site"],
-      team: ["Tudo do plano Pro, e mais:", "10 chaves do Pro para dividir com a equipe: todas vencem junto com o seu plano (quem ativar mais tarde não ganha dias a mais)", "Você gerencia as chaves na sua conta: pode revogar uma e passar para outra pessoa", "Até 3 computadores por licença"],
+      team: ["Tudo do plano Pro, e mais:", "Pro para 10 pessoas: o seu e mais 9 chaves para dividir com a equipe. Todas vencem junto com o seu plano (quem ativar mais tarde não ganha dias a mais)", "Você gerencia as chaves na sua conta: pode revogar uma e passar para outra pessoa", "Até 3 computadores por licença"],
     };
     const feats = (LISTS[pl.code] || (pl.features || []).map((f) => FEATURE_NAME[f] || f)).map((t, i) => `<li${i === 0 && /^Tudo do/.test(t) ? ' class="all"' : ""}>${esc(t)}</li>`).join("");
     // com preço Fundador ativo, é ele que o botão cobra: mostramos esse valor e o normal ao lado
@@ -122,10 +122,13 @@ async function renderPlans() {
         ? `<div class="cmp good">Anual: <b>−${pctTxt(sPl.savePct)}</b> em relação a pagar 12 meses no mensal (${brl(sPl.year12)}) · você economiza ${brl(sPl.saveC)}</div>`
         : `<div class="cmp">No anual sai ${brl(Math.round(sPl.yMonth))}/mês: <b>−${pctTxt(sPl.savePct)}</b> (economiza ${brl(sPl.saveC)} por ano)</div>`;
     }
-    if (pl.code === "team" && ST.diff.m != null) {
-      const bd = period === "year" ? ST.by : ST.bm, perTxt = period === "year" ? "ano" : "mês", d = period === "year" ? ST.diff.y : ST.diff.m;
-      cmpTxt += `<div class="cmp">Em relação a 1 Pro: <b>+${brl(d)}</b> por ${perTxt}, mas o Equipe inclui <b>10 chaves do Pro</b> (${ST.people} pessoas com Pro, contando você).</div>`;
-      if (bd) cmpTxt += `<div class="cmp good">${ST.people} Pros avulsos custariam <b>${brl(bd.all)}</b> por ${perTxt}. No Equipe você paga ${brl(period === "year" ? ST.team.y : ST.team.m)}: <b>economia de ${brl(bd.save)} (−${bd.pct}%)</b>, ou ${brl(Math.round(bd.per))} por pessoa. Já compensa a partir de <b>${bd.min} pessoas</b>.</div>`;
+    if (pl.code === "team" && ST.bm && ST.by) {
+      const yr = period === "year", bd = yr ? ST.by : ST.bm, own = yr ? ST.team.y : ST.team.m, un = yr ? "ano" : "mês";
+      cmpTxt += `<div class="team-box">
+        <div class="tb-head">👥 Pro para <b>${ST.people} pessoas</b> <small>você + ${ST.people - 1} convidados</small></div>
+        <div class="tb-per"><b>${brl(Math.round(bd.per))}</b> por pessoa / ${un}</div>
+        <div class="tb-cmp">Cada um assinando o Pro separado: <s>${brl(bd.all)}</s> por ${un}.<br>Com o Equipe você paga ${brl(own)}: <b>economiza ${brl(bd.save)} (${bd.pct}%)</b>.</div>
+        <div class="tb-foot">Já compensa a partir de <b>${bd.min} pessoas</b>. Todas as vagas vencem junto com o seu plano.</div></div>`;
     }
     let btn;
     if (pl.code === "free") btn = `<a class="btn quiet" href="${esc(PITWALL.download)}">Baixar grátis</a>`;
@@ -238,8 +241,8 @@ function seatsPanel(s) {
       <p class="sub">O prazo é o mesmo para todos: ativar a chave mais tarde não dá dias a mais.</p></div>` : "";
   }
   const keys = s.keys || [], free = s.capacity - keys.length;
-  return `<div class="panel seats"><h2>Chaves da equipe (${keys.length}/${s.capacity})</h2>
-    <p class="sub">Divida o plano Equipe: cada chave libera o <b>Pro</b> para uma pessoa. <b>Todas vencem junto com o seu plano (${dt(s.ends_at)})</b>: quem ativar no último dia não ganha dias a mais. Para trocar de pessoa, revogue a chave e passe outra.</p>
+  return `<div class="panel seats"><h2>Vagas da equipe: ${keys.length + 1}/${s.capacity + 1}</h2>
+    <p class="sub">O plano Equipe vale Pro para <b>10 pessoas</b>: a sua vaga (você já está dentro) e <b>${s.capacity} chaves</b> para dividir. Cada chave libera o <b>Pro</b> para uma pessoa. <b>Todas vencem junto com o seu plano (${dt(s.ends_at)})</b>: quem ativar no último dia não ganha dias a mais. Para trocar de pessoa, revogue a chave e passe outra.</p>
     ${keys.length ? `<table class="tbl"><tbody>${keys.map((k) => `<tr><td><code>${pii(k.code, "key")}</code></td>
       <td>${k.redeemed_email ? `${pii(k.redeemed_email, "email")}<br><small class="sub">ativada em ${dt(k.redeemed_at)}</small>` : `<span class="sub">livre</span>`}</td>
       <td><button class="btn small quiet" data-seatcopy="${esc(k.code)}">Copiar</button> <button class="btn small quiet" data-seatrev="${k.id}">Revogar</button></td></tr>`).join("")}</tbody></table>`
@@ -444,15 +447,14 @@ function priceCompare(prices) {
     <p class="sub">Calculado com os preços ativos acima (sem cupons). “Economia” = quanto o anual custa a menos que pagar 12 meses no mensal.</p>
     ${tbl(["Plano", "Mensal", "Anual", "12 × mensal", "Economia do anual", "Anual por mês"], rows, true)}
     ${warnTeam}
-    <h3 style="margin:14px 0 6px">Equipe x Pro (o Equipe inclui 10 chaves: ${S.people} pessoas com Pro)</h3>
+    <h3 style="margin:14px 0 6px">Equipe x Pro: o Equipe vale Pro para ${S.people} pessoas (dono + ${S.people - 1} chaves)</h3>
     ${d.m != null ? tbl(["", "Mensal", "Anual"], [
       ["1 Pro", brl(S.pro.m), brl(S.pro.y)],
-      ["Equipe", brl(S.team.m), brl(S.team.y)],
-      ["Diferença do Equipe para 1 Pro", `<b>+${brl(d.m)}</b> (+${d.mPct}%)`, `<b>${d.y >= 0 ? "+" : ""}${brl(d.y)}</b> (${d.yPct >= 0 ? "+" : ""}${d.yPct}%)`],
-      [`${S.people} Pros avulsos (o que a equipe pagaria sem o Equipe)`, S.bm ? brl(S.bm.all) : "—", S.by ? brl(S.by.all) : "—"],
-      ["<b>Economia do Equipe</b> sobre os Pros avulsos", S.bm ? `<b>${brl(S.bm.save)}</b> (−${S.bm.pct}%)` : "—", S.by ? `<b>${brl(S.by.save)}</b> (−${S.by.pct}%)` : "—"],
-      ["Custo por pessoa no Equipe", S.bm ? brl(Math.round(S.bm.per)) + "/mês" : "—", S.by ? brl(Math.round(S.by.per)) + "/ano" : "—"],
-      ["Compensa a partir de", S.bm ? `${S.bm.min} pessoas` : "—", S.by ? `${S.by.min} pessoas` : "—"]], true) : `<p class="sub">Falta o preço mensal ou anual de um dos planos.</p>`}
+      [`${S.people} Pros avulsos (cada um assinando)`, S.bm ? brl(S.bm.all) : "—", S.by ? brl(S.by.all) : "—"],
+      ["Equipe (as mesmas " + S.people + " pessoas)", brl(S.team.m), brl(S.team.y)],
+      ["<b>Economia do Equipe</b>", S.bm ? `<b>${brl(S.bm.save)}</b> (${S.bm.pct}%)` : "—", S.by ? `<b>${brl(S.by.save)}</b> (${S.by.pct}%)` : "—"],
+      ["Custo por pessoa no Equipe", S.bm ? brl(Math.round(S.bm.per)) + " por mês" : "—", S.by ? brl(Math.round(S.by.per)) + " por ano" : "—"],
+      ["O Equipe compensa a partir de", S.bm ? `${S.bm.min} pessoas` : "—", S.by ? `${S.by.min} pessoas` : "—"]], true) : `<p class="sub">Falta o preço mensal ou anual de um dos planos.</p>`}
     <p class="sub">O desconto de 10% de cupom ou afiliado vem por cima disso, no primeiro pagamento (veja a aba Afiliados).</p></div>`;
 }
 

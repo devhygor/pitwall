@@ -661,3 +661,10 @@ html { scroll-padding-top: 76px; }
 /* comparativos de preço nos cartões */
 .plan .cmp { margin: 6px 0; padding: 7px 11px; border-radius: 10px; font-size: 13.5px; line-height: 1.4; background: rgba(255,255,255,.05); color: var(--fog); }
 .plan .cmp b { color: var(--chalk); } .plan .cmp.good { background: rgba(46,229,157,.1); color: #bff5dc; } .plan .cmp.good b { color: var(--sodium); }
+
+/* bloco do Equipe: Pro para 10 pessoas */
+.team-box { margin: 10px 0; padding: 14px 16px; border-radius: 14px; background: linear-gradient(160deg, rgba(46,229,157,.14), rgba(77,163,255,.1)); border: 1px solid rgba(46,229,157,.4); }
+.tb-head { font-size: 15px; } .tb-head small { color: var(--fog); margin-left: 6px; }
+.tb-per { margin: 6px 0 8px; } .tb-per b { font: 800 30px/1 var(--display); color: var(--sodium); } .tb-per { color: var(--fog); font-size: 14px; }
+.tb-cmp { font-size: 14px; line-height: 1.5; color: var(--chalk); } .tb-cmp s { color: var(--fog); } .tb-cmp b { color: var(--sodium); }
+.tb-foot { margin-top: 8px; font-size: 13px; color: var(--fog); } .tb-foot b { color: var(--chalk); }

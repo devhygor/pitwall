@@ -1,4 +1,4 @@
--- Pitwall · plano Equipe com chaves para dividir (até 10). Cada chave libera o Pro para uma pessoa, com o MESMO prazo do plano do dono:
+-- Pitwall · plano Equipe com chaves para dividir (10 vagas de Pro: o dono + 9 chaves; capacidade = team_seats - 1). Cada chave libera o Pro para uma pessoa, com o MESMO prazo do plano do dono:
 -- ativar tarde não dá dias a mais. O dono pode revogar uma chave e passar para outra pessoa.
 -- Substitui o "Pro automático para quem entra na equipe" (resolve_entitlement agora usa as chaves). Depende de licencas_v1.sql e afiliados_v1.sql.
 
