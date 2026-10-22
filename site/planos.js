@@ -51,7 +51,9 @@ const FEATURE_NAME = { voice_basic: "Engenheiro de voz básico", voice_full: "En
   overlay_styles: "Overlays completos", overlay_styles_team: "Modelos de transmissão (overlay)", team_seats: "Pro para a equipe (chaves)" };
 const CP_ERR = { ja_tem_chave: "Você já usa uma chave de equipe.", ja_pago: "Você já tem um plano pago.", sem_plano: "Você precisa do plano Equipe ativo.", limite: "Você já criou todas as chaves. Revogue uma para criar outra.", invalido: "Código inválido.", expirado: "Esse código expirou.", esgotado: "Esse código já foi usado.", proprio: "Você não pode usar o seu próprio código.",
   plano_diferente: "Esse código não vale para este plano.", so_novos: "O desconto do link de indicação vale só para quem ainda não assinou.", use_no_checkout: "Esse é um código de presente: resgate em Minha conta.", ja_usado: "Você já resgatou esse código.", login: "Entre com o Google primeiro." };
-(function () { const m = (location.search + location.hash).match(/[?&]ref=([A-Za-z0-9_-]{3,40})/); if (m) store.set("pw.ref", m[1].toUpperCase()); })();   // link de afiliado: ?ref=CODIGO
+// código de afiliado do link (?ref=): só aparece/vem preenchido nos planos nesta visita (aba aberta pelo link); digitar o código no checkout vale sempre
+const getRef = () => { try { return sessionStorage.getItem("pw.refview") || ""; } catch (e) { return ""; } };
+(function () { const m = (location.search + location.hash).match(/[?&]ref=([A-Za-z0-9_-]{3,40})/); if (m) { const c = m[1].toUpperCase(); store.set("pw.ref", c); try { sessionStorage.setItem("pw.refview", c); } catch (e) { /* ok */ } } })();   // link de afiliado: ?ref=CODIGO
 const loginGoogle = (back) => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + (back || "") } });
 
 // ---------------------------------------------------------------- planos (público)
@@ -63,7 +65,7 @@ async function renderPlans() {
   let period = store.get("pw.period") === "year" ? "year" : "month";
   const ST = priceStats(prices);
   // descontos que a pessoa já tem: o código do link/afiliado (guardado em ?ref=) e o acumulado das indicações dela
-  const refCode = store.get("pw.ref"), cpOff = {}, cpDur = {};
+  const refCode = getRef(), cpOff = {}, cpDur = {};
   let rwPct = 0, myRefCode = "";
   if (session) { try { const r = await rpc("my_referral"); if (r && r.ok) { rwPct = r.pct || 0; myRefCode = r.code; } } catch (e) { /* ok */ } }
   if (refCode && refCode !== myRefCode) {
@@ -81,6 +83,7 @@ async function renderPlans() {
       <section class="sect"><div class="wrap plans">
         <span class="eyebrow">Planos</span>
         <h1 class="plans-h">Comece de graça. Assine quando quiser mais.</h1>
+        ${refCode && refCode !== myRefCode ? `<div class="cmp good ref-chip">Código <b>${esc(refCode)}</b> aplicado pelo link que você abriu. <button class="btn small quiet" id="refOff">Remover</button></div>` : ""}
         <p class="lede">Gravar, analisar e comparar as suas voltas é grátis. O Pro libera o engenheiro de voz completo e tira os anúncios.</p>
         <div class="period"><button class="btn small ${period === "month" ? "on" : ""}" data-per="month">Mensal</button>
           <button class="btn small ${period === "year" ? "on" : ""}" data-per="year">Anual${ST.pro.savePct > 0 ? ` <em>economize ${Math.round(ST.pro.savePct)}%</em>` : ""}</button></div>
@@ -88,6 +91,7 @@ async function renderPlans() {
         <p class="plans-note">Pagamento por Pix, cartão ou boleto, com renovação automática. Cancele quando quiser. Emitimos nota fiscal. O teste grátis de ${TRIAL_DAYS} dias não pede cartão.</p>
       </div></section>`;
     view.querySelectorAll("[data-per]").forEach((b) => b.onclick = () => { period = b.dataset.per; draw(); });
+    const ro = $("#refOff"); if (ro) ro.onclick = () => { try { sessionStorage.removeItem("pw.refview"); } catch (e) { /* ok */ } toast("Código removido", "ok"); renderPlans(); };
     view.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => buy(b.dataset.buy, b.dataset.price, +b.dataset.base, b.dataset.per));
     view.querySelectorAll("[data-trial]").forEach((b) => b.onclick = () => startTrialSite(b.dataset.trial));
   };
@@ -171,7 +175,7 @@ async function buy(plan, priceId, baseCents, per) {
     <p class="sub">Precisamos do nome e do CPF ou CNPJ para emitir a cobrança e a nota fiscal. O acesso é liberado no e-mail <b>${pii(session.user.email, "email")}</b>.</p>
     <label>Nome completo ou razão social<input id="bName" type="text" autocomplete="name" value="${esc((profile && profile.name) || "")}"></label>
     <label>CPF ou CNPJ<input id="bDoc" type="text" inputmode="numeric" autocomplete="off" placeholder="somente números"></label>
-    <label>Cupom ou código de afiliado (opcional)<input id="bCoupon" type="text" autocomplete="off" value="${esc(store.get("pw.ref") || "")}" placeholder="ex.: MEUCODIGO"></label>
+    <label>Cupom ou código de afiliado (opcional)<input id="bCoupon" type="text" autocomplete="off" value="${esc(getRef())}" placeholder="ex.: MEUCODIGO"></label>
     <div class="modal-ok" id="bCpHint"></div>
     <div class="buy-price" id="bPrice"></div>
     <div class="modal-err" id="bErr"></div>
@@ -222,7 +226,7 @@ async function buy(plan, priceId, baseCents, per) {
           preco_fora_do_prazo: "Esse preço não está mais disponível." }[j.error] || j.message || "Não foi possível gerar a cobrança.";
         throw new Error(msg);
       }
-      location.href = j.url;
+      try { sessionStorage.removeItem("pw.refview"); } catch (e) { /* ok */ } location.href = j.url;
     } catch (e) {
       $("#bErr").textContent = e.message;
       $("#bGo").disabled = false; $("#bGo").textContent = "Ir para o pagamento";
@@ -487,6 +491,9 @@ async function renderAdmin() {
   let tab = store.get("pw.admTab") || "geral", q = "";
   const match = (o) => !q || JSON.stringify(o).toLowerCase().includes(q);
   const badge = (s) => `<span class="st st-${s}">${esc(STATUS_NAME[s] || s)}</span>`;
+  const GROUPS = [["Resumo", ["geral"]], ["Pessoas", ["usuarios", "cortesias", "testes", "licencas"]], ["Dinheiro", ["assinaturas", "pagamentos", "precos", "comissoes"]], ["Divulgação", ["afiliados", "codigos"]], ["Sistema", ["log"]]];
+  const grpOf = (t) => (GROUPS.find((g) => g[1].includes(t)) || GROUPS[0]);
+  const TABNAME = Object.fromEntries(ADM_TABS);
   const draw = () => {
     store.set("pw.admTab", tab);
     const c = D.counts;
@@ -502,10 +509,11 @@ async function renderAdmin() {
             .map((r) => [pii(r[0], "email"), r[1], r[2], `${dt(r[3])} <span class="sub">(${days(r[3])} d)</span>`]), true)}</div>`,
       usuarios: () => `<div class="panel"><h2>Quem usa o Pitwall</h2>
         <p class="sub">A versão aparece depois que a pessoa abre o app novo (0.1.45 ou mais recente) com o login do Google.${LATEST ? ` Última versão publicada: <b>${esc(LATEST)}</b>.` : ""}</p>
-        ${table(["E-mail", "Plano", "Versão do app", "Último acesso do app", "Computadores", "Cadastro", "Último login"],
+        ${table(["E-mail", "Plano", "Versão do app", "Último acesso do app", "Computadores", "Cadastro", "Último login", ""],
           U.filter(match).map((u) => [pii(u.email, "email"), `${PLAN_NAME[u.plan] || "Grátis"}${SRC_NAME[u.source] ? ` <small class="sub">(${SRC_NAME[u.source]})</small>` : ""}`,
             u.app_version ? `<b>${esc(u.app_version)}</b>${LATEST && verOlder(u.app_version, LATEST) ? ` <span class="st st-past_due">desatualizado</span>` : ` <span class="st st-active">em dia</span>`}` : `<span class="sub">ainda não apareceu</span>`,
-            u.last_seen ? `${dtt(u.last_seen)}<br><small class="sub">${esc(u.device_label || "")}</small>` : "—", u.devices || 0, dt(u.created_at), dtt(u.last_sign_in_at)]), true)}</div>`,
+            u.last_seen ? `${dtt(u.last_seen)}<br><small class="sub">${esc(u.device_label || "")}</small>` : "—", u.devices || 0, dt(u.created_at), dtt(u.last_sign_in_at),
+            `<button class="btn small" data-um="${esc(u.email)}">Gerenciar</button>`]), true)}</div>`,
       afiliados: () => `<div class="panel"><h2>Novo afiliado</h2>
         <div class="adm-form"><input id="afName" type="text" placeholder="nome"><input id="afMail" type="email" placeholder="e-mail do afiliado (evita comissão de si mesmo)">
           <input id="afCode" type="text" placeholder="código (ex.: JOAO10)"><input id="afPix" type="text" placeholder="chave Pix para pagar a comissão"></div>
@@ -558,9 +566,11 @@ async function renderAdmin() {
           dt(s.current_period_end), `<code>${pii(s.license_key || "", "key")}</code>`,
           `<button class="btn small quiet" data-ext="${s.id}" data-end="${s.current_period_end || ""}">+30 dias</button>
            <button class="btn small quiet" data-cancel="${s.id}">Cancelar</button>`]), true)}</div>`,
-      pagamentos: () => `<div class="panel">${table(["Data", "E-mail", "Valor", "Status", "Forma", "Recibo"],
+      pagamentos: () => `<div class="panel">${table(["Data", "E-mail", "Valor", "Status", "Forma", "Recibo", ""],
         D.payments.filter(match).map((p) => [dt(p.paid_at || p.due_date || p.created_at), pii(p.email, "email"), brl(p.amount_cents), badge(p.status), esc(p.method || ""),
-          p.invoice_url ? `<a href="${esc(p.invoice_url)}" target="_blank" rel="noopener">abrir</a>` : ""]), true)}</div>`,
+          p.invoice_url ? `<a href="${esc(p.invoice_url)}" target="_blank" rel="noopener">abrir</a>` : "",
+          p.status === "paid" ? `<button class="btn small quiet" data-pr="${p.id}" title="Devolve o dinheiro ao cliente pelo Asaas">Estornar</button>` : `<button class="btn small quiet danger" data-pd="${p.id}" title="Cancela no Asaas e tira do painel">Apagar</button>`]), true)}
+        <p class="sub">Apagar cancela a cobrança no Asaas e a tira daqui e da conta do cliente. Pagamento já recebido não pode ser apagado: estorne antes (o dinheiro volta ao cliente).</p></div>`,
       cortesias: () => `<div class="panel"><h2>Dar um plano de cortesia</h2>
         <div class="adm-form"><input id="gMail" type="email" placeholder="e-mail do amigo (o do Google dele)">
           <select id="gPlan"><option value="pro">Pro</option><option value="team">Equipe</option></select>
@@ -589,8 +599,9 @@ async function renderAdmin() {
     }[tab]();
     view.innerHTML = `<section class="sect"><div class="wrap adm">
       <span class="eyebrow">Administração</span>
-      <div class="adm-bar"><div class="tabs">${ADM_TABS.map(([k, t]) => `<button class="btn small ${tab === k ? "on" : ""}" data-tab="${k}">${t}</button>`).join("")}</div>
+      <div class="adm-bar"><div class="tabs">${GROUPS.map(([g, ts]) => `<button class="btn small ${grpOf(tab)[0] === g ? "on" : ""}" data-tab="${ts[0]}">${g}</button>`).join("")}</div>
         <input id="admQ" type="search" placeholder="Buscar…" value="${esc(q)}"></div>
+      ${grpOf(tab)[1].length > 1 ? `<div class="adm-sub">${grpOf(tab)[1].map((k) => `<button class="${tab === k ? "on" : ""}" data-tab="${k}">${TABNAME[k]}</button>`).join("")}</div>` : ""}
       ${body}</div></section>`;
     bind();
   };
@@ -598,7 +609,48 @@ async function renderAdmin() {
       <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<p class="sub">Nada por aqui.</p>`;
   const reload = async () => { D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; AF = (await rpc("admin_affiliates")) || AF; draw(); };
   const act = async (fn) => { try { await fn(); await reload(); } catch (e) { alert(e.message); } };
+  const callAdminPay = async (id, action) => {
+    const r = await fetch(`${PITWALL.url}/functions/v1/admin-payments`, { method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}`, apikey: PITWALL.key }, body: JSON.stringify({ id, action }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.message || "Não foi possível concluir (" + (j.error || r.status) + ").");
+    toast(action === "refund" ? "Pagamento estornado no Asaas" : "Pagamento apagado (e cancelado no Asaas)", "ok");
+  };
+  const userModal = (email) => {
+    document.getElementById("umModal")?.remove();
+    const em = email.toLowerCase(), u = U.find((x) => x.email.toLowerCase() === em) || { email };
+    const gs = D.grants.filter((g) => g.email.toLowerCase() === em && !g.revoked_at);
+    const subs = D.subscriptions.filter((x) => x.email.toLowerCase() === em && x.status !== "canceled");
+    const ds = D.devices.filter((d) => d.email.toLowerCase() === em && !d.revoked_at);
+    const tr = D.trials.find((t) => t.email.toLowerCase() === em);
+    document.body.insertAdjacentHTML("beforeend", `<div class="modal" id="umModal"><div class="modal-box">
+      <h2>${pii(u.email, "email")}</h2>
+      <p class="sub">Plano agora: <b>${PLAN_NAME[u.plan] || "Grátis"}</b>${SRC_NAME[u.source] ? ` (${SRC_NAME[u.source]})` : ""}${u.app_version ? ` · app ${esc(u.app_version)}` : ""}</p>
+      <h3>Dar um plano</h3>
+      <div class="adm-form"><select id="umPlan"><option value="pro">Pro</option><option value="team">Equipe</option></select>
+        <select id="umDays"><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="">Sem data para acabar</option></select>
+        <input id="umWhy" type="text" placeholder="motivo (opcional)"><button class="btn go small" id="umGive">Liberar</button></div>
+      ${gs.length ? `<h3>Cortesias ativas</h3>${gs.map((g) => `<div class="um-row"><span>${PLAN_NAME[g.plan_code]} até ${g.expires_at ? dt(g.expires_at) : "sem fim"}${g.reason ? ` · ${esc(g.reason)}` : ""}</span><button class="btn small quiet" data-umrg="${g.id}">Revogar</button></div>`).join("")}` : ""}
+      ${subs.length ? `<h3>Assinaturas</h3>${subs.map((x) => `<div class="um-row"><span>${PLAN_NAME[x.plan_code]} ${x.period === "year" ? "anual" : "mensal"} · ${badge(x.status)} · vence ${dt(x.current_period_end)}</span>
+        <span><button class="btn small quiet" data-umx="${x.id}" data-end="${x.current_period_end || ""}">+30 dias</button> <button class="btn small quiet danger" data-umc="${x.id}">Cancelar</button></span></div>`).join("")}` : ""}
+      ${tr ? `<h3>Teste grátis</h3><div class="um-row"><span>termina em ${dt(tr.ends_at)}</span><button class="btn small quiet" id="umTr">+7 dias</button></div>` : ""}
+      ${ds.length ? `<h3>Computadores</h3>${ds.map((d) => `<div class="um-row"><span>${esc(d.label || "")} <small class="sub">${esc(d.app_version || "")} · ${dtt(d.last_seen)}</small></span><button class="btn small quiet" data-umd="${d.id}">Remover</button></div>`).join("")}` : ""}
+      <div class="modal-actions"><button class="btn quiet" id="umClose">Fechar</button></div></div></div>`);
+    const m = document.getElementById("umModal"), q = (x) => m.querySelectorAll(x);
+    const go = (fn) => async () => { try { await fn(); await reload(); userModal(email); } catch (e) { alert(e.message); } };
+    m.querySelector("#umClose").onclick = () => m.remove();
+    m.querySelector("#umGive").onclick = go(() => rpc("admin_grant", { p_email: email, p_plan: m.querySelector("#umPlan").value, p_days: m.querySelector("#umDays").value ? +m.querySelector("#umDays").value : null, p_reason: m.querySelector("#umWhy").value || null }));
+    q("[data-umrg]").forEach((b) => b.onclick = go(() => rpc("admin_revoke_grant", { p_id: b.dataset.umrg })));
+    q("[data-umx]").forEach((b) => b.onclick = go(() => { const base = b.dataset.end && new Date(b.dataset.end) > new Date() ? new Date(b.dataset.end) : new Date(); base.setDate(base.getDate() + 30);
+      return rpc("admin_set_subscription", { p_id: b.dataset.umx, p_status: "active", p_period_end: base.toISOString() }); }));
+    q("[data-umc]").forEach((b) => b.onclick = () => confirm("Cancelar esta assinatura agora?") && go(() => rpc("admin_set_subscription", { p_id: b.dataset.umc, p_status: "canceled", p_period_end: new Date().toISOString() }))());
+    const t7 = m.querySelector("#umTr"); if (t7) t7.onclick = go(() => rpc("admin_extend_trial", { p_email: email, p_days: 7 }));
+    q("[data-umd]").forEach((b) => b.onclick = go(() => rpc("admin_revoke_device", { p_id: b.dataset.umd })));
+  };
   function bind() {
+    view.querySelectorAll("[data-um]").forEach((b) => b.onclick = () => userModal(b.dataset.um));
+    view.querySelectorAll("[data-pd]").forEach((b) => b.onclick = () => confirm("Apagar este pagamento? A cobrança será cancelada no Asaas e sairá do painel.") && act(() => callAdminPay(b.dataset.pd, "delete")));
+    view.querySelectorAll("[data-pr]").forEach((b) => b.onclick = () => confirm("Estornar este pagamento? O dinheiro volta ao cliente pelo Asaas. Isso não dá para desfazer.") && act(() => callAdminPay(b.dataset.pr, "refund")));
     view.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { tab = b.dataset.tab; draw(); });
     const sq = $("#admQ"); if (sq) { sq.oninput = (e) => { q = e.target.value.toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $("#admQ"); n.focus(); n.setSelectionRange(pos, pos); }; }
     view.querySelectorAll("[data-cl]").forEach((b) => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.cl); b.textContent = "copiado!"; });

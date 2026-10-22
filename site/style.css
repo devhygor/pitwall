@@ -668,3 +668,11 @@ html { scroll-padding-top: 76px; }
 .tb-per { margin: 6px 0 8px; } .tb-per b { font: 800 30px/1 var(--display); color: var(--sodium); } .tb-per { color: var(--fog); font-size: 14px; }
 .tb-cmp { font-size: 14px; line-height: 1.5; color: var(--chalk); } .tb-cmp s { color: var(--fog); } .tb-cmp b { color: var(--sodium); }
 .tb-foot { margin-top: 8px; font-size: 13px; color: var(--fog); } .tb-foot b { color: var(--chalk); }
+
+/* admin: sub-abas e gerenciar usuário */
+.adm-sub { display: flex; gap: 4px; flex-wrap: wrap; margin: -6px 0 16px; border-bottom: 1px solid var(--line); }
+.adm-sub button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--fog); padding: 8px 12px; font: inherit; cursor: pointer; }
+.adm-sub button.on { color: var(--chalk); border-bottom-color: var(--sodium); }
+#umModal .modal-box { max-width: 640px; max-height: 88vh; overflow: auto; } #umModal h3 { margin: 16px 0 6px; font-size: 15px; }
+.um-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.btn.danger { color: #ff8a8a; }
