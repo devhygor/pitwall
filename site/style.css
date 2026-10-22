@@ -613,3 +613,10 @@ html { scroll-padding-top: 76px; }
 .modal-ok { color: var(--sodium); min-height: 18px; font-size: 14px; }
 .adm-codes { width: 100%; margin: 8px 0; padding: 10px; border-radius: 10px; background: var(--night); border: 1px solid var(--line); color: var(--chalk); font: 15px/1.5 ui-monospace, Consolas, monospace; }
 .adm-form label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* indique e ganhe */
+.ref-big { font-size: 56px; font-weight: 800; line-height: 1; background: linear-gradient(135deg, #3ee08f, #3d8bff 55%, #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ref-bar { height: 10px; border-radius: 99px; background: rgba(255,255,255,.08); margin: 10px 0; overflow: hidden; }
+.ref-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3ee08f, #3d8bff, #a855f7); }
+.ref-stats { display: flex; gap: 18px; margin-bottom: 10px; } .ref-stats div { display: flex; flex-direction: column; } .ref-stats b { font-size: 26px; } .ref-stats span { font-size: 12px; opacity: .7; }
+.ref-rules { margin: 0; padding-left: 18px; line-height: 1.6; }

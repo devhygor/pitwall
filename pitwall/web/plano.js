@@ -55,6 +55,11 @@ async function renderPlano() {
         ${(paid && s.source !== "dev") ? `<div class="sub" style="margin-top:8px"><button class="btn sm" id="pClear">Remover a licença deste computador</button></div>` : ""}
       </div>
 
+      <div class="set-card"><h2>Indique e ganhe</h2>
+        ${setRow("Seu link de indicação", "Cada amigo que entrar pelo seu link ganha 5% no primeiro pagamento, e você ganha 1% de desconto na próxima assinatura a cada 2 amigos que usarem o Pitwall, até 50%.",
+          `<button class="btn" id="pRefer">Ver meu link</button>`)}
+      </div>
+
       <div class="set-card"><h2>Código de presente</h2>
         ${setRow("Ganhou um código?", "Códigos de sorteios e parcerias liberam o Pro por alguns dias. Precisa estar com o Google ligado (botão acima).",
           `<div class="eng-inline"><input id="pGift" type="text" placeholder="PW-XXXXXXXX" style="min-width:200px"><button class="btn" id="pGiftBtn">Resgatar</button></div>`)}
@@ -88,6 +93,7 @@ async function renderPlano() {
   };
   $("#pUp").onclick = () => post("/api/open-url", { url: s.upgrade_url }).catch((e) => alert(e.message));
   $("#pRef").onclick = () => act(() => post("/api/license/refresh"));
+  $("#pRefer").onclick = () => post("/api/open-url", { url: "https://pitwall.hygor.com.br/#/indicar" }).catch((e) => alert(e.message));
   $("#pKeyBtn").onclick = () => act(async () => {
     const r = await post("/api/license/key", { key: $("#pKey").value });
     if (r.error) alert(r.error);

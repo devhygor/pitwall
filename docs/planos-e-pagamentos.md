@@ -104,6 +104,17 @@ Esquema em `supabase/afiliados_v1.sql` (já aplicado). Painel: `#/admin` > **Afi
   Quem se indica (e-mail igual ao do afiliado) não gera comissão. O pagamento ao afiliado é manual (Pix): marque como paga no painel.
 * O desconto nunca deixa a cobrança abaixo de R$ 5,00.
 
+## Indique e ganhe (link de indicação para todos)
+
+Esquema em `supabase/indicacoes_v1.sql`. Página do site `#/indicar` (menu "Indique e ganhe") e atalho no menu Plano do app.
+
+* Todo usuário logado ganha um link `https://pitwall.hygor.com.br/?ref=PWXXXXXX` (criado na primeira visita à página).
+* Quem entra pelo link e faz login (conta nova, até 3 dias) ganha **5% no primeiro pagamento** (cupom automático do link; só para quem nunca assinou).
+* Quem indicou ganha **1% de desconto a cada 2 indicados confirmados, até 50% (100 indicados)** na próxima assinatura (primeiro pagamento, via checkout). O desconto soma com o cupom (máx. 60%) e depois zera; o histórico continua.
+* **Confirmado** = o indicado já usou o Pitwall (computador registrado com o e-mail dele), começou teste ou assinou. Evita ganhar desconto com contas falsas. Se quiser contar já no cadastro, troque `_ref_confirmed` por `select true`.
+* Se a cobrança não for paga e a assinatura pendente for cancelada, o desconto volta para quem indicou.
+* Limitação: o desconto vale no checkout de uma nova assinatura; renovações automáticas seguem no preço da assinatura em curso.
+
 ## Banco (Supabase)
 
 * Esquema: `supabase/licencas_v1.sql`, `supabase/licencas_v1_pagamentos.sql` e `supabase/afiliados_v1.sql` (já aplicados no projeto `pitwall`).

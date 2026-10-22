@@ -99,9 +99,17 @@ Deno.serve(async (req) => {
       if (a.email && String(a.email).toLowerCase() === email) return bad("proprio");   // ninguém ganha comissão de si mesmo
       aff = a.id;
     }
+    if (c.batch === "indicacao") {                         // cupom do link de indicação: só para cliente novo e nunca para o dono do link
+      const { data: own } = await admin.from("referral_links").select("user_id").eq("code", c.code).maybeSingle();
+      if (own && own.user_id === u.user.id) return bad("proprio");
+      const { data: prev } = await admin.from("subscriptions").select("id").eq("email", email).not("status", "in", "(canceled,pending)").limit(1);
+      if (prev?.length) return bad("so_novos");
+    }
     cp = c; pct = c.percent_off || 0;
   }
-  const chargeCents = pct > 0 ? Math.max(500, Math.round(price.amount_cents * (100 - pct) / 100)) : price.amount_cents;
+  const couponPct = pct;
+  let chargeCents = pct > 0 ? Math.max(500, Math.round(price.amount_cents * (100 - pct) / 100)) : price.amount_cents;
+  let rwIds: string[] = [];
 
   try {
     // cliques repetidos em "Assinar" não podem empilhar cobranças: cancela as assinaturas ainda não pagas deste e-mail
@@ -111,12 +119,22 @@ Deno.serve(async (req) => {
       if (o.provider_subscription_id) { try { await asaas(`/subscriptions/${o.provider_subscription_id}`, { method: "DELETE" }); } catch { /* já não existe */ } }
       await admin.from("subscriptions").update({ status: "canceled" }).eq("id", o.id);
     }
+    if (stale?.length) await admin.rpc("referral_release", { p_subs: stale.map((o: any) => o.id) });   // devolve o desconto de indicação gasto numa cobrança que não foi paga
+    // desconto de quem indicou (1% a cada 2 indicados confirmados, até 50%): soma com o cupom, no máximo 60%
+    const { data: rw } = await admin.rpc("referral_reward", { p_user: u.user.id });
+    const rwPct = Number(rw?.pct || 0);
+    if (rwPct > 0) {
+      rwIds = rw.ids || [];
+      pct = Math.min(60, couponPct + rwPct);
+      chargeCents = Math.max(500, Math.round(price.amount_cents * (100 - pct) / 100));
+    }
     const { data: sub, error: se } = await admin.from("subscriptions").insert({
       email, user_id: u.user.id, name, doc, plan_code: price.plan_code, period: price.period, provider: "asaas", status: "pending",
-      coupon_code: cp?.code ?? null, affiliate_id: aff, discount_pct: pct, discount_duration: pct > 0 ? cp.duration : null,
+      coupon_code: cp?.code ?? null, affiliate_id: aff, discount_pct: pct, discount_duration: pct > 0 ? (rwIds.length ? "once" : cp.duration) : null,
       full_price_cents: pct > 0 ? price.amount_cents : null,
     }).select("id").single();
     if (se) throw new Error(se.message);
+    if (rwIds.length) await admin.rpc("referral_consume", { p_ids: rwIds, p_sub: sub.id });
 
     // reaproveita o cliente do Asaas se o mesmo CPF/CNPJ já assinou antes (evita cliente duplicado)
     let customer: any = null;
@@ -126,7 +144,7 @@ Deno.serve(async (req) => {
     const subBody: Record<string, unknown> = {
       customer: customer.id, billingType: "UNDEFINED", value: chargeCents / 100, nextDueDate: today,
       cycle: price.period === "year" ? "YEARLY" : "MONTHLY",
-      description: `Pitwall ${price.plan_code === "team" ? "Equipe" : "Pro"} (${price.period === "year" ? "anual" : "mensal"})${cp ? ` · cupom ${cp.code}` : ""}`,
+      description: `Pitwall ${price.plan_code === "team" ? "Equipe" : "Pro"} (${price.period === "year" ? "anual" : "mensal"})${cp ? ` · cupom ${cp.code}` : ""}${rwIds.length ? " · desconto de indicações" : ""}`,
       externalReference: sub.id,
     };
     let subscription;

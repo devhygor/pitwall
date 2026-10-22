@@ -26,7 +26,7 @@ const FEATURE_NAME = { voice_basic: "Engenheiro de voz básico", voice_full: "En
   setups_unlimited: "Setups sem limite", team_multi: "Várias equipes", no_ads: "Sem anúncios", team_admin: "Painel da equipe",
   overlay_styles: "Overlays completos", overlay_styles_team: "Modelos de transmissão (overlay)", team_seats: "Pro para até 10 integrantes" };
 const CP_ERR = { invalido: "Código inválido.", expirado: "Esse código expirou.", esgotado: "Esse código já foi usado.", proprio: "Você não pode usar o seu próprio código.",
-  plano_diferente: "Esse código não vale para este plano.", use_no_checkout: "Esse é um código de presente: resgate em Minha conta.", ja_usado: "Você já resgatou esse código.", login: "Entre com o Google primeiro." };
+  plano_diferente: "Esse código não vale para este plano.", so_novos: "O desconto do link de indicação vale só para quem ainda não assinou.", use_no_checkout: "Esse é um código de presente: resgate em Minha conta.", ja_usado: "Você já resgatou esse código.", login: "Entre com o Google primeiro." };
 (function () { const m = (location.search + location.hash).match(/[?&]ref=([A-Za-z0-9_-]{3,40})/); if (m) store.set("pw.ref", m[1].toUpperCase()); })();   // link de afiliado: ?ref=CODIGO
 const loginGoogle = (back) => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname + (back || "") } });
 
@@ -224,6 +224,56 @@ async function renderAccount() {
   const t2 = $("#aTrialTeam"); if (t2) t2.onclick = () => startTrialSite("team");
   const c = $("#copyKey"); if (c) c.onclick = async () => { await navigator.clipboard.writeText(a.license_key); c.textContent = "Copiado!"; };
   view.querySelectorAll("[data-rmdev]").forEach((b) => b.onclick = async () => { await rpc("revoke_my_device", { p_id: b.dataset.rmdev }); renderAccount(); });
+}
+
+// ---------------------------------------------------------------- indique e ganhe
+async function claimReferral() {                      // quem entrou por um link de indicação: registra uma vez (só conta nova)
+  const code = store.get("pw.ref");
+  if (!code || store.get("pw.refclaimed") === code) return;
+  try { await rpc("claim_referral", { p_code: code }); } catch (e) { return; }
+  store.set("pw.refclaimed", code);
+}
+async function renderReferral() {
+  view.innerHTML = `<div class="loading">Carregando…</div>`;
+  let r;
+  try { r = await rpc("my_referral"); } catch (e) { view.innerHTML = `<div class="wrap"><p class="modal-err">${esc(e.message)}</p></div>`; return; }
+  if (!r || !r.ok) { view.innerHTML = `<div class="wrap"><p>Entre com o Google para ver o seu link.</p></div>`; return; }
+  const link = `https://pitwall.hygor.com.br/?ref=${r.code}`;
+  const pctBar = Math.min(100, Math.round((r.available / 100) * 100));
+  const ST = { confirmado: "Confirmado", pendente: "Aguardando usar o Pitwall", usado: "Já virou desconto" };
+  view.innerHTML = `
+    <section class="sect"><div class="wrap acct">
+      <span class="eyebrow">Indique e ganhe</span>
+      <h1 class="plans-h">Traga amigos e ganhe até 50% de desconto</h1>
+      <p class="lede">Compartilhe o seu link. Quem entrar por ele ganha <b>${r.invite_pct}% de desconto</b> no primeiro pagamento, e você ganha <b>1% de desconto</b> na sua próxima assinatura a cada 2 amigos que começarem a usar o Pitwall, até <b>${r.max_pct}%</b> com 100 amigos.</p>
+      <div class="acct-grid">
+        <div class="panel"><h2>O seu link</h2>
+          <code class="lickey" id="refLink">${esc(link)}</code>
+          <div class="row-actions"><button class="btn go small" id="refCopy">Copiar link</button>
+            <a class="btn small" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent("Testa o Pitwall (telemetria e engenheiro de voz para ACC e iRacing): " + link)}">Enviar no WhatsApp</a></div>
+          <p class="sub">Seu código: <b>${esc(r.code)}</b></p>
+        </div>
+        <div class="panel"><h2>Seu desconto</h2>
+          <div class="ref-big">${r.pct}%</div>
+          <div class="ref-bar"><i style="width:${Math.max(r.available ? 2 : 0, pctBar)}%"></i></div>
+          <p class="sub">${r.pct >= r.max_pct ? "Você chegou ao máximo de 50%!" : `Faltam <b>${r.need_next}</b> amigo${r.need_next === 1 ? "" : "s"} para chegar a ${r.pct + 1}%.`}
+            O desconto vale na <b>próxima assinatura</b> que você fizer (primeiro pagamento) e depois zera para recomeçar.</p>
+        </div>
+        <div class="panel"><h2>Seus amigos</h2>
+          <div class="ref-stats"><div><b>${r.total}</b><span>entraram pelo link</span></div><div><b>${r.confirmed}</b><span>já usaram o Pitwall</span></div><div><b>${r.used}</b><span>já viraram desconto</span></div></div>
+          ${(r.list || []).length ? `<table class="tbl"><tbody>${r.list.map((x) => `<tr><td>${esc(x.who)}</td><td class="sub">${dt(x.at)}</td><td>${ST[x.status] || x.status}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Ninguém entrou pelo seu link ainda.</p>`}
+        </div>
+        <div class="panel"><h2>Como funciona</h2>
+          <ul class="ref-rules">
+            <li>Seu amigo entra pelo link e faz login com o Google: ele ganha ${r.invite_pct}% no primeiro pagamento do Pro ou Equipe.</li>
+            <li>Ele conta para você quando começa a usar o Pitwall (abre o app com o e-mail dele, começa um teste ou assina).</li>
+            <li>A cada 2 amigos assim, +1% no seu desconto, até 50%.</li>
+            <li>O desconto é usado no primeiro pagamento da sua próxima assinatura. Depois zera e você pode juntar de novo.</li>
+            <li>Vale só para contas novas, e não vale indicar a si mesmo.</li>
+          </ul>
+        </div>
+      </div></div></section>`;
+  $("#refCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#refCopy").textContent = "Copiado!"; };
 }
 
 // ---------------------------------------------------------------- painel do administrador
