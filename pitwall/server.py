@@ -785,8 +785,8 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         return {**r, "status": _lic().status()}
 
     @app.post("/api/license/trial")
-    def license_trial():
-        return _lic().start_trial()
+    def license_trial(plan: str = Body("pro", embed=True)):
+        return _lic().start_trial(plan)
 
     @app.post("/api/license/clear")
     def license_clear():

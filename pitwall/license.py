@@ -133,6 +133,8 @@ class License:
         body = {"action": action, "device": {"hash": h, "label": label}, "app_version": _version()}
         if key:
             body["key"] = key
+        if action == "trial":
+            body["plan"] = getattr(self, "_trial_plan", "pro")
         headers = {"Content-Type": "application/json", "apikey": _anon_key()}
         if self.team is not None and self.team.configured:
             try:
@@ -201,7 +203,8 @@ class License:
     def activate_key(self, key: str) -> dict:
         return self.refresh(key=key.strip().upper(), action="activate")
 
-    def start_trial(self) -> dict:
+    def start_trial(self, plan: str = "pro") -> dict:
+        self._trial_plan = "team" if plan == "team" else "pro"
         return self.refresh(action="trial")
 
     def clear(self):

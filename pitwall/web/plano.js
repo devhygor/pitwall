@@ -41,7 +41,7 @@ async function renderPlano() {
         ${s.error ? `<div class="note warn">${esc(s.error)}</div>` : ""}
         ${s.needs_refresh ? `<div class="note warn">A licença salva venceu ou não confere. Abra o Pitwall com internet para renovar.</div>` : ""}
         <div class="plan-actions">
-          ${paid ? "" : s.logged_in ? `<button class="btn primary" id="pTrial">Começar teste grátis de 10 dias</button>`
+          ${paid ? "" : s.logged_in ? `<button class="btn primary" id="pTrial">Testar o Pro por 10 dias</button><button class="btn" id="pTrialTeam">Testar o Equipe por 10 dias</button>`
             : `<button class="btn primary" id="pLogin">Entrar com o Google</button>`}
           <button class="btn ${paid ? "" : "primary"}" id="pUp">${paid ? "Gerenciar minha conta" : "Ver planos e assinar"}</button>
           <button class="btn sm" id="pRef">Atualizar agora</button>
@@ -70,8 +70,10 @@ async function renderPlano() {
       </div>
     </div>`;
   const act = async (fn) => { try { await fn(); } catch (e) { alert(e.message); } renderPlano(); };
-  const t = $("#pTrial");
-  if (t) t.onclick = () => act(async () => { t.disabled = true; t.textContent = "Ativando…"; await post("/api/license/trial"); });
+  for (const [id, plan] of [["#pTrial", "pro"], ["#pTrialTeam", "team"]]) {
+    const t = $(id);
+    if (t) t.onclick = () => act(async () => { t.disabled = true; t.textContent = "Ativando…"; await post("/api/license/trial", { plan }); });
+  }
   const l = $("#pLogin");
   if (l) l.onclick = async () => {
     await post("/api/team/login");

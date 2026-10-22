@@ -45,3 +45,27 @@ language sql stable security definer set search_path = public as $$
    order by p.sort desc, c.ends_at desc
    limit 1;
 $$;
+
+-- Teste grátis de 10 dias também do plano Equipe (migração "start_trial_plano"): um teste por e-mail, Pro ou Equipe.
+drop function if exists public.start_trial(text);
+create or replace function public.start_trial(p_device text default null, p_plan text default 'pro')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare mail text := lower(auth.email()); e record; t record; pl text := case when p_plan = 'team' then 'team' else 'pro' end;
+begin
+  if auth.uid() is null or mail is null then
+    return jsonb_build_object('ok', false, 'error', 'login');
+  end if;
+  select * into e from public.resolve_entitlement(mail);
+  if e.plan_code <> 'free' then
+    return jsonb_build_object('ok', false, 'error', 'already_paid');
+  end if;
+  if exists (select 1 from public.trials where lower(email) = mail)
+     or (p_device is not null and exists (select 1 from public.trials where device_hash = p_device)) then
+    return jsonb_build_object('ok', false, 'error', 'trial_used');
+  end if;
+  insert into public.trials (user_id, email, plan_code, device_hash, ends_at)
+  values (auth.uid(), mail, pl, p_device, now() + interval '10 days') returning * into t;
+  perform public.ensure_license(mail, auth.uid());
+  return jsonb_build_object('ok', true, 'ends_at', t.ends_at, 'plan', pl);
+end $$;
+grant execute on function public.start_trial(text, text) to authenticated;

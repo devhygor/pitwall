@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const user = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false },
     });
-    const { data, error } = await user.rpc("start_trial", { p_device: hash });
+    const { data, error } = await user.rpc("start_trial", { p_device: hash, p_plan: body.plan === "team" ? "team" : "pro" });
     if (error || !data?.ok) return json({ ok: false, error: data?.error || "trial_failed" }, 409);
   }
 

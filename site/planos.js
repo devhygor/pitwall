@@ -51,7 +51,7 @@ async function renderPlans() {
       </div></section>`;
     view.querySelectorAll("[data-per]").forEach((b) => b.onclick = () => { period = b.dataset.per; draw(); });
     view.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => buy(b.dataset.buy, b.dataset.price));
-    view.querySelectorAll("[data-trial]").forEach((b) => b.onclick = startTrialSite);
+    view.querySelectorAll("[data-trial]").forEach((b) => b.onclick = () => startTrialSite(b.dataset.trial));
   };
   const planCard = (pl) => {
     const std = price(pl.code, period), fund = pl.code === "pro" && period === "month" ? price("pro", "month", true) : null;
@@ -77,7 +77,7 @@ async function renderPlans() {
       ${fund ? `<div class="fundador"><b>Preço Fundador</b>: o valor de hoje não sobe para quem assinar agora.</div>` : ""}
       <ul>${feats}</ul>
       ${btn}
-      ${pl.code === "pro" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial>Testar 10 dias grátis</button>` : ""}
+      ${pl.code !== "free" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial="${pl.code}">Testar o ${esc(pl.name)} por 10 dias grátis</button>` : ""}
     </article>`;
   };
   draw();
@@ -85,10 +85,11 @@ async function renderPlans() {
   if (nl) nl.onclick = (e) => { e.preventDefault(); loginGoogle("#/planos"); };
 }
 
-async function startTrialSite() {
+async function startTrialSite(plan) {
+  plan = plan === "team" ? "team" : "pro";
   if (!session) return loginGoogle("#/planos");
   try {
-    const r = await rpc("start_trial", { p_device: null });
+    const r = await rpc("start_trial", { p_device: null, p_plan: plan });
     if (!r.ok) {
       alert({ trial_used: "O teste grátis já foi usado neste e-mail.", already_paid: "Você já tem um plano pago.", login: "Entre com o Google." }[r.error] || "Não foi possível começar o teste.");
       return;
@@ -185,7 +186,7 @@ async function renderAccount() {
           <p>${paid ? (far ? "Sem data para acabar." : `Válido até <b>${dt(a.ends_at)}</b>${left != null && left <= 10 ? ` (faltam ${left} dia${left === 1 ? "" : "s"})` : ""}.`) : "Você está no plano Grátis."}</p>
           <div class="row-actions">
             ${paid && a.source !== "grant" ? "" : `<a class="btn go small" href="#/planos">${paid ? "Ver planos" : "Assinar o Pro"}</a>`}
-            ${!paid && !a.trial ? `<button class="btn small" id="aTrial">Testar 10 dias grátis</button>` : ""}
+            ${!paid && !a.trial ? `<button class="btn small" id="aTrial">Testar o Pro por 10 dias</button><button class="btn small" id="aTrialTeam">Testar o Equipe por 10 dias</button>` : ""}
           </div>
           ${a.trial ? `<p class="sub">Teste grátis: de ${dt(a.trial.started_at)} até ${dt(a.trial.ends_at)}.</p>` : ""}
         </div>
@@ -219,7 +220,8 @@ async function renderAccount() {
       renderAccount();
     } catch (e) { m.textContent = e.message; }
   };
-  const t = $("#aTrial"); if (t) t.onclick = startTrialSite;
+  const t = $("#aTrial"); if (t) t.onclick = () => startTrialSite("pro");
+  const t2 = $("#aTrialTeam"); if (t2) t2.onclick = () => startTrialSite("team");
   const c = $("#copyKey"); if (c) c.onclick = async () => { await navigator.clipboard.writeText(a.license_key); c.textContent = "Copiado!"; };
   view.querySelectorAll("[data-rmdev]").forEach((b) => b.onclick = async () => { await rpc("revoke_my_device", { p_id: b.dataset.rmdev }); renderAccount(); });
 }
