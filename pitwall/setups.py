@@ -205,7 +205,8 @@ def info(db, setup_id: int) -> dict:
     m = re.match(r"^Gerado a partir de '(.+)'$", s.get("notes") or "")
     if m:
         parent = next((x["id"] for x in db.setups_list() if x["car"] == s["car"] and x["track"] == s["track"] and x["name"] == m.group(1) and x["id"] != s["id"]), None)
-    return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s), "parent_id": parent}
+    return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s), "parent_id": parent,
+            "editable": editable(content), "spots": SPOT_NAMES}
 
 
 TRACK_ABBR = {
@@ -347,6 +348,82 @@ def diff(db, id_a: int, id_b: int) -> dict:
                      "a": x["values"] if x else None, "b": y["values"] if y else None,
                      "same": bool(x and y and x["raw"] == y["raw"])})
     return {"a": sa["name"], "b": sb["name"], "rows": rows}
+
+
+
+# ---------------------------------------------------------------------------
+# Editor visual: cada ajuste ligado a uma parte do carro (ponto clicável no desenho)
+# ---------------------------------------------------------------------------
+# (caminho, rótulo, seção, formato, dica do que mais cliques fazem, pontos por índice)
+#   pontos: texto único (vale para o valor) ou lista (um ponto por índice do vetor: 0=DE 1=DD 2=TE 3=TD)
+_W = ["w0", "w1", "w2", "w3"]
+EDIT = [
+    ("advancedSetup.aeroBalance.splitter", "Splitter", "Aerodinâmica", None, "Mais cliques: mais pressão aerodinâmica na frente (carro mais 'preso' na frente, um pouco mais de arrasto).", "aero_f"),
+    ("advancedSetup.aeroBalance.rideHeight", "Altura do carro", "Aerodinâmica", None, "Mais cliques: carro mais alto (menos pressão aerodinâmica e menos risco de raspar).", ["aero_f", "aero_f", "aero_r", "aero_r"]),
+    ("advancedSetup.aeroBalance.rearWing", "Asa traseira", "Aerodinâmica", None, "Mais cliques: mais pressão aerodinâmica atrás (mais estabilidade em alta, menos velocidade final).", "aero_r"),
+    ("basicSetup.tyres.tyrePressure", "Pressão (fria)", "Pneu", "psi", "Mais pressão: menos área de contato e pneu mais quente. Menos: mais aderência, até esquentar demais.", _W),
+    ("basicSetup.alignment.camber", "Cambagem", "Alinhamento", None, "Mais cambagem negativa: mais aderência em curva e mais desgaste na borda interna.", _W),
+    ("basicSetup.alignment.toe", "Convergência", "Alinhamento", None, "Na frente, mais abertura (toe-out) ajuda a esterçar; atrás, mais fechamento (toe-in) dá estabilidade.", _W),
+    ("basicSetup.alignment.casterLF", "Cáster", "Alinhamento", None, "Mais cáster: direção mais pesada e estável em reta, mais cambagem ao esterçar.", "w0"),
+    ("basicSetup.alignment.casterRF", "Cáster", "Alinhamento", None, "Mais cáster: direção mais pesada e estável em reta, mais cambagem ao esterçar.", "w1"),
+    ("advancedSetup.mechanicalBalance.wheelRate", "Mola", "Suspensão", None, "Mais cliques: mola mais dura (resposta rápida; pior em zebras e ondulações).", _W),
+    ("advancedSetup.dampers.bumpSlow", "Bump lento", "Suspensão", None, "Mais cliques: amortecedor mais duro na compressão lenta (controla a rolagem e o caturro).", _W),
+    ("advancedSetup.dampers.bumpFast", "Bump rápido", "Suspensão", None, "Mais cliques: mais duro em impactos rápidos (zebras e ondulações).", _W),
+    ("advancedSetup.dampers.reboundSlow", "Rebound lento", "Suspensão", None, "Mais cliques: a suspensão volta mais devagar (carro mais firme na transferência de peso).", _W),
+    ("advancedSetup.dampers.reboundFast", "Rebound rápido", "Suspensão", None, "Mais cliques: volta mais devagar em impactos rápidos.", _W),
+    ("advancedSetup.mechanicalBalance.bumpStopRateUp", "Batente (rigidez)", "Suspensão", None, "Mais cliques: o batente endurece mais cedo, controlando a altura em carga aerodinâmica.", _W),
+    ("advancedSetup.mechanicalBalance.bumpStopRateDn", "Batente (descida)", "Suspensão", None, "Rigidez do batente na extensão.", _W),
+    ("advancedSetup.mechanicalBalance.bumpStopWindow", "Janela do batente", "Suspensão", None, "Mais cliques: o batente começa a atuar mais tarde.", _W),
+    ("advancedSetup.mechanicalBalance.aRBFront", "Barra estabilizadora (frente)", "Equilíbrio", None, "Mais cliques: mais dura na frente, menos rolagem e mais subesterço.", "axle_f"),
+    ("basicSetup.alignment.steerRatio", "Relação de direção", "Equilíbrio", None, "Mais cliques: direção mais lenta (mais volante para o mesmo giro), mais estável.", "axle_f"),
+    ("advancedSetup.aeroBalance.brakeDuct[0]", "Duto de freio (frente)", "Freios", None, "Mais cliques: mais ar nos freios (esfria mais, mais arrasto).", "axle_f"),
+    ("basicSetup.strategy.frontBrakePadCompound", "Pastilha dianteira", "Freios", "+1", "Composto da pastilha: cada número muda a mordida e a temperatura de trabalho.", "axle_f"),
+    ("advancedSetup.mechanicalBalance.aRBRear", "Barra estabilizadora (trás)", "Equilíbrio", None, "Mais cliques: mais dura atrás, mais sobresterço (traseira solta mais fácil).", "axle_r"),
+    ("advancedSetup.drivetrain.preload", "Pré-carga do diferencial", "Equilíbrio", None, "Mais cliques: diferencial mais travado (mais tração na saída, mais subesterço na entrada).", "axle_r"),
+    ("advancedSetup.aeroBalance.brakeDuct[1]", "Duto de freio (trás)", "Freios", None, "Mais cliques: mais ar nos freios traseiros.", "axle_r"),
+    ("basicSetup.strategy.rearBrakePadCompound", "Pastilha traseira", "Freios", "+1", "Composto da pastilha traseira.", "axle_r"),
+    ("advancedSetup.mechanicalBalance.brakeBias", "Viés de freio", "Freios", None, "Mais cliques: mais freio na frente (mais estável, pode travar a frente).", "cockpit"),
+    ("advancedSetup.mechanicalBalance.brakeTorque", "Pressão de freio", "Freios", None, "Mais cliques: freio mais forte.", "cockpit"),
+    ("basicSetup.electronics.abs", "ABS", "Eletrônica", None, "Mais cliques: o ABS interfere mais (menos travadas, frenagem mais longa).", "cockpit"),
+    ("basicSetup.electronics.tC1", "TC", "Eletrônica", None, "Mais cliques: o controle de tração interfere mais (menos patinagem).", "cockpit"),
+    ("basicSetup.electronics.tC2", "TC cut", "Eletrônica", None, "Mais cliques: corta mais potência quando o TC atua.", "cockpit"),
+    ("basicSetup.electronics.eCUMap", "Mapa do motor", "Eletrônica", "+1", "Mapas diferentes trocam entrega de potência e consumo.", "cockpit"),
+    ("basicSetup.strategy.fuel", "Combustível (L)", "Estratégia", None, "Mais combustível: mais peso (mais lento), mais voltas antes de parar.", "fuel"),
+]
+
+SPOT_NAMES = {
+    "aero_f": "Aerodinâmica dianteira", "aero_r": "Aerodinâmica traseira", "w0": "Roda dianteira esquerda", "w1": "Roda dianteira direita",
+    "w2": "Roda traseira esquerda", "w3": "Roda traseira direita", "axle_f": "Eixo dianteiro", "axle_r": "Eixo traseiro",
+    "cockpit": "Cockpit e freios", "fuel": "Tanque de combustível",
+}
+
+
+def editable(setup: dict) -> list[dict]:
+    """Todos os ajustes que o editor visual pode mexer, cada um ligado ao seu ponto no desenho do carro."""
+    out = []
+    for path, label, section, kind, hint, spot in EDIT:
+        base = path
+        m = _IDX.match(path)
+        if m:                                                    # caminho já com índice (ex.: brakeDuct[0])
+            v = get_value(setup, path)
+            vals = [(path, v, 0)] if v is not None else []
+        else:
+            cur = _get(setup, base)
+            if cur is None:
+                continue
+            vals = [(f"{base}[{i}]", x, i) for i, x in enumerate(cur)] if isinstance(cur, list) else [(base, cur, 0)]
+        for p, v, i in vals:
+            if not isinstance(v, (int, float)):
+                continue
+            sp = spot[i] if isinstance(spot, list) and i < len(spot) else (spot if isinstance(spot, str) else None)
+            if not sp:
+                continue
+            side = ""
+            if isinstance(cur if not m else None, list) and len(cur) == 4:
+                side = " " + WHEELS[i]
+            out.append({"path": p, "label": label, "side": side.strip(), "section": section, "spot": sp, "raw": v,
+                        "disp": _fmt(v, kind), "unit": "psi" if kind == "psi" else "", "kind": kind or "", "hint": hint})
+    return out
 
 
 def _perf(db, setup_id: int) -> dict:

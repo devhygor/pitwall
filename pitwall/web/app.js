@@ -1766,7 +1766,8 @@ async function showSetup(id) {
     ${st ? (st.estimated ? `<div class="sd-note">Tempos estimados: você não marcou este setup nas sessões, então usei o que o Pitwall detectou.</div>` : "")
       : `<div class="sd-note">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para juntar seus tempos aqui.</div>`}
     <div class="sd-actions">
-      <button class="btn primary ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup<em class="tier">Pro</em></button>
+      <button class="btn primary" id="sEditor" title="Desenho do carro com os ajustes em cada parte">🏎 Editor visual</button>
+      <button class="btn ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup<em class="tier">Pro</em></button>
       ${s.parent_id ? `<button class="btn" id="sVsParent" title="Ver se os ajustes funcionaram">Comparar com o original</button>` : ""}
       ${others.length ? `<div id="sCmpWith"></div>` : ""}
     </div>
@@ -1782,6 +1783,7 @@ async function showSetup(id) {
     <div id="sShare" style="margin-top:14px"></div>
     <div id="sDel" style="margin-top:14px"><button class="btn sm quiet danger" id="sDelBtn">Apagar este setup</button></div>`;
   shareBox(id);
+  $("#sEditor").onclick = () => SetupCar.open(s, { genLock, onSaved: (r) => { if (r && r.id) setupsState.open = r.id; renderSetups(); } });
   const startCmp = (x, y) => { setupsState.cmp = [x, y]; setupsState.sel = [x, y]; renderSetups(); };
   const vp = $("#sVsParent"); if (vp) vp.onclick = () => startCmp(s.parent_id, id);
   const cw = $("#sCmpWith");
