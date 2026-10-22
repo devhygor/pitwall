@@ -1507,6 +1507,15 @@ async function renderSetups() {
   const extra = [st.kind, st.source, st.time, st.inacc].filter(Boolean).length;
   const anyFilter = st.car || st.track || extra || st.q;
   const nm = (id) => { const f = all.find((x) => x.id === id); return f ? f.name : "?"; };
+  // filtros ativos viram "chips" que se removem com um clique, junto com a contagem do que está sendo mostrado
+  const chips = [];
+  if (st.q) chips.push(["q", "Nome", `“${st.q}”`]);
+  if (st.car) chips.push(["car", "Carro", pretty(st.car)]);
+  if (st.track) chips.push(["track", "Pista", pretty(st.track)]);
+  if (st.kind) chips.push(["kind", "Tipo", st.kind === "Q" ? "Classificação" : "Corrida"]);
+  if (st.source) chips.push(["source", "Origem", srcLabel(st.source)]);
+  if (st.time) chips.push(["time", "Tempo de volta", st.time === "with" ? "só com tempo" : "sem tempo"]);
+  if (st.inacc) chips.push(["inacc", "ACC", st.inacc === "yes" ? "instalados" : "não instalados"]);
   view.innerHTML = `
     <div class="head"><div><h1>Setups</h1>
       <div class="sub">${all.length} setups · pasta do ACC: <code>${esc(lib.root)}</code>${lib.exists ? "" : " (não encontrada)"}</div></div>
@@ -1516,8 +1525,10 @@ async function renderSetups() {
       ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
       ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
       <button class="btn sm ${extra ? "on" : "quiet"}" id="fMoreBtn">Mais filtros${extra ? ` <b class="cnt">${extra}</b>` : ""}</button>
-      ${anyFilter ? `<button class="btn sm quiet" id="fClear">Limpar</button>` : ""}
+      ${anyFilter ? `<button class="btn sm quiet" id="fClear">Limpar todos</button>` : ""}
     </div>
+    ${chips.length ? `<div class="fchips"><span class="fcount">Mostrando <b>${list.length}</b> de ${all.length} setups</span>
+      ${chips.map(([k, t, v]) => `<button class="fchip" data-fx="${k}" title="Remover este filtro">${t}: <b>${esc(v)}</b> <i>✕</i></button>`).join("")}</div>` : ""}
     <div class="sbar more" id="fMore" ${st.moreOpen || extra ? "" : "hidden"}>
       ${sel("fKind", [["Q", "Classificação (Q)"], ["R", "Corrida (R)"]], st.kind, "Q e R")}
       ${sel("fSrc", [["GO Setups", srcLabel("GO Setups")], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"], ["Equipe", "Da equipe"]], st.source, "Todas as origens")}
@@ -1560,6 +1571,9 @@ async function renderSetups() {
     const k = th.dataset.sort;
     if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = 1; }
     st.page = 0; reRender();
+  });
+  view.querySelectorAll("[data-fx]").forEach((b) => b.onclick = () => {
+    const k = b.dataset.fx; st[k] = ""; if (k === "car") st.track = ""; st.page = 0; reRender();
   });
   const clr = $("#fClear"); if (clr) clr.onclick = () => { Object.assign(st, { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", page: 0, moreOpen: false }); reRender(); };
   const pgp = $("#pgPrev"), pgn = $("#pgNext");

@@ -1241,3 +1241,8 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .cmp-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px; border-radius: 12px; background: rgba(46,229,157,.08); border: 1px solid rgba(46,229,157,.35); font-size: 13.5px; } .cmp-bar[hidden] { display: none; }
 .slist .sname { font-weight: 600; } .slist .sline { font-size: 12px; margin-top: 2px; } .slist td.stags { white-space: nowrap; } .slist td.stags > * { margin-right: 4px; }
 .sd-empty { display: flex; flex-direction: column; gap: 6px; text-align: center; color: var(--muted); padding: 40px 20px; line-height: 1.5; } .sd-empty b { color: var(--text); font-size: 15px; }
+
+.fchips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; font-size: 13px; } .fchips .fcount { color: var(--muted); margin-right: 4px; } .fchips .fcount b { color: var(--text); }
+.fchip { display: inline-flex; gap: 5px; align-items: center; padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(46,229,157,.45); background: rgba(46,229,157,.1); color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
+.fchip i { font-style: normal; color: var(--muted); font-size: 11px; } .fchip:hover { background: rgba(255,93,93,.12); border-color: rgba(255,93,93,.5); } .fchip:hover i { color: #ff8a8a; }
+.sbar input.sq:not(:placeholder-shown) { border-color: var(--accent); }
