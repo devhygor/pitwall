@@ -1181,3 +1181,7 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .swatches.locked { opacity: .55; }
 
 .cm-special { grid-template-columns: repeat(6, 1fr); margin-bottom: 8px; }
+
+/* etiqueta de plano (Pro) igual em qualquer lugar: título de bloco, botão, chip ou controle */
+.tier, h3 .tier, .ovchip .tier, .ovslide .tier { display: inline-block; font-style: normal !important; font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: none; margin-left: 6px; padding: 1px 7px; border-radius: 99px; background: rgba(61,139,255,.22); color: #8fbcff; vertical-align: middle; }
+.ovg h3 .tier { font-size: 10.5px; }
