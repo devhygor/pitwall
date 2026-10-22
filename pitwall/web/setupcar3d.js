@@ -165,7 +165,7 @@ function buildCar(key, scene) {
   const st = [];
   for (let i = 0; i <= 150; i++) {
     const x = lerp(-2.32, 2.32, i / 150);
-    st.push({ x, hw: tab(HW, x), y0: tab(BOT, x), y1: tab(TOP, x), n: 4.6, m: 3.0 });
+    st.push({ x, hw: tab(HW, x), y0: tab(BOT, x), y1: tab(TOP, x), n: 6.5, m: 3.4 });
   }
   const carve = (g) => {                       // cava o arco de cada roda no flanco do corpo (a roda aparece, o paralama fica por cima)
     const pa = g.attributes.position;
@@ -180,23 +180,34 @@ function buildCar(key, scene) {
     g.computeVertexNormals(); fixSeam(g, g.userData.seg, g.userData.rings); return g;
   };
   const shell = new THREE.Mesh(carve(loft(st, 72)), paint); shell.castShadow = true; shell.receiveShadow = true; body.add(shell);
-  const lowerStrip = new THREE.Mesh(carve(loft(st.map((s) => ({ ...s, hw: s.hw + 0.004, y1: s.y0 + 0.07, n: 4.6, m: 3.0 })), 72)), carbon); body.add(lowerStrip);   // saia preta
+  const lowerStrip = new THREE.Mesh(carve(loft(st.map((s) => ({ ...s, hw: s.hw + 0.004, y1: s.y0 + 0.07, n: 6.5, m: 3.4 })), 72)), carbon); body.add(lowerStrip);   // saia preta
 
-  // --- cabine (vidros) e teto
-  const [cx0, cx1] = P.cab, roof = [[cx0, 0.82], [cx0 + 0.25, 1.0], [cx0 + 0.6, P.roofH - 0.03], [(cx0 + cx1) / 2, P.roofH], [cx1 - 0.7, P.roofH - 0.02], [cx1 - 0.25, 1.0], [cx1, 0.83]];
-  const cab = [];
-  for (let i = 0; i <= 36; i++) {
-    const x = lerp(cx0, cx1, i / 36);
-    cab.push({ x, hw: tab([[cx0, 0.62], [cx0 + 0.5, 0.78], [(cx0 + cx1) / 2, 0.80], [cx1 - 0.5, 0.78], [cx1, 0.62]], x), y0: 0.76, y1: tab(roof, x), n: 3.4, m: 2.2 });
+  // --- cabine: painéis de verdade (para-brisa, vidros laterais, teto, colunas), não um tubo mole
+  const [cx0, cx1] = P.cab, belt = 0.79, bw = 0.80, tw = 0.62, rh = P.roofH;
+  const cabin = new THREE.Group(); body.add(cabin);
+  const quad = (a, b, c, d, m) => {                                 // quadrilátero (vértices em ordem), duas faces
+    const g = new THREE.BufferGeometry(), v = [...a, ...b, ...c, ...d];
+    g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3)); g.setIndex([0, 1, 2, 0, 2, 3]); g.computeVertexNormals();
+    const mm = new THREE.Mesh(g, m); mm.material.side = THREE.DoubleSide; mm.castShadow = true; return mm;
+  };
+  const xf = cx1 - 0.74, xr = cx0 + 0.62;                          // fim do para-brisa (teto) / começo do vidro traseiro
+  cabin.add(quad([cx1, belt, -bw], [cx1, belt, bw], [xf, rh - 0.02, tw], [xf, rh - 0.02, -tw], glass));            // para-brisa
+  cabin.add(quad([cx0, belt + 0.02, bw - 0.04], [cx0, belt + 0.02, -bw + 0.04], [xr, rh - 0.03, -tw], [xr, rh - 0.03, tw], glass));   // vidro traseiro
+  const roofPanel = new THREE.Mesh(new THREE.BoxGeometry(xf - xr, 0.035, tw * 2), carbon); roofPanel.position.set((xf + xr) / 2, rh - 0.012, 0); roofPanel.castShadow = true; cabin.add(roofPanel);
+  const sideShape = new THREE.Shape(); sideShape.moveTo(cx0 + 0.16, belt + 0.01); sideShape.lineTo(xr + 0.02, rh - 0.05); sideShape.lineTo(xf - 0.02, rh - 0.05); sideShape.lineTo(cx1 - 0.12, belt + 0.01); sideShape.closePath();
+  for (const s2 of [-1, 1]) {
+    const gl = new THREE.Mesh(new THREE.ExtrudeGeometry(sideShape, { depth: 0.01, bevelEnabled: false }), glass);
+    const pv = new THREE.Group(); pv.position.set(0, belt, s2 * bw); gl.position.set(0, -belt, 0); pv.add(gl); pv.rotation.x = -s2 * 0.3; cabin.add(pv);   // vidro inclinado para dentro (tumblehome)
+    // colunas A e C, base da janela e coluna B
+    cabin.add(between(new THREE.Vector3(cx1 - 0.03, belt, s2 * (bw - 0.02)), new THREE.Vector3(xf, rh - 0.03, s2 * tw), 0.03, paintPlain));
+    cabin.add(between(new THREE.Vector3(cx0 + 0.02, belt, s2 * (bw - 0.03)), new THREE.Vector3(xr, rh - 0.03, s2 * tw), 0.034, paintPlain));
+    cabin.add(between(new THREE.Vector3(cx0 + 0.05, belt, s2 * bw), new THREE.Vector3(cx1 - 0.05, belt, s2 * bw), 0.022, carbon));
+    cabin.add(between(new THREE.Vector3(xf + 0.06, rh - 0.04, s2 * tw), new THREE.Vector3(xr - 0.05, rh - 0.04, s2 * tw), 0.02, carbon));
+    const mid = (cx0 + cx1) / 2 - 0.05; cabin.add(between(new THREE.Vector3(mid, belt, s2 * (bw - 0.03)), new THREE.Vector3(mid, rh - 0.05, s2 * (tw + 0.03)), 0.022, carbon));
   }
-  const cabin = new THREE.Mesh(loft(cab, 32), glass); cabin.castShadow = true; body.add(cabin);
-  for (const s2 of [-1, 1]) {                    // colunas A e C em cor de carro
-    const a = between(new THREE.Vector3(cx1 - 0.05, 0.82, s2 * 0.66), new THREE.Vector3(cx1 - 0.7, P.roofH - 0.03, s2 * 0.62), 0.028, paintPlain);
-    const c = between(new THREE.Vector3(cx0 + 0.05, 0.84, s2 * 0.62), new THREE.Vector3(cx0 + 0.55, P.roofH - 0.04, s2 * 0.62), 0.03, paintPlain);
-    body.add(a, c);
-  }
-  body.add(new THREE.Mesh(loft(cab.filter((s) => s.x > cx0 + 0.05 && s.x < cx1 - 0.05).map((s) => ({ ...s, hw: s.hw + 0.006, y0: 0.74, y1: 0.8, n: 3.6, m: 2.4 })), 32), carbon));   // moldura do vidro
-  const roofSkin = new THREE.Mesh(loft(cab.filter((s) => s.x > cx0 + 0.45 && s.x < cx1 - 0.65).map((s) => ({ ...s, hw: s.hw * 0.86, y0: s.y1 - 0.05, y1: s.y1 + 0.004, n: 2.6, m: 2.4 })), 32), carbon); body.add(roofSkin);
+  const cab = [];                                                  // (usado pelos detalhes que seguem a cabine)
+  for (let i = 0; i <= 12; i++) { const x = lerp(cx0, cx1, i / 12); cab.push({ x, y1: rh }); }
+  const cabinMeshes = cabin.children;
 
   // --- paralamas largos com o arco da roda (a roda aparece pelo furo)
   const flares = [];
@@ -205,6 +216,10 @@ function buildCar(key, scene) {
     liner.rotation.x = Math.PI / 2; liner.position.set(ax, R, sd * 0.78); body.add(liner);
   }
 
+  for (const ax of [WB.front, WB.rear]) for (const sd of [-1, 1]) {      // contorno do arco (aresta viva do paralama)
+    const eb = new THREE.Mesh(new THREE.TorusGeometry(R + 0.07, 0.016, 10, 48, Math.PI), paintPlain); eb.position.set(ax, R, sd * (tab(HW, ax) - 0.01)); body.add(eb);
+    const eb2 = new THREE.Mesh(new THREE.TorusGeometry(R + 0.07, 0.01, 8, 48, Math.PI), carbon); eb2.position.set(ax, R, sd * (tab(HW, ax) - 0.03)); body.add(eb2);
+  }
   // --- splitter, difusor, asa
   const splitter = new THREE.Group(); splitter.position.set(2.18, 0.1, 0);
   const sp = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.025, 1.86), carbon); sp.position.x = 0.12; sp.castShadow = true; splitter.add(sp);
@@ -300,7 +315,7 @@ function buildCar(key, scene) {
   }
   const floor = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.02, 1.5), carbon); floor.position.set(0, 0.12, 0); body.add(floor);
 
-  return { root, body, P, paint, paintPlain, bodyMats, flares, splitter, wing: wingPivot, wingGroup: wing, corners, ducts, shell, cabin, roofSkin, carbon, dark, metal, steel, lowerStrip, wheelRim, dashLed, hw: HW, top: TOP };
+  return { root, body, P, paint, paintPlain, glass, cabinMeshes, bodyMats, flares, splitter, wing: wingPivot, wingGroup: wing, corners, ducts, shell, carbon, dark, metal, steel, lowerStrip, wheelRim, dashLed, hw: HW, top: TOP };
 }
 
 // ------------------------------------------------------------------ suspensão (visível no modo raio-x)
@@ -427,7 +442,7 @@ export async function createStage(host, opts) {
   function setXray(on) {
     xray = on; sus.grp.visible = true;
     for (const m of [car.paint, car.paintPlain, car.carbon, car.dark, ...(car.bodyMats || [])]) { m.transparent = true; m.depthWrite = !on; m.opacity = on ? 0.10 : 1; }
-    car.cabin.material.opacity = on ? 0.06 : 0.94;
+    car.cabinMeshes.forEach((m) => { if (m.material === car.glass) { m.material.opacity = on ? 0.06 : 0.93; } });
     car.corners.forEach((c) => { c.tire.material.transparent = true; c.tire.material.opacity = on ? 0.4 : 1; c.tire.material.depthWrite = !on; });
     sus.grp.visible = on;
   }
