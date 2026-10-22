@@ -178,6 +178,7 @@ class License:
                         self._save()
                         self._payload = None
                         self.last_error = ""
+                        self._fetch_trial_days()
                     else:
                         self.last_error = "O servidor respondeu com uma licença que não confere. Atualize o Pitwall."
                 else:
@@ -202,6 +203,19 @@ class License:
 
     def activate_key(self, key: str) -> dict:
         return self.refresh(key=key.strip().upper(), action="activate")
+
+    def _fetch_trial_days(self):
+        """Quantos dias vale o teste grátis (o administrador define no painel do site)."""
+        try:
+            req = urllib.request.Request(f"{SUPABASE_URL}/rest/v1/rpc/trial_days", data=b"{}", method="POST",
+                                         headers={"Content-Type": "application/json", "apikey": _anon_key()})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                n = int(json.loads(r.read()))
+            if n > 0:
+                self._data["trial_days"] = n
+                self._save()
+        except Exception:  # noqa: BLE001
+            pass
 
     def start_trial(self, plan: str = "pro") -> dict:
         self._trial_plan = "team" if plan == "team" else "pro"
@@ -239,7 +253,7 @@ class License:
             "email": (p or {}).get("email") or self._data.get("email"),
             "ends_at": self._data.get("ends_at") if p else None, "token_exp": (p or {}).get("exp"),
             "features": [{"id": f, "name": FEATURE_NAMES.get(f, f)} for f in (feats or [])],
-            "license_key": self._data.get("license_key") or self._data.get("key"),
+            "license_key": self._data.get("license_key") or self._data.get("key"), "trial_days": self._data.get("trial_days", 10),
             "logged_in": bool(self.team is not None and self.team.configured),
             "error": self.last_error, "busy": self.busy, "upgrade_url": UPGRADE_URL,
             "needs_refresh": bool(self._data.get("token")) and p is None,

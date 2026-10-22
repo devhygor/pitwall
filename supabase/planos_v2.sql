@@ -69,3 +69,6 @@ begin
   return jsonb_build_object('ok', true, 'ends_at', t.ends_at, 'plan', pl);
 end $$;
 grant execute on function public.start_trial(text, text) to authenticated;
+
+-- Duração do teste grátis configurável (migração "trial_days_config"): tabela app_config + trial_days() + admin_set_trial_days();
+-- start_trial passa a usar make_interval(days => trial_days()). Detalhes na migração aplicada no projeto.

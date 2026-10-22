@@ -37,11 +37,11 @@ async function renderPlano() {
             ${SRC_NAMES[s.source] ? `<span class="sub"> · ${SRC_NAMES[s.source]}</span>` : ""}</div>
           ${s.email ? `<span class="sub">${pii(s.email, "email")}</span>` : ""}
         </div>
-        <div class="plan-line">${paid ? esc(until) + " O Pitwall renova o plano sozinho sempre que abre com internet." : "Você está no plano Grátis. Assine o Pro ou comece o teste de 10 dias."}</div>
+        <div class="plan-line">${paid ? esc(until) + " O Pitwall renova o plano sozinho sempre que abre com internet." : "Você está no plano Grátis. Assine o Pro ou comece o teste grátis."}</div>
         ${s.error ? `<div class="note warn">${esc(s.error)}</div>` : ""}
         ${s.needs_refresh ? `<div class="note warn">A licença salva venceu ou não confere. Abra o Pitwall com internet para renovar.</div>` : ""}
         <div class="plan-actions">
-          ${paid ? "" : s.logged_in ? `<button class="btn primary" id="pTrial">Testar o Pro por 10 dias</button><button class="btn" id="pTrialTeam">Testar o Equipe por 10 dias</button>`
+          ${paid ? "" : s.logged_in ? `<button class="btn primary" id="pTrial">Testar o Pro por ${s.trial_days || 10} dias</button><button class="btn" id="pTrialTeam">Testar o Equipe por ${s.trial_days || 10} dias</button>`
             : `<button class="btn primary" id="pLogin">Entrar com o Google</button>`}
           <button class="btn ${paid ? "" : "primary"}" id="pUp">${paid ? "Gerenciar minha conta" : "Ver planos e assinar"}</button>
           <button class="btn sm" id="pRef">Atualizar agora</button>

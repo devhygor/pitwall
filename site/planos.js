@@ -3,9 +3,12 @@
    (planos/preços públicos, my_account, start_trial, admin_*, e as funções de borda "checkout" e "license"). */
 "use strict";
 
+let TRIAL_DAYS = 10;
+async function loadTrialDays() { try { const d = await rpc("trial_days"); if (d > 0) TRIAL_DAYS = d; } catch (e) { /* mantém */ } }
 let isAffiliate = false, isAdmin = false, myPlan = { plan: "free", features: [] };
 
 async function loadAccountFlags() {
+  loadTrialDays();
   isAdmin = false; isAffiliate = false; myPlan = { plan: "free", features: [] };
   if (!session) { window.PITWALL_NO_ADS = false; return; }
   try { isAdmin = !!(await rpc("is_admin")); } catch (e) { /* ok */ }
@@ -34,6 +37,7 @@ const loginGoogle = (back) => sb.auth.signInWithOAuth({ provider: "google", opti
 // ---------------------------------------------------------------- planos (público)
 async function renderPlans() {
   view.innerHTML = `<div class="loading">Carregando…</div>`;
+  await loadTrialDays();
   const [{ data: plans }, { data: prices }] = await Promise.all([
     sb.from("plans").select("*").order("sort"), sb.from("prices").select("*").eq("active", true)]);
   let period = store.get("pw.period") === "year" ? "year" : "month";
@@ -60,7 +64,7 @@ async function renderPlans() {
         <div class="period"><button class="btn small ${period === "month" ? "on" : ""}" data-per="month">Mensal</button>
           <button class="btn small ${period === "year" ? "on" : ""}" data-per="year">Anual <em>economize</em></button></div>
         <div class="plan-grid">${(plans || []).map((pl) => planCard(pl)).join("")}</div>
-        <p class="plans-note">Pagamento por Pix, cartão ou boleto, com renovação automática. Cancele quando quiser. Emitimos nota fiscal. O teste grátis de 10 dias não pede cartão.</p>
+        <p class="plans-note">Pagamento por Pix, cartão ou boleto, com renovação automática. Cancele quando quiser. Emitimos nota fiscal. O teste grátis de ${TRIAL_DAYS} dias não pede cartão.</p>
       </div></section>`;
     view.querySelectorAll("[data-per]").forEach((b) => b.onclick = () => { period = b.dataset.per; draw(); });
     view.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => buy(b.dataset.buy, b.dataset.price, +b.dataset.base, b.dataset.per));
@@ -101,7 +105,7 @@ async function renderPlans() {
       ${fund ? `<div class="fundador"><b>Preço Fundador</b>: o valor de hoje não sobe para quem assinar agora.</div>` : ""}
       <ul>${feats}</ul>
       ${btn}
-      ${pl.code !== "free" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial="${pl.code}">Testar o ${esc(pl.name)} por 10 dias grátis</button>` : ""}
+      ${pl.code !== "free" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial="${pl.code}">Testar o ${esc(pl.name)} por ${TRIAL_DAYS} dias grátis</button>` : ""}
     </article>`;
   };
   draw();
@@ -119,7 +123,7 @@ async function startTrialSite(plan) {
       return;
     }
     await loadAccountFlags();
-    alert("Teste grátis ativado por 10 dias! Abra o Pitwall e entre com o mesmo e-mail do Google (menu Plano) para liberar os recursos.");
+    alert(`Teste grátis ativado por ${r.days || TRIAL_DAYS} dias! Abra o Pitwall e entre com o mesmo e-mail do Google (menu Plano) para liberar os recursos.`);
     location.hash = "#/conta";
   } catch (e) { alert(e.message); }
 }
@@ -194,6 +198,7 @@ async function buy(plan, priceId, baseCents, per) {
 // ---------------------------------------------------------------- minha conta
 async function renderAccount() {
   view.innerHTML = `<div class="loading">Carregando…</div>`;
+  await loadTrialDays();
   let a;
   try { a = await rpc("my_account"); } catch (e) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">${esc(e.message)}</div></div></section>`; return; }
   myPlan = a; window.PITWALL_NO_ADS = (a.features || []).includes("no_ads");
@@ -223,7 +228,7 @@ async function renderAccount() {
           <p>${paid ? (far ? "Sem data para acabar." : `Válido até <b>${dt(a.ends_at)}</b>${left != null && left <= 10 ? ` (faltam ${left} dia${left === 1 ? "" : "s"})` : ""}.`) : "Você está no plano Grátis."}</p>
           <div class="row-actions">
             ${paid && a.source !== "grant" ? "" : `<a class="btn go small" href="#/planos">${paid ? "Ver planos" : "Assinar o Pro"}</a>`}
-            ${!paid && !a.trial ? `<button class="btn small" id="aTrial">Testar o Pro por 10 dias</button><button class="btn small" id="aTrialTeam">Testar o Equipe por 10 dias</button>` : ""}
+            ${!paid && !a.trial ? `<button class="btn small" id="aTrial">Testar o Pro por ${TRIAL_DAYS} dias</button><button class="btn small" id="aTrialTeam">Testar o Equipe por ${TRIAL_DAYS} dias</button>` : ""}
           </div>
           ${a.trial ? `<p class="sub">Teste grátis: de ${dt(a.trial.started_at)} até ${dt(a.trial.ends_at)}.</p>` : ""}
         </div>
@@ -482,7 +487,11 @@ async function renderAdmin() {
       precos: () => `<div class="panel">${table(["Plano", "Período", "Nome", "Valor (R$)", "Ativo", ""], D.prices.map((p) => [PLAN_NAME[p.plan_code], p.period === "year" ? "Anual" : "Mensal", esc(p.label || "Padrão"),
         `<input class="adm-num" data-pv="${p.id}" type="number" step="0.01" min="0" value="${(p.amount_cents / 100).toFixed(2)}">`,
         `<input type="checkbox" data-pa="${p.id}" ${p.active ? "checked" : ""}>`, `<button class="btn small" data-ps="${p.id}">Salvar</button>`]), true)}
-        <p class="sub">Mudar o preço aqui vale para novas assinaturas. Quem já assina continua pagando o valor combinado no Asaas.</p></div>`,
+        <p class="sub">Mudar o preço aqui vale para novas assinaturas. Quem já assina continua pagando o valor combinado no Asaas.</p></div>
+        <div class="panel"><h2>Teste grátis</h2>
+          <p class="sub">Quantos dias vale o teste grátis (Pro ou Equipe, um por e-mail). Vale para os próximos testes; quem já está testando mantém a data atual.</p>
+          <div class="adm-form"><label class="sub">Dias do teste <input class="adm-num" id="trialDays" type="number" min="1" max="365" step="1" value="${TRIAL_DAYS}"></label><button class="btn small go" id="trialSave">Salvar</button></div>
+        </div>`,
       log: () => `<div class="panel">${table(["Quando", "Ação", "Alvo", "Detalhes"], D.log.map((l) => [dtt(l.created_at), esc(l.action), esc(l.target || ""), `<small class="sub">${esc(JSON.stringify(l.data || {}))}</small>`]), true)}</div>`,
     }[tab]();
     view.innerHTML = `<section class="sect"><div class="wrap adm">
@@ -523,6 +532,7 @@ async function renderAdmin() {
     view.querySelectorAll("[data-xt]").forEach((b) => b.onclick = () => act(() => rpc("admin_extend_trial", { p_email: b.dataset.xt, p_days: 7 })));
     view.querySelectorAll("[data-rl]").forEach((b) => b.onclick = () => confirm("Revogar esta chave?") && act(() => rpc("admin_revoke_license", { p_key: b.dataset.rl })));
     view.querySelectorAll("[data-rd]").forEach((b) => b.onclick = () => act(() => rpc("admin_revoke_device", { p_id: b.dataset.rd })));
+    const ts = $("#trialSave"); if (ts) ts.onclick = async () => { const n = Math.round(+$("#trialDays").value); try { await rpc("admin_set_trial_days", { p_days: n }); TRIAL_DAYS = n; alert(`Teste grátis agora vale ${n} dias.`); } catch (e) { alert(e.message); } };
     view.querySelectorAll("[data-ps]").forEach((b) => b.onclick = () => act(() => rpc("admin_set_price", {
       p_id: b.dataset.ps, p_amount_cents: Math.round(parseFloat($(`[data-pv="${b.dataset.ps}"]`).value) * 100), p_active: $(`[data-pa="${b.dataset.ps}"]`).checked })));
   }

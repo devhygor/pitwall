@@ -15,7 +15,7 @@ app / site (#/conta)       ──────────►  função license  
 * **Planos:** `free`, `pro`, `team`. Os recursos de cada plano ficam na tabela `plans` (coluna `features`); os preços, em `prices`.
   Dá para mudar preço em **#/admin > Preços** sem mexer no app.
 * **Cortesia:** `#/admin > Cortesias`: e-mail + plano + prazo (ou sem fim). A pessoa só precisa entrar com esse e-mail.
-* **Teste grátis:** 10 dias do Pro, uma vez por e-mail (e por computador, no app). Botão no app (menu *Plano*) e no site.
+* **Teste grátis:** Pro ou Equipe, uma vez por e-mail; a duração (padrão 10 dias) se muda em **#/admin > Preços > Teste grátis** (tabela `app_config`, função `trial_days()`) (e por computador, no app). Botão no app (menu *Plano*) e no site.
 * **Computadores:** Pro = 2, Equipe = 3 por licença. A pessoa remove computadores em *Minha conta*.
 
 ## O que cada plano libera (recursos = `features`)

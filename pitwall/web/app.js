@@ -3304,7 +3304,7 @@ function bindOverlayPanel(box, n, put, putModes) {
     } else if (el.dataset.val !== undefined) {
       el.onclick = async () => {
         if (el.dataset.need && !OV_FEATS.has(el.dataset.need)) {
-          toast(`Este modelo é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano (teste grátis de 10 dias).`);
+          toast(`Este modelo é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano (há teste grátis).`);
           return;
         }
         const v = el.dataset.num ? +el.dataset.val : el.dataset.val;
