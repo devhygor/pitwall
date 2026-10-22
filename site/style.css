@@ -657,3 +657,7 @@ html { scroll-padding-top: 76px; }
 .toast.err { border-color: rgba(255, 90, 95, .6); } .toast.err i { color: var(--loss, var(--bad, #ff5a5f)); } .toast.err u { background: var(--loss, var(--bad, #ff5a5f)); }
 .toast.info { border-color: rgba(77, 163, 255, .55); } .toast.info i { color: var(--blue, #4da3ff); } .toast.info u { background: var(--blue, #4da3ff); }
 @media (max-width: 560px) { #toasts { right: 16px; left: 16px; bottom: 16px; width: auto; } }
+
+/* comparativos de preço nos cartões */
+.plan .cmp { margin: 6px 0; padding: 7px 11px; border-radius: 10px; font-size: 13.5px; line-height: 1.4; background: rgba(255,255,255,.05); color: var(--fog); }
+.plan .cmp b { color: var(--chalk); } .plan .cmp.good { background: rgba(46,229,157,.1); color: #bff5dc; } .plan .cmp.good b { color: var(--sodium); }

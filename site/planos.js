@@ -17,6 +17,24 @@ async function loadAccountFlags() {
   window.PITWALL_NO_ADS = (myPlan.features || []).includes("no_ads");
 }
 
+// ---------------------------------------------------------------- comparativo de preços (mensal x anual, Pro x Equipe)
+// std = preço padrão (sem rótulo), fund = preço Fundador. Devolve valores em centavos e os descontos reais.
+function priceStats(prices) {
+  const pick = (code, per, f) => (prices || []).filter((p) => p.active !== false && p.plan_code === code && p.period === per && (f ? p.label : !p.label))[0];
+  const out = {};
+  for (const code of ["pro", "team"]) {
+    const m = pick(code, "month"), y = pick(code, "year"), fm = pick(code, "month", true);
+    const mc = m && m.amount_cents, yc = y && y.amount_cents, fc = fm && fm.amount_cents;
+    const year12 = mc ? mc * 12 : null;
+    out[code] = { m: mc, y: yc, f: fc, year12, saveC: mc && yc ? year12 - yc : null, savePct: mc && yc ? Math.round((1 - yc / year12) * 1000) / 10 : null, yMonth: yc ? yc / 12 : null };
+  }
+  const P = out.pro, T = out.team;
+  out.diff = { m: P.m && T.m ? T.m - P.m : null, y: P.y && T.y ? T.y - P.y : null,
+    mPct: P.m && T.m ? Math.round((T.m / P.m - 1) * 100) : null, yPct: P.y && T.y ? Math.round((T.y / P.y - 1) * 100) : null };
+  return out;
+}
+const pctTxt = (n) => (n == null ? "—" : String(n).replace(".", ",") + "%");
+
 const brl = (c) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dt = (iso) => iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 const dtt = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -41,6 +59,7 @@ async function renderPlans() {
   const [{ data: plans }, { data: prices }] = await Promise.all([
     sb.from("plans").select("*").order("sort"), sb.from("prices").select("*").eq("active", true)]);
   let period = store.get("pw.period") === "year" ? "year" : "month";
+  const ST = priceStats(prices);
   // descontos que a pessoa já tem: o código do link/afiliado (guardado em ?ref=) e o acumulado das indicações dela
   const refCode = store.get("pw.ref"), cpOff = {}, cpDur = {};
   let rwPct = 0, myRefCode = "";
@@ -62,7 +81,7 @@ async function renderPlans() {
         <h1 class="plans-h">Comece de graça. Assine quando quiser mais.</h1>
         <p class="lede">Gravar, analisar e comparar as suas voltas é grátis. O Pro libera o engenheiro de voz completo e tira os anúncios.</p>
         <div class="period"><button class="btn small ${period === "month" ? "on" : ""}" data-per="month">Mensal</button>
-          <button class="btn small ${period === "year" ? "on" : ""}" data-per="year">Anual <em>economize</em></button></div>
+          <button class="btn small ${period === "year" ? "on" : ""}" data-per="year">Anual${ST.pro.savePct > 0 ? ` <em>economize ${Math.round(ST.pro.savePct)}%</em>` : ""}</button></div>
         <div class="plan-grid">${(plans || []).map((pl) => planCard(pl)).join("")}</div>
         <p class="plans-note">Pagamento por Pix, cartão ou boleto, com renovação automática. Cancele quando quiser. Emitimos nota fiscal. O teste grátis de ${TRIAL_DAYS} dias não pede cartão.</p>
       </div></section>`;
@@ -93,6 +112,19 @@ async function renderPlans() {
       if (rwPct) parts.push(`${rwPct}% das suas indicações (próxima assinatura)`);
       discTxt = `<div class="disc-badge"><b>−${offPct}%</b> ${parts.join(" + ")}</div>`;
     }
+    // comparativos reais: anual x mensal e Equipe x Pro
+    let cmpTxt = "";
+    const sPl = ST[pl.code];
+    if (sPl && sPl.m && sPl.y) {
+      if (sPl.saveC > 0) cmpTxt += period === "year"
+        ? `<div class="cmp good">Anual: <b>−${pctTxt(sPl.savePct)}</b> em relação a pagar 12 meses no mensal (${brl(sPl.year12)}) · você economiza ${brl(sPl.saveC)}</div>`
+        : `<div class="cmp">No anual sai ${brl(Math.round(sPl.yMonth))}/mês: <b>−${pctTxt(sPl.savePct)}</b> (economiza ${brl(sPl.saveC)} por ano)</div>`;
+    }
+    if (pl.code === "team" && ST.diff.m != null) {
+      const d = period === "year" ? ST.diff.y : ST.diff.m, pc = period === "year" ? ST.diff.yPct : ST.diff.mPct;
+      cmpTxt += `<div class="cmp">Em relação ao Pro: <b>+${brl(d)}</b>${period === "year" ? " por ano" : " por mês"} (+${pc}%)</div>`;
+      if (ST.team.m) cmpTxt += `<div class="cmp good">Dividindo as 10 chaves entre 11 pessoas (você e mais 10): <b>${brl(Math.round(ST.team.m / 11))}/mês</b> por pessoa no mensal${ST.pro.m ? `, contra ${brl(ST.pro.m)} de um Pro individual` : ""}.</div>`;
+    }
     let btn;
     if (pl.code === "free") btn = `<a class="btn quiet" href="${esc(PITWALL.download)}">Baixar grátis</a>`;
     else if (cur) btn = `<span class="btn quiet" aria-disabled="true">Seu plano atual</span>`;
@@ -101,7 +133,7 @@ async function renderPlans() {
     return `<article class="plan ${pl.code === "pro" ? "hot" : ""}">
       ${pl.code === "pro" ? `<span class="plan-badge">Mais escolhido</span>` : ""}
       <h2>${esc(pl.name)}</h2><p class="plan-desc">${esc(pl.description)}</p>
-      <div class="plan-price">${was}<b>${amount}</b><span>${sub}</span></div>${discTxt}
+      <div class="plan-price">${was}<b>${amount}</b><span>${sub}</span></div>${discTxt}${cmpTxt}
       ${fund ? `<div class="fundador"><b>Preço Fundador</b>: o valor de hoje não sobe para quem assinar agora.</div>` : ""}
       <ul>${feats}</ul>
       ${btn}
@@ -391,6 +423,33 @@ async function renderAffiliate() {
   };
 }
 
+// quadro do painel (Preços): desconto do anual sobre o mensal e diferença entre Pro e Equipe, sempre com os preços atuais
+function priceCompare(prices) {
+  const tbl = (head, rows) => `<div class="tbl-wrap"><table class="tbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  const S = priceStats(prices), rows = [];
+  for (const [code, nm] of [["pro", "Pro"], ["team", "Equipe"]]) {
+    const s = S[code];
+    if (!s.m && !s.y) continue;
+    const warn = s.saveC != null && s.saveC < 0;
+    rows.push([nm, s.m ? brl(s.m) : "—", s.y ? brl(s.y) : "—", s.year12 ? brl(s.year12) : "—",
+      s.saveC == null ? "—" : warn ? `<span class="st st-past_due">${brl(-s.saveC)} a MAIS (${pctTxt(-s.savePct)})</span>` : `<b>${brl(s.saveC)}</b> (−${pctTxt(s.savePct)})`,
+      s.yMonth ? brl(Math.round(s.yMonth)) + "/mês" : "—"]);
+    if (s.f) rows.push([nm + " · Fundador", brl(s.f), "—", brl(s.f * 12), s.y ? `anual ${s.y < s.f * 12 ? "<b>−" + pctTxt(Math.round((1 - s.y / (s.f * 12)) * 1000) / 10) + "</b>" : "sem desconto"} vs Fundador` : "—", ""]);
+  }
+  const d = S.diff;
+  const warnTeam = S.team.saveC != null && S.team.saveC < 0 ? `<p class="modal-err" style="margin:8px 0">Atenção: o anual do Equipe (${brl(S.team.y)}) está mais caro que 12 meses no mensal (${brl(S.team.year12)}). Se não foi de propósito, ajuste o preço acima.</p>` : "";
+  return `<div class="panel"><h2>Descontos e comparativo</h2>
+    <p class="sub">Calculado com os preços ativos acima (sem cupons). “Economia” = quanto o anual custa a menos que pagar 12 meses no mensal.</p>
+    ${tbl(["Plano", "Mensal", "Anual", "12 × mensal", "Economia do anual", "Anual por mês"], rows, true)}
+    ${warnTeam}
+    <h3 style="margin:14px 0 6px">Equipe x Pro</h3>
+    ${d.m != null ? tbl(["", "Pro", "Equipe", "Diferença", "%"], [
+      ["Mensal", brl(S.pro.m), brl(S.team.m), `<b>+${brl(d.m)}</b>`, `+${d.mPct}%`],
+      ["Anual", brl(S.pro.y), brl(S.team.y), `<b>${d.y >= 0 ? "+" : ""}${brl(d.y)}</b>`, `${d.yPct >= 0 ? "+" : ""}${d.yPct}%`],
+      ["Equipe por pessoa (11 pessoas, mensal)", "—", brl(Math.round(S.team.m / 11)), "—", "—"]], true) : `<p class="sub">Falta o preço mensal ou anual de um dos planos.</p>`}
+    <p class="sub">O desconto de 10% de cupom ou afiliado vem por cima disso, no primeiro pagamento (veja a aba Afiliados).</p></div>`;
+}
+
 // ---------------------------------------------------------------- painel do administrador
 const ADM_TABS = [["geral", "Visão geral"], ["usuarios", "Usuários e versões"], ["assinaturas", "Assinaturas"], ["pagamentos", "Pagamentos"], ["afiliados", "Afiliados"], ["codigos", "Códigos e cupons"], ["comissoes", "Comissões"], ["cortesias", "Cortesias"],
   ["testes", "Testes"], ["licencas", "Licenças e computadores"], ["precos", "Preços"], ["log", "Histórico"]];
@@ -515,6 +574,7 @@ async function renderAdmin() {
         `<input class="adm-num" data-pv="${p.id}" type="number" step="0.01" min="0" value="${(p.amount_cents / 100).toFixed(2)}">`,
         `<input type="checkbox" data-pa="${p.id}" ${p.active ? "checked" : ""}>`, `<button class="btn small" data-ps="${p.id}">Salvar</button>`]), true)}
         <p class="sub">Mudar o preço aqui vale para novas assinaturas. Quem já assina continua pagando o valor combinado no Asaas.</p></div>
+        ${priceCompare(D.prices)}
         <div class="panel"><h2>Teste grátis</h2>
           <p class="sub">Quantos dias vale o teste grátis (Pro ou Equipe, um por e-mail). Vale para os próximos testes; quem já está testando mantém a data atual.</p>
           <div class="adm-form"><label class="sub">Dias do teste <input class="adm-num" id="trialDays" type="number" min="1" max="365" step="1" value="${TRIAL_DAYS}"></label><button class="btn small go" id="trialSave">Salvar</button></div>
