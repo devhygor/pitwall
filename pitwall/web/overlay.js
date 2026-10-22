@@ -18,7 +18,7 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true,
   mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full",
-  rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true, carcolor: "heat" };
+  rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true, carcolor: "heat", carstatic: "#f4f7ff", showmode: "always", nearm: 30 };
 
 let cfg = { ...DEFAULT_CFG };
 // modelos extras de overlay: Pro (overlay_styles); sem o recurso, volta para o modelo simples
@@ -616,13 +616,29 @@ function radarOverlay() {
     gp.style.display = cfg.gap && style !== "sides" && D ? "" : "none";
     gp.innerHTML = `<span>▲ ${ahead ? Math.round(ahead.fwd) + " m" : "—"}</span><span>▼ ${behind ? Math.round(-behind.fwd) + " m" : "—"}</span>`;
     sd.style.display = style === "sides" ? "" : "none";
-    const kindOf = (c) => { const b = carKindOf(c || {}); return FEATS.has(F_TEAM) && cfg.carmap && cfg.carmap[b] ? cfg.carmap[b] : b; };
-    const myKind = kindOf(D && D.me);
-    const white = cfg.carcolor === "white";                                             // carros brancos (sem a cor por proximidade; o perigo vira brilho vermelho)
-    const tone = (d) => (white ? "#f4f7ff" : hsl(heat(d, R * 0.8)));
-    const glowOf = (col) => (white ? "#ff4d5e" : col);
+    const kindOf = (c) => carKindOf(c || {});                                            // a classe vem do carro; o desenho dentro da classe é automático ou o escolhido
+    const variantOf = (c) => { const p = FEATS.has(F_TEAM) && cfg.carmap ? cfg.carmap[kindOf(c)] : null; return Number.isInteger(p) ? p : carAutoVariant(c || {}); };
+    const myKind = kindOf(D && D.me), myVar = variantOf(D && D.me);
+    const stat = cfg.carcolor === "static" || cfg.carcolor === "white", statCol = cfg.carcolor === "white" ? "#f4f7ff" : (cfg.carstatic || "#f4f7ff");
+    const lightStat = (() => { const m = /^#([0-9a-f]{6})$/i.exec(statCol); if (!m) return true; const n = parseInt(m[1], 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255 > 0.55; })();
+    const DANGER = "#ff3b4e";
+    const tone = (c, d) => (alongside(c) ? DANGER : stat ? statCol : hsl(heat(d, R * 0.8)));       // o carro ao lado fica vermelho
+    const nearM = clamp(+cfg.nearm || 30, 8, 80), anyNear = cars.some((c) => Math.abs(c.fwd) <= nearM && Math.abs(c.side) <= 9);
+    card.classList.toggle("rd-hide", cfg.showmode === "near" && !anyNear && !previewing && !!D);        // opção: só aparece quando há carro perto
+    const danger = (c, x, y, hh) => {                                                    // algo a mais no carro ao lado: aura pulsante e alerta
+      if (!alongside(c)) return;
+      const t = performance.now() / 1000, a = 0.5 + 0.5 * Math.sin(t * 9);
+      ctx.save(); ctx.fillStyle = `rgba(255,59,78,${0.12 + 0.14 * a})`; ctx.strokeStyle = `rgba(255,59,78,${0.5 + 0.4 * a})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, y, hh * 0.66 + 2 * a, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+    };
+    const alert = (c, x, y, hh) => {
+      if (!alongside(c)) return;
+      const yy = y - hh * 0.72, s = 7;
+      ctx.save(); ctx.fillStyle = DANGER; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, yy - s); ctx.lineTo(x + s, yy + s * 0.7); ctx.lineTo(x - s, yy + s * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = "800 9px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", x, yy + 1.5); ctx.restore();
+    };
     if (style === "sides") {
-      const mc = root.querySelector("#mc"), mx = mc.getContext("2d"); mx.clearRect(0, 0, mc.width, mc.height); drawCar(mx, 32, 52, 92, "#e8f0ff", { kind: myKind, hi: "#fff" });
+      const mc = root.querySelector("#mc"), mx = mc.getContext("2d"); mx.clearRect(0, 0, mc.width, mc.height); drawCar(mx, 32, 52, 92, "#e8f0ff", { kind: myKind, variant: myVar, hi: "#fff" });
       sd.querySelector(".L").className = "L" + (L ? " on" : ""); sd.querySelector(".R").className = "R" + (Rr ? " on" : "");
       sd.classList.toggle("wide", L > 0 && Rr > 0);
       sd.querySelector(".L").dataset.n = L > 1 ? L : ""; sd.querySelector(".R").dataset.n = Rr > 1 ? Rr : "";
@@ -640,10 +656,12 @@ function radarOverlay() {
       ctx.setLineDash([]);
       ctx.strokeStyle = "rgba(255,255,255,.1)"; ctx.beginPath(); ctx.moveTo(10, cy - R / 2 * ky); ctx.lineTo(W - 10, cy - R / 2 * ky); ctx.moveTo(10, cy + R / 2 * ky); ctx.lineTo(W - 10, cy + R / 2 * ky); ctx.stroke();
       for (const c of cars) {
-        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = tone(d);
-        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), glow: alongside(c) ? glowOf(col) : null, label: cfg.numbers ? c.n : null, labelCol: white ? "#0b0d10" : "#fff", hi: white ? "#ffffff" : col });
+        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = tone(c, d);
+        danger(c, x, y, 42);
+        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), variant: variantOf(c), glow: alongside(c) ? DANGER : null, label: cfg.numbers ? c.n : null, labelCol: stat && lightStat && !alongside(c) ? "#0b0d10" : "#fff", hi: col });
+        alert(c, x, y, 42);
       }
-      drawCar(ctx, cx, cy, 46, "#e8f0ff", { kind: myKind, glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
+      drawCar(ctx, cx, cy, 46, "#e8f0ff", { kind: myKind, variant: myVar, glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
     } else if (style === "circle") {
       const cx = W / 2, cy = H / 2, k = (W / 2 - 12) / R;
       ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 1.5;
@@ -653,10 +671,12 @@ function radarOverlay() {
       for (const c of cars) {
         const x = cx + clamp(c.side * 2.2, -R, R) * k * 0.62, y = cy - c.fwd * k, d = Math.hypot(c.fwd, c.side * 1.5);
         if (Math.hypot(x - cx, y - cy) > W / 2 - 8) continue;
-        const col = tone(d);
-        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), glow: alongside(c) ? glowOf(col) : null, label: cfg.numbers ? c.n : null, labelCol: white ? "#0b0d10" : "#fff" });
+        const col = tone(c, d);
+        danger(c, x, y, 30);
+        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), variant: variantOf(c), glow: alongside(c) ? DANGER : null, label: cfg.numbers ? c.n : null, labelCol: stat && lightStat && !alongside(c) ? "#0b0d10" : "#fff" });
+        alert(c, x, y, 30);
       }
-      drawCar(ctx, cx, cy, 38, "#e8f0ff", { kind: myKind, glow: "#3ee08f", hi: "#ffffff" });
+      drawCar(ctx, cx, cy, 38, "#e8f0ff", { kind: myKind, variant: myVar, glow: "#3ee08f", hi: "#ffffff" });
     } else {                                                                                         // halo: oito setores ao redor do carro acendem conforme a proximidade
       const cx = W / 2, cy = H / 2, r0 = W / 2 - 38, sec = new Array(8).fill(0), near = new Array(8).fill(1e9);
       for (const c of cars) {
@@ -670,12 +690,12 @@ function radarOverlay() {
         if (v > 0.5) { ctx.shadowColor = hsl(0); ctx.shadowBlur = 16; }
         ctx.beginPath(); ctx.arc(cx, cy, r0, a - Math.PI / 8 + 0.07, a + Math.PI / 8 - 0.07); ctx.stroke(); ctx.shadowBlur = 0;
       }
-      drawCar(ctx, cx, cy, 84, "#e8f0ff", { kind: myKind, hi: "#ffffff" });
+      drawCar(ctx, cx, cy, 84, "#e8f0ff", { kind: myKind, variant: myVar, hi: "#ffffff" });
     }
   }
   const loop = () => { draw(); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
-  return { onData() {}, onCfg() {} };
+  return { onData() {}, onCfg() {}, draw };
 }
 
 // ------------------------------------------------------------------ PONTO CEGO (uma luz por lado, cada uma numa janela para pôr onde quiser)

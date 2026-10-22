@@ -48,9 +48,26 @@ const CAR_BODY = {
   formula: [[0, .05], [.06, .06], [.12, .20], [.17, .32], [.30, .38], [.36, .50], [.34, .64], [.24, .77], [.14, .88], [.08, .95], [0, .965]],
 };
 
+// quatro desenhos para cada classe (o radar escolhe sozinho pelo modelo do carro ou você escolhe nas opções do Radar)
+const CAR_VARIANTS = {
+  formula: [{ name: "Clássico" }, { name: "Moderno", side: 1.15, fin: true, haloW: 1.5 }, { name: "Antigo", halo: false, airbox: true, fw: 0.85, rw: 0.8 }, { name: "Indy", fw: 1.0, rw: 1.15, side: 0.9, stripe: "center" }],
+  proto: [{ name: "Hypercar" }, { name: "LMP2", ws: 0.93, finH: 1.5 }, { name: "Bolha", bubble: 1.35, ws: 0.97 }, { name: "Longtail", ws: 0.9, tail: true, finH: 1.2 }],
+  gt3: [{ name: "Clássico", vents: true }, { name: "Largo", flare: true, canard: true, stripe: "twin", vents: true }, { name: "Aero", wing: "swan", stripe: "center", scoop: true, ws: 0.97 }, { name: "Esportivo", wing: "low", stripe: "side", ws: 0.94, cabS: 0.26, cabE: 0.7 }],
+  gt4: [{ name: "Clássico", vents: true }, { name: "Compacto", ws: 0.9, wing: "low" }, { name: "Listrado", stripe: "twin", vents: true }, { name: "Aero", wing: "swan", scoop: true, canard: true }],
+  touring: [{ name: "Sedã" }, { name: "Hatch", cabE: 0.74, ws: 0.95 }, { name: "Cupê", cabS: 0.3, cabE: 0.7, ws: 0.96, stripe: "center" }, { name: "Perua", cabE: 0.86, ws: 0.97 }],
+};
+const carVariantName = (kind, v) => ((CAR_VARIANTS[kind] || [])[v] || {}).name || "";
+// automático: o desenho varia pelo modelo do carro (carros diferentes ficam diferentes no radar)
+function carAutoVariant(info) {
+  const t = `${info && info.brand || ""}${info && info.model || ""}${info && info.car || ""}`;
+  let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return h % 4;
+}
+
 function drawCar(ctx, cx, cy, h, col, o = {}) {
   const kind = CAR_RATIO[o.kind] ? o.kind : "gt3", w = h * CAR_RATIO[kind], rgb = _rgb(ctx, col);
-  const X = (u) => cx + u * w / 2, Y = (v) => cy - h / 2 + v * h, P = (half) => _both(half).map(([u, v]) => [X(u), Y(v)]);
+  const V = (CAR_VARIANTS[kind] || [])[(o.variant | 0) % 4] || {}, ws = V.ws || 1;
+  const X = (u) => cx + u * ws * w / 2, XW = (u) => cx + u * w / 2, Y = (v) => cy - h / 2 + v * h, P = (half) => _both(half).map(([u, v]) => [X(u), Y(v)]);
   const WHITE = [255, 255, 255], BLACK = [8, 10, 14], dark = "#0a0c10", edge = "rgba(0,0,0,.8)";
   const lw = Math.max(0.8, h * 0.022);
   const rr = (a, b, c, d, r) => { ctx.beginPath(); ctx.roundRect(a, b, c, d, r); };
@@ -70,83 +87,94 @@ function drawCar(ctx, cx, cy, h, col, o = {}) {
     ctx.strokeStyle = edge; ctx.lineWidth = lw; _spline(ctx, P(half)); ctx.stroke();
   };
   const wheel = (u, v, ww, hh) => {                                                    // pneu + aro + brilho
-    const x = X(u) - ww / 2, y = Y(v) - hh / 2;
+    const x = XW(u) - ww / 2, y = Y(v) - hh / 2;
     ctx.fillStyle = dark; rr(x, y, ww, hh, ww * 0.3); ctx.fill();
     const g = ctx.createLinearGradient(x, 0, x + ww, 0); g.addColorStop(0, "rgba(255,255,255,.0)"); g.addColorStop(0.5, "rgba(255,255,255,.14)"); g.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = g; rr(x, y, ww, hh, ww * 0.3); ctx.fill();
     ctx.fillStyle = "rgba(150,160,175,.55)"; rr(x + ww * 0.3, y + hh * 0.2, ww * 0.4, hh * 0.6, ww * 0.18); ctx.fill();
   };
-  const glass = (path, strong) => {                                                    // vidro escuro com reflexo diagonal
+  const glass = (path) => {                                                            // vidro escuro com reflexo diagonal
     path(); const g = ctx.createLinearGradient(0, Y(0.3), 0, Y(0.75)); g.addColorStop(0, "rgba(40,70,110,.95)"); g.addColorStop(1, "rgba(6,12,24,.97)");
     ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw * 0.7; ctx.stroke();
     ctx.save(); path(); ctx.clip();
     ctx.fillStyle = "rgba(255,255,255,.22)"; ctx.beginPath(); ctx.moveTo(X(-1), Y(0.34)); ctx.lineTo(X(-0.1), Y(0.34)); ctx.lineTo(X(-0.55), Y(0.62)); ctx.lineTo(X(-1), Y(0.62)); ctx.closePath(); ctx.fill();
     ctx.restore();
   };
-  const lights = (v0, u0, u1, hh, c1, c2) => { ctx.fillStyle = c1; rr(X(u0), Y(v0), (u1 - u0) * w / 2, hh, hh * 0.45); ctx.fill(); ctx.fillStyle = c1; rr(X(-u1), Y(v0), (u1 - u0) * w / 2, hh, hh * 0.45); ctx.fill(); };
-  const stripe = (u0, u1, v0, v1, a) => { ctx.fillStyle = `rgba(255,255,255,${a})`; rr(X(u0), Y(v0), (u1 - u0) * w / 2, (v1 - v0) * h, w * 0.02); ctx.fill(); };
+  const lights = (v0, u0, u1, hh, c1) => { ctx.fillStyle = c1; rr(X(u0), Y(v0), (u1 - u0) * ws * w / 2, hh, hh * 0.45); ctx.fill(); rr(X(-u1), Y(v0), (u1 - u0) * ws * w / 2, hh, hh * 0.45); ctx.fill(); };
+  const stripe = (kindS, a = 0.5) => {                                                 // faixas de pintura
+    ctx.fillStyle = `rgba(255,255,255,${a})`;
+    if (kindS === "center") rr(X(-0.05), Y(0.05), 0.1 * ws * w / 2, 0.88 * h, w * 0.02), ctx.fill();
+    else if (kindS === "twin") { rr(X(-0.16), Y(0.05), 0.07 * ws * w / 2, 0.88 * h, w * 0.02); ctx.fill(); rr(X(0.09), Y(0.05), 0.07 * ws * w / 2, 0.88 * h, w * 0.02); ctx.fill(); }
+    else if (kindS === "side") { rr(X(-0.78), Y(0.2), 0.07 * ws * w / 2, 0.66 * h, w * 0.02); ctx.fill(); rr(X(0.71), Y(0.2), 0.07 * ws * w / 2, 0.66 * h, w * 0.02); ctx.fill(); }
+  };
 
   if (kind === "formula") {
-    const ww = w * 0.2, fh = h * 0.19, rh = h * 0.23;
+    const ww = w * 0.2, fh = h * 0.19, rh = h * 0.23, fwS = V.fw || 1, rwS = V.rw || 1, sd = V.side || 1;
     wheel(-0.86, 0.16, ww, fh); wheel(0.86, 0.16, ww, fh); wheel(-0.9, 0.72, ww * 1.08, rh); wheel(0.9, 0.72, ww * 1.08, rh);
     ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; ctx.lineWidth = lw;                                    // asa dianteira
-    rr(X(-0.96), Y(0.0), w * 0.96, h * 0.05, h * 0.015); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = col; rr(X(-0.96), Y(0.0), w * 0.09, h * 0.07, h * 0.012); ctx.fill(); rr(X(0.78), Y(0.0), w * 0.09, h * 0.07, h * 0.012); ctx.fill();
-    ctx.fillStyle = "#171b22"; rr(X(-0.78), Y(0.935), w * 0.78, h * 0.065, h * 0.015); ctx.fill(); ctx.stroke();      // asa traseira
-    ctx.fillStyle = col; rr(X(-0.8), Y(0.925), w * 0.045, h * 0.085, h * 0.01); ctx.fill(); rr(X(0.71), Y(0.925), w * 0.045, h * 0.085, h * 0.01); ctx.fill();
-    ctx.fillStyle = "#171b22"; ctx.beginPath(); ctx.moveTo(X(-0.55), Y(0.36)); ctx.lineTo(X(-0.28), Y(0.4)); ctx.lineTo(X(-0.28), Y(0.62)); ctx.lineTo(X(-0.55), Y(0.7)); ctx.closePath(); ctx.fill();   // suspensão
-    ctx.beginPath(); ctx.moveTo(X(0.55), Y(0.36)); ctx.lineTo(X(0.28), Y(0.4)); ctx.lineTo(X(0.28), Y(0.62)); ctx.lineTo(X(0.55), Y(0.7)); ctx.closePath(); ctx.fill();
-    body(CAR_BODY.formula);
-    ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = lw * 0.7; ctx.beginPath(); ctx.moveTo(X(0), Y(0.1)); ctx.lineTo(X(0), Y(0.93)); ctx.stroke();                                     // linha central
-    ctx.fillStyle = "rgba(10,14,22,.92)"; ctx.beginPath(); ctx.ellipse(X(0), Y(0.46), w * 0.075, h * 0.075, 0, 0, 7); ctx.fill();                                                           // cockpit
-    ctx.fillStyle = o.helmet || "#ffd24a"; ctx.beginPath(); ctx.arc(X(0), Y(0.47), w * 0.045, 0, 7); ctx.fill();
-    ctx.strokeStyle = "#14181f"; ctx.lineWidth = Math.max(1.2, w * 0.04); ctx.beginPath(); ctx.moveTo(X(-0.17), Y(0.40)); ctx.quadraticCurveTo(X(0), Y(0.35), X(0.17), Y(0.40)); ctx.moveTo(X(0), Y(0.36)); ctx.lineTo(X(0), Y(0.31)); ctx.stroke();   // halo
-    ctx.fillStyle = "rgba(0,0,0,.45)"; rr(X(-0.07), Y(0.54), w * 0.07, h * 0.3, w * 0.03); ctx.fill();                                                                                  // entrada de ar / motor
-    stripe(-0.05, 0.05, 0.1, 0.34, 0.25);
+    const fwW = 0.96 * fwS; rr(XW(-fwW), Y(0.0), w * fwW, h * 0.05, h * 0.015); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col; rr(XW(-fwW), Y(0.0), w * 0.09, h * 0.07, h * 0.012); ctx.fill(); rr(XW(fwW) - w * 0.09, Y(0.0), w * 0.09, h * 0.07, h * 0.012); ctx.fill();
+    const rwW = 0.78 * rwS; ctx.fillStyle = "#171b22"; rr(XW(-rwW), Y(0.935), w * rwW, h * 0.065, h * 0.015); ctx.fill(); ctx.stroke();      // asa traseira
+    ctx.fillStyle = col; rr(XW(-rwW) - w * 0.01, Y(0.925), w * 0.045, h * 0.085, h * 0.01); ctx.fill(); rr(XW(rwW) - w * 0.035, Y(0.925), w * 0.045, h * 0.085, h * 0.01); ctx.fill();
+    ctx.fillStyle = "#171b22"; ctx.beginPath(); ctx.moveTo(XW(-0.55), Y(0.36)); ctx.lineTo(XW(-0.28), Y(0.4)); ctx.lineTo(XW(-0.28), Y(0.62)); ctx.lineTo(XW(-0.55), Y(0.7)); ctx.closePath(); ctx.fill();   // suspensão
+    ctx.beginPath(); ctx.moveTo(XW(0.55), Y(0.36)); ctx.lineTo(XW(0.28), Y(0.4)); ctx.lineTo(XW(0.28), Y(0.62)); ctx.lineTo(XW(0.55), Y(0.7)); ctx.closePath(); ctx.fill();
+    body(CAR_BODY.formula.map(([u, v]) => [u > 0.2 ? Math.min(0.5, u * sd) : u, v]));
+    ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = lw * 0.7; ctx.beginPath(); ctx.moveTo(XW(0), Y(0.1)); ctx.lineTo(XW(0), Y(0.93)); ctx.stroke();
+    if (V.stripe) stripe(V.stripe, 0.45);
+    ctx.fillStyle = "rgba(10,14,22,.92)"; ctx.beginPath(); ctx.ellipse(XW(0), Y(0.46), w * 0.075, h * 0.075, 0, 0, 7); ctx.fill();                                                           // cockpit
+    ctx.fillStyle = o.helmet || "#ffd24a"; ctx.beginPath(); ctx.arc(XW(0), Y(0.47), w * 0.045, 0, 7); ctx.fill();
+    if (V.halo !== false) { ctx.strokeStyle = "#14181f"; ctx.lineWidth = Math.max(1.2, w * 0.04 * (V.haloW || 1)); ctx.beginPath(); ctx.moveTo(XW(-0.17), Y(0.40)); ctx.quadraticCurveTo(XW(0), Y(0.35), XW(0.17), Y(0.40)); ctx.moveTo(XW(0), Y(0.36)); ctx.lineTo(XW(0), Y(0.31)); ctx.stroke(); }   // halo
+    if (V.airbox) { ctx.fillStyle = "#14181f"; ctx.beginPath(); ctx.ellipse(XW(0), Y(0.57), w * 0.06, h * 0.05, 0, 0, 7); ctx.fill(); }
+    ctx.fillStyle = "rgba(0,0,0,.45)"; rr(XW(-0.07), Y(0.54), w * 0.07, h * 0.3, w * 0.03); ctx.fill();
+    if (V.fin) { ctx.fillStyle = "rgba(255,255,255,.55)"; rr(XW(-0.025), Y(0.6), w * 0.025, h * 0.3, w * 0.01); ctx.fill(); }
   } else if (kind === "proto") {
+    const finH = V.finH || 1, bub = V.bubble || 1;
     wheel(-0.97, 0.22, w * 0.15, h * 0.17); wheel(0.97, 0.22, w * 0.15, h * 0.17); wheel(-0.97, 0.74, w * 0.17, h * 0.2); wheel(0.97, 0.74, w * 0.17, h * 0.2);
-    body(CAR_BODY.proto);
+    body(CAR_BODY.proto.map(([u, v]) => (V.tail && v > 0.78 ? [u * 0.82, v] : [u, v])));
     ctx.fillStyle = "rgba(0,0,0,.35)";                                                                                        // grelhas dos para-lamas
     for (const s of [-1, 1]) { rr(X(s * 0.62) - w * 0.04, Y(0.15), w * 0.08, h * 0.1, w * 0.02); ctx.fill(); rr(X(s * 0.7) - w * 0.04, Y(0.67), w * 0.08, h * 0.12, w * 0.02); ctx.fill(); }
-    glass(() => { _spline(ctx, [[X(0), Y(0.27)], [X(0.3), Y(0.33)], [X(0.34), Y(0.47)], [X(0.22), Y(0.58)], [X(-0.22), Y(0.58)], [X(-0.34), Y(0.47)], [X(-0.3), Y(0.33)]]); });
-    ctx.fillStyle = "rgba(255,255,255,.28)"; rr(X(-0.03), Y(0.6), w * 0.06, h * 0.3, w * 0.02); ctx.fill();                      // aleta central
-    ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; ctx.lineWidth = lw; rr(X(-0.88), Y(0.94), w * 0.88, h * 0.055, h * 0.015); ctx.fill(); ctx.stroke();   // asa traseira
+    glass(() => { _spline(ctx, [[X(0), Y(0.27)], [X(0.3 * bub), Y(0.33)], [X(0.34 * bub), Y(0.47)], [X(0.22 * bub), Y(0.58 + 0.02 * bub)], [X(-0.22 * bub), Y(0.58 + 0.02 * bub)], [X(-0.34 * bub), Y(0.47)], [X(-0.3 * bub), Y(0.33)]]); });
+    ctx.fillStyle = "rgba(255,255,255,.28)"; rr(X(-0.03 * finH), Y(0.6), w * 0.06 * finH * 0.5, h * 0.3 * finH * 0.8, w * 0.02); ctx.fill();                      // aleta central
+    ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; ctx.lineWidth = lw; rr(X(-0.88), Y(0.94), w * 0.88 * ws, h * 0.055, h * 0.015); ctx.fill(); ctx.stroke();   // asa traseira
     ctx.fillStyle = col; rr(X(-0.9), Y(0.92), w * 0.045, h * 0.08, h * 0.01); ctx.fill(); rr(X(0.81), Y(0.92), w * 0.045, h * 0.08, h * 0.01); ctx.fill();
-    ctx.fillStyle = "#171b22"; rr(X(-0.4), Y(0.0), w * 0.4, h * 0.022, h * 0.01); ctx.fill();                                    // splitter
+    ctx.fillStyle = "#171b22"; rr(X(-0.4), Y(0.0), w * 0.4 * ws, h * 0.022, h * 0.01); ctx.fill();                                    // splitter
     lights(0.035, 0.2, 0.55, h * 0.025, "#fff6c8");
   } else {                                                                                                                  // gt3, gt4 e turismo
-    const touring = kind === "touring", gt4 = kind === "gt4", f = gt4 ? 0.93 : 1;
+    const touring = kind === "touring", gt4 = kind === "gt4", f = gt4 ? 0.93 : 1, cs = V.cabS ?? 0.29, ce = V.cabE ?? (touring ? 0.78 : 0.73);
     wheel(-0.98 * f, 0.2, w * 0.15, h * 0.19); wheel(0.98 * f, 0.2, w * 0.15, h * 0.19); wheel(-0.99 * f, 0.74, w * 0.16, h * 0.2); wheel(0.99 * f, 0.74, w * 0.16, h * 0.2);
-    if (!touring) { ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; ctx.lineWidth = lw * 0.8; rr(X(-0.62), Y(-0.002), w * 0.62, h * 0.03, h * 0.012); ctx.fill(); }          // splitter
+    if (!touring) { ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; ctx.lineWidth = lw * 0.8; const sp = V.flare ? 0.8 : 0.62; rr(X(-sp), Y(-0.002), w * sp * ws, h * 0.03, h * 0.012); ctx.fill(); }          // splitter
     body(CAR_BODY[kind]);
-    // recortes das portas e linha central
-    ctx.strokeStyle = "rgba(0,0,0,.28)"; ctx.lineWidth = lw * 0.7;
+    ctx.strokeStyle = "rgba(0,0,0,.28)"; ctx.lineWidth = lw * 0.7;                                                           // recortes das portas e linha central
     ctx.beginPath(); ctx.moveTo(X(-0.7), Y(0.40)); ctx.lineTo(X(-0.7), Y(0.66)); ctx.moveTo(X(0.7), Y(0.40)); ctx.lineTo(X(0.7), Y(0.66)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(X(0), Y(0.05)); ctx.lineTo(X(0), Y(0.28)); ctx.stroke();
-    if (!touring) { ctx.fillStyle = "rgba(0,0,0,.38)"; for (const s of [-1, 1]) { rr(X(s * 0.3) - w * 0.045, Y(0.1), w * 0.09, h * 0.11, w * 0.02); ctx.fill(); } ctx.fillStyle = "rgba(255,255,255,.12)"; rr(X(-0.12), Y(0.04), w * 0.12, h * 0.22, w * 0.05); ctx.fill(); }   // entradas de ar no capô
+    if (V.stripe) stripe(V.stripe, 0.5);
+    if (V.flare) { ctx.fillStyle = "rgba(255,255,255,.14)"; for (const s of [-1, 1]) { rr(X(s * 0.88) - w * 0.05, Y(0.12), w * 0.1, h * 0.17, w * 0.04); ctx.fill(); rr(X(s * 0.93) - w * 0.05, Y(0.66), w * 0.1, h * 0.19, w * 0.04); ctx.fill(); } }
+    if (V.canard) { ctx.fillStyle = "#171b22"; for (const s of [-1, 1]) { rr(X(s * 0.8) - w * 0.05, Y(0.045), w * 0.1, h * 0.018, h * 0.008); ctx.fill(); } }
+    if (V.vents) { ctx.fillStyle = "rgba(0,0,0,.38)"; for (const s of [-1, 1]) { rr(X(s * 0.3) - w * 0.045, Y(0.1), w * 0.09, h * 0.11, w * 0.02); ctx.fill(); } ctx.fillStyle = "rgba(255,255,255,.12)"; rr(X(-0.12), Y(0.04), w * 0.12 * ws, h * 0.22, w * 0.05); ctx.fill(); }
+    if (V.scoop) { ctx.fillStyle = "rgba(0,0,0,.55)"; rr(X(-0.1), Y(0.5), w * 0.1 * ws, h * 0.06, w * 0.02); ctx.fill(); }                  // entrada de ar no teto
     // vidros e teto
     glass(() => { _spline(ctx, touring
-      ? [[X(0), Y(0.25)], [X(0.62), Y(0.28)], [X(0.7), Y(0.46)], [X(0.68), Y(0.7)], [X(0.4), Y(0.78)], [X(-0.4), Y(0.78)], [X(-0.68), Y(0.7)], [X(-0.7), Y(0.46)], [X(-0.62), Y(0.28)]]
-      : [[X(0), Y(0.29)], [X(0.58), Y(0.32)], [X(0.64), Y(0.47)], [X(0.6), Y(0.66)], [X(0.36), Y(0.73)], [X(-0.36), Y(0.73)], [X(-0.6), Y(0.66)], [X(-0.64), Y(0.47)], [X(-0.58), Y(0.32)]]); });
+      ? [[X(0), Y(cs - 0.04)], [X(0.62), Y(cs - 0.01)], [X(0.7), Y(cs + 0.17)], [X(0.68), Y(ce - 0.08)], [X(0.4), Y(ce)], [X(-0.4), Y(ce)], [X(-0.68), Y(ce - 0.08)], [X(-0.7), Y(cs + 0.17)], [X(-0.62), Y(cs - 0.01)]]
+      : [[X(0), Y(cs)], [X(0.58), Y(cs + 0.03)], [X(0.64), Y(cs + 0.18)], [X(0.6), Y(ce - 0.07)], [X(0.36), Y(ce)], [X(-0.36), Y(ce)], [X(-0.6), Y(ce - 0.07)], [X(-0.64), Y(cs + 0.18)], [X(-0.58), Y(cs + 0.03)]]); });
     ctx.fillStyle = _mix(rgb, WHITE, 0.18); _spline(ctx, touring
-      ? [[X(0), Y(0.43)], [X(0.48), Y(0.45)], [X(0.5), Y(0.6)], [X(0.3), Y(0.66)], [X(-0.3), Y(0.66)], [X(-0.5), Y(0.6)], [X(-0.48), Y(0.45)]]
-      : [[X(0), Y(0.45)], [X(0.46), Y(0.47)], [X(0.46), Y(0.58)], [X(0.28), Y(0.63)], [X(-0.28), Y(0.63)], [X(-0.46), Y(0.58)], [X(-0.46), Y(0.47)]]); ctx.fill();
+      ? [[X(0), Y(cs + 0.14)], [X(0.48), Y(cs + 0.16)], [X(0.5), Y(ce - 0.18)], [X(0.3), Y(ce - 0.12)], [X(-0.3), Y(ce - 0.12)], [X(-0.5), Y(ce - 0.18)], [X(-0.48), Y(cs + 0.16)]]
+      : [[X(0), Y(cs + 0.16)], [X(0.46), Y(cs + 0.18)], [X(0.46), Y(ce - 0.15)], [X(0.28), Y(ce - 0.1)], [X(-0.28), Y(ce - 0.1)], [X(-0.46), Y(ce - 0.15)], [X(-0.46), Y(cs + 0.18)]]); ctx.fill();
     ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = lw * 0.6; ctx.stroke();
-    // retrovisores
-    ctx.fillStyle = _mix(rgb, BLACK, 0.3); ctx.strokeStyle = edge; ctx.lineWidth = lw * 0.7;
-    for (const s of [-1, 1]) { rr(X(s * 0.96) - w * 0.045, Y(0.37), w * 0.09, h * 0.045, w * 0.02); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = _mix(rgb, BLACK, 0.3); ctx.strokeStyle = edge; ctx.lineWidth = lw * 0.7;                                   // retrovisores
+    for (const s of [-1, 1]) { rr(X(s * 0.96) - w * 0.045, Y(cs + 0.08), w * 0.09, h * 0.045, w * 0.02); ctx.fill(); ctx.stroke(); }
     lights(0.04, 0.16, 0.5, h * 0.028, "#fff6c8");
-    { const a = touring ? 0.46 : 0.62, wd = touring ? 0.22 : 0.3, vy = touring ? 0.945 : 0.955; ctx.fillStyle = "#ff3b4e"; rr(X(-a), Y(vy), w * wd * 0.9, h * 0.026, h * 0.01); ctx.fill(); rr(X(a) - w * wd * 0.9, Y(vy), w * wd * 0.9, h * 0.026, h * 0.01); ctx.fill(); }   // lanternas
-    if (!touring) {                                                                                                         // asa traseira com suportes e placas laterais
-      const ww = gt4 ? 0.82 : 1.0;
+    { const a = touring ? 0.46 : 0.62, wd = touring ? 0.22 : 0.3, vy = touring ? 0.945 : 0.955; ctx.fillStyle = "#ff3b4e"; rr(X(-a), Y(vy), w * wd * 0.9 * ws, h * 0.026, h * 0.01); ctx.fill(); rr(X(a) - w * wd * 0.9 * ws, Y(vy), w * wd * 0.9 * ws, h * 0.026, h * 0.01); ctx.fill(); }   // lanternas
+    const wingT = V.wing || (touring ? "spoiler" : "wide");
+    if (wingT === "wide" || wingT === "swan") {                                                                             // asa traseira (a "swan" fica elevada, presa por dois suportes)
+      const ww = gt4 ? 0.82 : 1.0, y0 = wingT === "swan" ? 0.9 : 0.925;
       ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; ctx.lineWidth = lw * 0.9;
-      rr(X(-ww), Y(0.925), w * ww, h * 0.06, h * 0.015); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = col; rr(X(-ww) - w * 0.012, Y(0.91), w * 0.04, h * 0.09, h * 0.01); ctx.fill(); rr(X(ww) - w * 0.028, Y(0.91), w * 0.04, h * 0.09, h * 0.01); ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,.25)"; ctx.fillRect(X(-ww) + w * 0.02, Y(0.93), w * ww - w * 0.04, h * 0.008);
-    } else { ctx.fillStyle = "#171b22"; rr(X(-0.55), Y(0.935), w * 0.55, h * 0.03, h * 0.01); ctx.fill(); }
-    if (gt4) stripe(-0.05, 0.05, 0.06, 0.92, 0.5);                                                                          // faixa central do GT4
+      if (wingT === "swan") { ctx.fillStyle = "rgba(0,0,0,.55)"; rr(X(-0.3), Y(0.8), w * 0.05, h * 0.12, w * 0.01); ctx.fill(); rr(X(0.25), Y(0.8), w * 0.05, h * 0.12, w * 0.01); ctx.fill(); ctx.fillStyle = "#171b22"; }
+      rr(X(-ww), Y(y0), w * ww * ws, h * 0.06, h * 0.015); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = col; rr(X(-ww) - w * 0.012, Y(y0 - 0.015), w * 0.04, h * 0.09, h * 0.01); ctx.fill(); rr(X(ww) - w * 0.028, Y(y0 - 0.015), w * 0.04, h * 0.09, h * 0.01); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,.25)"; ctx.fillRect(X(-ww) + w * 0.02, Y(y0 + 0.005), w * ww * ws - w * 0.04, h * 0.008);
+    } else if (wingT === "low") { ctx.fillStyle = "#171b22"; ctx.strokeStyle = edge; rr(X(-0.7), Y(0.945), w * 0.7 * ws, h * 0.04, h * 0.012); ctx.fill(); ctx.stroke(); }
+    else { ctx.fillStyle = "#171b22"; rr(X(-0.55), Y(0.935), w * 0.55 * ws, h * 0.03, h * 0.01); ctx.fill(); }
   }
-  if (o.label != null) { ctx.fillStyle = o.labelCol || "#fff"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 2; ctx.font = `800 ${Math.max(8, h * 0.19)}px Segoe UI`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.strokeText(String(o.label), cx, Y(0.545)); ctx.fillText(String(o.label), cx, Y(0.545)); }
+  if (o.label != null) { ctx.fillStyle = o.labelCol || "#fff"; ctx.strokeStyle = o.labelCol === "#0b0d10" ? "rgba(255,255,255,.6)" : "rgba(0,0,0,.7)"; ctx.lineWidth = 2; ctx.font = `800 ${Math.max(8, h * 0.19)}px Segoe UI`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.strokeText(String(o.label), cx, Y(0.545)); ctx.fillText(String(o.label), cx, Y(0.545)); }
   ctx.restore();
 }
 
@@ -160,7 +188,7 @@ const OPT_LOCK = {
   delta: { predicted: false, fuel: false },
   corner: { lead: 250, speed: false, next: false, name: false, brakepoint: false },
   tyres: { brake: false, pads: false, wear: false, compound: false, weather: false, tmin: 70, tmax: 100, pmin: 26, pmax: 27, bmin: 350, bmax: 800, punit: "psi" },
-  radar: { range: 40, gap: false, numbers: false, carcolor: "heat" },
+  radar: { range: 40, gap: false, numbers: false, carcolor: "heat", carstatic: "#f4f7ff", showmode: "always", nearm: 30 },
   blindl: { always: true }, blindr: { always: true },
 };
 const OPT_LOCK_TEAM = { radar: { carmap: null } };                    // escolher o carrinho de cada classe: Pro

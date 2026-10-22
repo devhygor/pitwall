@@ -1170,3 +1170,12 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 
 /* os botões liga/desliga dentro de .fuel (equipe > Ajustes) eram espremidos pela regra do checkbox comum */
 .fuel input.tgl[type=checkbox] { width: 44px; height: 26px; flex: none; }
+
+/* escolha de desenho por classe e cores dos carros do radar */
+.cm-opts { grid-template-columns: repeat(5, 1fr); }
+.cm-opt.cm-auto { justify-content: center; } .cm-opt .cm-a { display: flex; align-items: center; justify-content: center; width: 36px; height: 52px; border-radius: 10px; border: 2px dashed #3a465a; color: var(--accent); font-weight: 800; font-size: 20px; }
+.cm-opt.on .cm-a { border-color: var(--accent); }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 2px; }
+.sw { width: 30px; height: 30px; border-radius: 50%; background: var(--c); border: 3px solid transparent; box-shadow: 0 0 0 1px rgba(255,255,255,.25); cursor: pointer; padding: 0; }
+.sw.on { border-color: var(--bg, #0b0f17); box-shadow: 0 0 0 3px var(--accent); }
+.swatches.locked { opacity: .55; }

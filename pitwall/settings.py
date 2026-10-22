@@ -19,7 +19,7 @@ OVERLAY_DEFAULTS = {
                   "group": True, "classpos": True, "header": True, "others": 3, "carstyle": "both", "logomode": "color", "trendcolor": True, "trend_secs": 25},
     "delta": {**_BASE, "bg": 35, "dstyle": "classic", "fuel": True, "predicted": True},
     "corner": {**_BASE, "bg": 30, "dist": True, "brakepoint": True, "speed": True, "next": True, "name": True, "lead": 250, "cstyle": "full"},
-    "radar": {**_BASE, "bg": 20, "rstyle": "sides", "range": 40, "numbers": False, "gap": True, "carmap": None, "carcolor": "heat"},
+    "radar": {**_BASE, "bg": 20, "rstyle": "sides", "range": 40, "numbers": False, "gap": True, "carmap": None, "carcolor": "heat", "carstatic": "#f4f7ff", "showmode": "always", "nearm": 30},
     "blindl": {**_BASE, "bstyle": "dot", "always": True},
     "blindr": {**_BASE, "bstyle": "dot", "always": True},
     "tyres": {**_BASE, "bg": 25, "temp": True, "press": True, "brake": True, "wear": True, "compound": True, "punit": "psi",

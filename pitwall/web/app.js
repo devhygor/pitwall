@@ -3263,15 +3263,21 @@ function ovPanel(n, S) {
       "mostra se há carro ao lado, atrás ou à frente de você");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "gap", "Distância do carro à frente e atrás", c.gap, "Metros até o carro mais próximo na sua linha")}
       ${ovChip(n, "numbers", "Número dos carros", c.numbers)}</div>` + ovSlider(n, "range", "Alcance do radar", c.range || 40, 20, 80, 5, " m"));
-    const cm = c.carmap || {}, cmLock = !OV_FEATS.has(OV_T);
-    g += ovGroup("Cor dos carros", ovSeg(n, "carcolor", [["heat", "Por proximidade · verde → vermelho"], ["white", "Brancos"]], c.carcolor || "heat"),
-      "brancos: todos os carros em branco; quem está ao seu lado ganha um brilho vermelho");
-    g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => `<div class="cm-row" data-class="${k}"><div class="cm-name"><b>${t}</b><small>${(cm[k] || k) === k ? "automático" : "escolhido por você"}</small></div>
-        <div class="cm-opts">${CAR_KINDS.map(([v, tt]) => `<button type="button" class="cm-opt ${(cm[k] || k) === v ? "on" : ""}" data-pick="${k}:${v}" title="${tt}" ${cmLock ? "disabled" : ""}>
-          <canvas data-thumb="${v}" width="64" height="104"></canvas><span>${tt.split(" (")[0].split(" /")[0]}</span></button>`).join("")}</div></div>`).join("")}
-      ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe o desenho sozinho pela classe do carro. No plano Pro você escolhe o carrinho de cada classe.</div>`
-        : `<div class="sub">Para cada classe, clique no carrinho que quer ver no radar. O radar descobre a classe de cada carro sozinho (ACC e iRacing). <button type="button" class="btn xs" id="cmReset">Voltar ao automático</button></div>`}</div>`,
-      "ex.: mostrar todos os GT3 como carro de turismo");
+    const cm = c.carmap || {}, cmLock = !OV_FEATS.has(OV_T), ccMode = c.carcolor === "white" ? "static" : (c.carcolor || "heat"), swLock = ovLocked("radar", "carstatic");
+    g += ovGroup("Quando aparece", ovSeg(n, "showmode", [["always", "Sempre na tela"], ["near", "Só quando houver carro perto"]], c.showmode || "always") +
+      ovSlider(n, "nearm", "Considerar “perto” até", c.nearm || 30, 8, 80, 2, " m"),
+      "no modo “só quando houver carro perto”, o radar some da tela e volta quando alguém chega perto de você");
+    g += ovGroup("Cor dos carros", ovSeg(n, "carcolor", [["heat", "Colorido por proximidade"], ["static", "Cor fixa"]], ccMode) +
+      `<div class="swatches ${swLock ? "locked" : ""}" id="swRow" style="${ccMode === "static" ? "" : "display:none"}">${[["#f4f7ff", "Branco"], ["#3ee08f", "Verde"], ["#4aa3ff", "Azul"], ["#ffd24a", "Amarelo"], ["#ff9f43", "Laranja"], ["#c77dff", "Roxo"], ["#36d6e7", "Ciano"], ["#9aa7bd", "Cinza"]]
+        .map(([hx, nm]) => `<button type="button" class="sw ${((c.carstatic || "#f4f7ff").toLowerCase() === hx) ? "on" : ""}" data-sw="${hx}" title="${nm}" style="--c:${hx}" ${swLock ? 'data-need="overlay_custom"' : ""}></button>`).join("")}</div>`,
+      "o carro que estiver ao seu lado fica vermelho, pulsa e ganha um alerta (!) para chamar a atenção");
+    g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => { const cur = Number.isInteger(cm[k]) ? cm[k] : "auto";
+      return `<div class="cm-row" data-class="${k}"><div class="cm-name"><b>${t}</b><small>${cur === "auto" ? "automático" : "desenho: " + carVariantName(k, cur)}</small></div>
+        <div class="cm-opts"><button type="button" class="cm-opt cm-auto ${cur === "auto" ? "on" : ""}" data-pick="${k}:auto" ${cmLock ? "disabled" : ""}><span class="cm-a">A</span><span>Automático</span></button>${[0, 1, 2, 3].map((v) => `<button type="button" class="cm-opt ${cur === v ? "on" : ""}" data-pick="${k}:${v}" title="${carVariantName(k, v)}" ${cmLock ? "disabled" : ""}>
+          <canvas data-thumb="${k}:${v}" width="64" height="104"></canvas><span>${carVariantName(k, v)}</span></button>`).join("")}</div></div>`; }).join("")}
+      ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe sozinho um desenho para cada carro. No plano Pro você escolhe o desenho de cada classe.</div>`
+        : `<div class="sub">Para cada classe você escolhe entre 4 desenhos de carrinho, ou deixa em <b>Automático</b> (o radar varia o desenho pelo modelo do carro). O radar descobre a classe de cada carro sozinho (ACC e iRacing). <button type="button" class="btn xs" id="cmReset">Tudo automático</button></div>`}</div>`,
+      "escolha o carrinho de cada classe");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
       "se o radar mostrar o carro do lado errado, ligue isto (vale também para o aviso falado do engenheiro)");
     g += `<p class="sub" style="margin:8px 0 0">No ACC o radar usa a posição dos carros; na primeira volta ele calibra sozinho. No iRacing a distância vem da pista e o lado, do aviso do próprio jogo (por isso o iRacing mostra os carros à frente e atrás só na sua linha).</p>`;
@@ -3490,29 +3496,35 @@ function bindOverlayPanel(box, n, put, putModes) {
         else await send(name, key, v);
         if (key === "mode") { const sub = box.querySelector(".ovp-head .sub"); if (sub) sub.textContent = OV_MODE_TXT[v]; }
         el.parentElement.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === el));
-        if (key === "carcolor" && box._paintThumbs) box._paintThumbs();
+        if (key === "carcolor") { const sr = box.querySelector("#swRow"); if (sr) sr.style.display = v === "static" ? "" : "none"; if (box._paintThumbs) box._paintThumbs(); }
         if (key === "trend_secs") { const sl = box.querySelector('input[data-k="trend_secs"]'); if (sl) { sl.value = v; sl.nextElementSibling.textContent = v + " s"; } }
       };
     }
   });
+  const radarCfg = () => { const cc = box.querySelector('button[data-k="carcolor"].on'), sw = box.querySelector(".sw.on"); return { stat: !!cc && cc.dataset.val === "static", col: sw ? sw.dataset.sw : "#f4f7ff" }; };
   box._paintThumbs = () => box.querySelectorAll("canvas[data-thumb]").forEach((cv) => {                  // miniaturas dos carrinhos (na cor escolhida)
-    const x = cv.getContext("2d"), cc = box.querySelector('button[data-k="carcolor"].on'), white = !!cc && cc.dataset.val === "white";
-    x.clearRect(0, 0, cv.width, cv.height); drawCar(x, 32, 52, 88, white ? "#f4f7ff" : "#3ee08f", { kind: cv.dataset.thumb, hi: "#ffffff" });
+    const x = cv.getContext("2d"), rc = radarCfg(), [k, v] = cv.dataset.thumb.split(":");
+    x.clearRect(0, 0, cv.width, cv.height); drawCar(x, 32, 52, 88, rc.stat ? rc.col : "#3ee08f", { kind: k, variant: +v, hi: "#ffffff" });
   });
   box._paintThumbs();
   box.querySelectorAll("button[data-pick]").forEach((b) => b.onclick = () => {
     if (b.disabled) return;
-    const [cls, kind] = b.dataset.pick.split(":"), row = b.closest(".cm-row");
+    const [cls, val] = b.dataset.pick.split(":"), row = b.closest(".cm-row");
     row.querySelectorAll(".cm-opt").forEach((x) => x.classList.toggle("on", x === b));
-    row.querySelector("small").textContent = kind === cls ? "automático" : "escolhido por você";
+    row.querySelector("small").textContent = val === "auto" ? "automático" : "desenho: " + carVariantName(cls, +val);
     const map = {};
-    box.querySelectorAll(".cm-row").forEach((r) => { const on = r.querySelector(".cm-opt.on"); const [k2, v2] = on ? on.dataset.pick.split(":") : []; if (k2 && v2 !== k2) map[k2] = v2; });
+    box.querySelectorAll(".cm-row").forEach((r) => { const on = r.querySelector(".cm-opt.on"); const [k2, v2] = on ? on.dataset.pick.split(":") : []; if (k2 && v2 !== "auto") map[k2] = +v2; });
     put({ overlays: { radar: { carmap: Object.keys(map).length ? map : null } } });
   });
   const cmr = box.querySelector("#cmReset"); if (cmr) cmr.onclick = () => {
     put({ overlays: { radar: { carmap: null } } });
-    box.querySelectorAll(".cm-row").forEach((r) => { r.querySelectorAll(".cm-opt").forEach((x) => x.classList.toggle("on", x.dataset.pick.split(":")[0] === x.dataset.pick.split(":")[1])); r.querySelector("small").textContent = "automático"; });
+    box.querySelectorAll(".cm-row").forEach((r) => { r.querySelectorAll(".cm-opt").forEach((x) => x.classList.toggle("on", x.dataset.pick.endsWith(":auto"))); r.querySelector("small").textContent = "automático"; });
   };
+  box.querySelectorAll(".sw").forEach((b) => b.onclick = () => {                                           // cor fixa dos carros
+    if (b.dataset.need && !OV_FEATS.has(b.dataset.need)) { toast(`Escolher a cor é do plano ${OV_TIER[b.dataset.need]}. Veja o menu Plano.`); return; }
+    box.querySelectorAll(".sw").forEach((x) => x.classList.toggle("on", x === b));
+    put({ overlays: { radar: { carstatic: b.dataset.sw, carcolor: "static" } } }); if (box._paintThumbs) box._paintThumbs();
+  });
   box.querySelectorAll("[data-swap]").forEach((el) => el.onclick = () => { el.classList.toggle("on"); put({ eng_spotter_swap: el.classList.contains("on") }); });
   box.querySelectorAll(".ovslide.locked").forEach((el) => el.onclick = () => toast(`Esta opção é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano.`));
   box.querySelectorAll("[data-col]").forEach((el) => el.onclick = () => {
