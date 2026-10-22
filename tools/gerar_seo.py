@@ -278,6 +278,39 @@ PAGINAS = [
     },
 ]
 
+# Capturas reais do app, em site/img/. Cada item: (arquivo, texto alternativo, legenda); entram depois das seções 1, 2, ...
+IMAGENS = {
+    "telemetria-acc": [
+        ("app-analise-de-volta", "Tela de análise de volta do Pitwall no ACC em Monza: delta entre duas voltas, curvas onde se perde tempo e vídeo lado a lado", "Análise de volta: o delta, as curvas onde você perde tempo e o vídeo das duas voltas lado a lado."),
+        ("app-progresso-rating", "Tela de progresso do Pitwall com rating, volta ideal e lista do que treinar agora no ACC", "Progresso: rating, volta ideal e os trechos que mais valem treino."),
+    ],
+    "comparar-voltas": [
+        ("app-replay-comparado", "Replay comparado do Pitwall: duas voltas do ACC em Monza com mapa, setores, delta e vídeos sincronizados", "Replay comparado: duas voltas lado a lado, com mapa, setores e delta."),
+        ("app-analise-de-volta", "Análise de volta do Pitwall com delta e curvas onde se perde tempo", "Análise: onde exatamente a volta perde tempo para a referência."),
+    ],
+    "overlays-acc-iracing": [
+        ("app-overlays", "Tela de overlays do Pitwall: mapa, pedais, participantes, pneus, curva, radar, pontos cegos e delta, com ajustes de tamanho, fundo e estilo", "Escolha os overlays e ajuste tamanho, fundo transparente e estilo de cada um."),
+    ],
+    "engenheiro-de-corrida-em-portugues": [
+        ("app-engenheiro-de-voz", "Tela do engenheiro de corrida em português do Pitwall, com escolha de voz offline, microfone, tecla de falar e avisos", "O engenheiro de voz: escolha da voz, microfone, tecla de falar e avisos."),
+    ],
+    "setups-acc": [
+        ("app-biblioteca-de-setups", "Biblioteca de setups do Pitwall para o ACC, com busca, filtros por carro e pista e botão para instalar", "Biblioteca de setups: busque, filtre por carro e pista e instale no ACC com um clique."),
+    ],
+}
+ALTURA = {"app-analise-de-volta": 1000}
+
+
+def figura(slug, i):
+    """Figura que entra depois da seção de índice i (se houver)."""
+    it = IMAGENS.get(slug, [])
+    if i >= len(it):
+        return ""
+    f, alt, cap = it[i]
+    return (f'<figure><img src="/img/{f}.webp" alt="{esc(alt)}" width="1360" height="{ALTURA.get(f, 900)}" loading="lazy" decoding="async">'
+            f'<figcaption>{esc(cap)}</figcaption></figure>')
+
+
 CSS = """
 :root{--night:#0a0e14;--panel:#111826;--line:#223049;--text:#e8eef9;--fog:#9aa6bb;--sodium:#2ee59d;--blue:#3b9cff;--purple:#a77bff}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
@@ -296,6 +329,7 @@ h1{font:italic 800 clamp(34px,6vw,54px)/1.08 "Barlow Condensed",sans-serif;margi
 .lede{font-size:21px;color:#c9d3e6;margin:0 0 26px}
 h2{font:700 28px "Barlow Condensed",sans-serif;margin:34px 0 8px;letter-spacing:.2px}
 p{margin:0 0 14px}
+figure{margin:22px 0;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}figure img{display:block;width:100%;height:auto}figcaption{padding:10px 14px;font-size:14px;color:var(--fog)}
 .cta{margin:34px 0;padding:22px;border:1px solid #1f6b50;background:linear-gradient(135deg,rgba(46,229,157,.12),rgba(59,156,255,.08));border-radius:16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .cta p{margin:0;flex:1 1 280px;font-size:19px}
 details{border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0;background:var(--panel)}summary{cursor:pointer;font-weight:600}
@@ -353,7 +387,7 @@ def pagina(p):
         {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
             {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in p["faq"]]},
     ]
-    corpo = "".join(f"<h2>{esc(t)}</h2>" + "".join(f"<p>{esc(par)}</p>" for par in pars) for t, pars in p["secoes"])
+    corpo = "".join(f"<h2>{esc(t)}</h2>" + "".join(f"<p>{esc(par)}</p>" for par in pars) + figura(p["slug"], i) for i, (t, pars) in enumerate(p["secoes"]))
     cta_txt, cta_href = p.get("cta", ("Baixar o Pitwall grátis", "/baixar/"))
     rel = "".join(f'<a href="/{q["slug"]}/">{esc(q["nav"])}<small>{esc(q["desc"][:95])}…</small></a>' for q in PAGINAS if q["slug"] in p["rel"])
     faq = "".join(f"<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q, a in p["faq"])
@@ -372,8 +406,12 @@ def pagina(p):
 
 def sitemap():
     urls = [("/", "1.0", "weekly")] + [(f"/{p['slug']}/", "0.8", "monthly") for p in PAGINAS]
-    return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "".join(
-        f"  <url><loc>{BASE}{u}</loc><lastmod>{HOJE}</lastmod><changefreq>{c}</changefreq><priority>{pr}</priority></url>\n" for u, pr, c in urls) + "</urlset>\n"
+
+    def imgs(u):
+        return "".join(f"<image:image><image:loc>{BASE}/img/{f}.webp</image:loc><image:caption>{esc(cap)}</image:caption></image:image>"
+                       for f, _, cap in IMAGENS.get(u.strip("/"), []))
+    cab = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n'
+    return cab + "".join(f"  <url><loc>{BASE}{u}</loc><lastmod>{HOJE}</lastmod><changefreq>{c}</changefreq><priority>{pr}</priority>{imgs(u)}</url>\n" for u, pr, c in urls) + "</urlset>\n"
 
 
 def og_png(caminho):
