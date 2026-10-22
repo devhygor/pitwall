@@ -199,3 +199,63 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .cnr.compact.nodist { grid-template-columns: 1fr; grid-template-areas: "arrow" "brk"; justify-items: center; }
 .cnr.compact.nodist .cn-brk { width: 100%; justify-self: stretch; }
 .cnr.compact .cn-brk { justify-self: stretch; }
+
+/* ---- modelos extras (Pro / Equipe) ---- */
+.pedals .alt { display: none; }
+/* pedais · minimalista: só as barras finas, marcha e velocidade */
+.p-minimal canvas, .p-minimal .wheelbox, .p-minimal .legend { display: none; }
+.p-minimal { gap: 12px; padding: 8px 12px; }
+.p-minimal .bars { height: 64px; gap: 5px; } .p-minimal .vbar { width: 8px; }
+.p-minimal .info { width: auto; min-width: 54px; gap: 4px; } .p-minimal .gear { font-size: 34px; } .p-minimal .spd { font-size: 16px; }
+/* pedais · horizontal: duas barras com a porcentagem */
+.p-horizontal canvas, .p-horizontal .bars, .p-horizontal .wheelbox, .p-horizontal .info { display: none; }
+.p-horizontal .alt.hb { display: flex; flex-direction: column; gap: 6px; width: 250px; }
+.hrow { display: grid; grid-template-columns: 44px 1fr 34px; align-items: center; gap: 8px; font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.hrow b { font-size: 15px; color: var(--text); text-align: right; letter-spacing: 0; }
+.hbar { height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.hbar i { display: block; height: 100%; width: 0; border-radius: 6px; }
+.hrow.r .hbar i { background: linear-gradient(90deg, #ff2f45, #ff7a86); } .hrow.g .hbar i { background: linear-gradient(90deg, #25c777, #7dffc0); }
+/* pedais · painel do piloto (Equipe): marcha grande no meio, pedais nas laterais */
+.p-driver canvas, .p-driver .bars, .p-driver .wheelbox, .p-driver .info { display: none; }
+.p-driver { padding: 12px 18px; border-radius: 18px; }
+.p-driver .alt.dash { display: flex; align-items: stretch; gap: 16px; }
+.dash .dbars .vbar { width: 16px; height: 92px; }
+.dmid { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 96px; }
+.dgear { font-size: 76px; font-weight: 800; line-height: .95; background: linear-gradient(135deg, #3ee08f, #3d8bff 55%, #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dspd { font-size: 26px; font-weight: 700; line-height: 1.1; } .dmid small { font-size: 10px; letter-spacing: .12em; color: var(--muted); font-weight: 700; }
+
+/* delta · minimalista: só o número */
+.d-minimal { width: auto; min-width: 150px; padding: 6px 18px; }
+.d-minimal .dbar, .d-minimal .row { display: none; } .d-minimal .big { font-size: 54px; }
+/* delta · barra larga (Equipe): barra grossa centrada e o número embaixo */
+.d-bar { width: 440px; display: flex; flex-direction: column; padding: 10px 14px 12px; }
+.d-bar .dbar { order: -1; height: 26px; border-radius: 8px; margin: 0 0 8px; } .d-bar .dbar i { border-radius: 0; }
+.d-bar .big { font-size: 46px; }
+
+/* participantes · compacto (linhas menores, sem carro/tendência) */
+.s-compact { padding: 4px 4px 6px; min-width: 160px; }
+.s-compact .cell { height: 21px; font-size: 12px; padding: 0 6px; } .s-compact .hd { height: 16px; font-size: 9px; }
+.s-compact .st-bar { font-size: 11px; }
+/* participantes · torre de transmissão (Equipe): posição em bloco branco, linhas altas */
+.s-tower { padding: 0; border-radius: 8px; overflow: hidden; min-width: 270px; }
+.s-tower .cell { height: 32px; font-size: 15px; font-weight: 700; }
+.s-tower .hd { height: 18px; font-size: 9px; font-weight: 600; }
+.s-tower .cell.first.pos { background: rgba(255, 255, 255, .93); color: #0b0d10; border-radius: 0; box-shadow: none !important; }
+.s-tower .row-me { background: linear-gradient(90deg, rgba(62, 224, 143, .38), rgba(61, 139, 255, .22)); }
+.s-tower .row-me.first.pos { background: linear-gradient(135deg, #3ee08f, #3d8bff); color: #04140d; }
+
+/* pneus · enxutos */
+.tymini { display: grid; grid-template-columns: repeat(2, 78px); gap: 6px; padding: 8px; }
+.tymini .tm { position: relative; height: 62px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; box-shadow: 0 3px 10px rgba(0, 0, 0, .4); }
+.tymini .tt { font-size: 22px; font-weight: 800; line-height: 1; } .tymini .tp { font-size: 11px; font-weight: 700; opacity: .9; }
+.tymini.row { grid-template-columns: repeat(4, 70px); }
+.tymini.row .tm { height: 74px; padding-bottom: 10px; }
+.tymini .tb, .tymini .tw { position: absolute; left: 6px; right: 6px; height: 3px; border-radius: 2px; background: rgba(0, 0, 0, .45); overflow: hidden; }
+.tymini .tb { bottom: 9px; } .tymini .tw { bottom: 4px; } .tymini .tb i, .tymini .tw i { display: block; height: 100%; }
+
+/* curva · em linha */
+.cnr.line { width: auto; display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
+.cnr.line .cn-arrow { width: 42px; height: 42px; margin: 0; border-radius: 12px; } .cnr.line .cn-arrow svg { width: 30px; height: 30px; }
+.cnr.line .cn-info { flex: none; } .cnr.line .cn-info b { font-size: 17px; } .cnr.line .cn-info small, .cnr.line .cn-dir, .cnr.line .cn-sub, .cnr.line .cn-next { display: none; }
+.cnr.line .cn-dist { font-size: 26px; min-width: 70px; }
+.cnr.line .cn-brk { margin: 0; padding: 4px 10px; } .cnr.line .cn-brk .bar { display: none; } .cnr.line .cn-brk .lab b { font-size: 16px; }

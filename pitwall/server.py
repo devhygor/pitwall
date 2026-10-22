@@ -886,6 +886,24 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             raise HTTPException(400, err)
         return {"ok": True}
 
+    @app.post("/api/engineer/storage/clear")
+    def eng_storage_clear(what: str = Body(..., embed=True)):
+        if what not in ("cache", "piper", "whisper", "all"):
+            raise HTTPException(400, "opção inválida")
+        _eng().clear_storage(what)
+        return {"ok": True}
+
+    @app.post("/api/engineer/storage/open")
+    def eng_storage_open():
+        import os
+        p = _eng().root
+        p.mkdir(parents=True, exist_ok=True)
+        try:
+            os.startfile(str(p))          # abre a pasta no Explorer (só no Windows)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, str(e))
+        return {"ok": True}
+
     @app.post("/api/engineer/piper/remove")
     def eng_piper_remove(name: str = Body(..., embed=True)):
         e = _eng()

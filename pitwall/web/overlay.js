@@ -20,6 +20,18 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full" };
 
 let cfg = { ...DEFAULT_CFG };
+// modelos extras de overlay: Pro (overlay_styles) e Equipe (overlay_styles_team); sem o recurso, volta para o modelo clássico
+const FEATS = new Set();
+const F_PRO = "overlay_styles", F_TEAM = "overlay_styles_team";
+const STYLE_NEED = { map: { neon: F_PRO }, pedals: { minimal: F_PRO, horizontal: F_PRO, driver: F_TEAM }, delta: { minimal: F_PRO, bar: F_TEAM },
+  standings: { compact: F_PRO, tower: F_TEAM }, tyres: { minimal: F_PRO, row: F_TEAM }, corner: { line: F_PRO } };
+function pickStyle(group, key, def) {
+  const v = cfg[key] || def, need = (STYLE_NEED[group] || {})[v];
+  return !need || FEATS.has(need) ? v : def;
+}
+async function loadFeatures() {
+  try { const l = await getJSON("/api/license"); FEATS.clear(); for (const f of l.features || []) FEATS.add(f.id); } catch (e) { /* mantém o que tinha */ }
+}
 let edit = false;
 let lastSize = "";
 
@@ -65,7 +77,9 @@ function applyCfg(settings) {
   document.documentElement.style.setProperty("--s", String(clamp(cfg.scale, 40, 300) / 100));
   document.documentElement.style.setProperty("--bg", String(clamp(cfg.bg, 0, 100)));
 }
+let featAt = 0;
 async function settingsLoop() {
+  if (performance.now() - featAt > 15000) { featAt = performance.now(); loadFeatures(); }
   try { applyCfg((await getJSON("/api/settings")).settings || {}); } catch (e) { /* app reiniciando */ }
   if (current && current.onCfg) current.onCfg();
   reportSize();
@@ -241,8 +255,8 @@ function mapOverlay() {
     }
     // textos e marcas que precisam ficar em pé mesmo com o mapa girando
     const upright = (x, y, fn) => { ctx.save(); ctx.translate(x, y); ctx.rotate(-rotA); ctx.scale(sc, sc); fn(); ctx.restore(); };
-    const style = ["asphalt", "thin", "classic"].includes(cfg.mapstyle) ? cfg.mapstyle : "asphalt";
-    const lw = (style === "thin" ? 3.2 : clamp(cfg.width, 3, 20)) * sc;
+    const style = ["asphalt", "thin", "classic", "neon"].includes(cfg.mapstyle) ? pickStyle("map", "mapstyle", "asphalt") : "asphalt";
+    const lw = (style === "thin" ? 3.2 : style === "neon" ? 3.6 : clamp(cfg.width, 3, 20)) * sc;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     const trace = (a, b) => { ctx.beginPath(); ctx.moveTo(P[a][0], P[a][1]); for (let i = a + 1; i <= b; i++) ctx.lineTo(P[i % n][0], P[i % n][1]); };
     if (style === "asphalt") {
@@ -263,6 +277,7 @@ function mapOverlay() {
       ctx.globalAlpha = fl === "yellow" || fl === "red" ? pulse : 1;
       if (fl) { ctx.strokeStyle = FLAG_INFO[fl][1]; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke(); }     // bandeira: pinta a pista toda
       else if (style === "asphalt") { ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = Math.max(1.5 * sc, lw * 0.14); ctx.setLineDash([6 * sc, 8 * sc]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
+      else if (style === "neon") { ctx.shadowColor = "#38e8ff"; ctx.shadowBlur = 12; ctx.strokeStyle = "#7df3ff"; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke(); ctx.shadowBlur = 0; }
       else { ctx.strokeStyle = style === "thin" ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.88)"; ctx.lineWidth = lw; trace(a, Math.min(i, n)); ctx.stroke(); }
       if (fl === "chequered") { ctx.strokeStyle = "#111"; ctx.setLineDash([8 * sc, 8 * sc]); trace(a, Math.min(i, n)); ctx.stroke(); ctx.setLineDash([]); }
       ctx.globalAlpha = 1;
@@ -275,7 +290,7 @@ function mapOverlay() {
       ctx.strokeStyle = col; ctx.lineWidth = w * sc; ctx.beginPath();
       ctx.moveTo(p[0] - dy * len, p[1] + dx * len); ctx.lineTo(p[0] + dy * len, p[1] - dx * len); ctx.stroke();
     };
-    const half = (style === "thin" ? 5 : lw * 0.9 + 3 * sc);
+    const half = (style === "thin" || style === "neon" ? 5 : lw * 0.9 + 3 * sc);
     tick(0, "#ffffff", half);
     if (cfg.sectors) { tick(Math.round(sectors[0] * n), "rgba(0,0,0,.75)", lw * 0.7); tick(Math.round(sectors[1] * n), "rgba(0,0,0,.75)", lw * 0.7); }
     // curvas: número (e nome) no mapa e a curva em que você está agora
@@ -307,7 +322,7 @@ function mapOverlay() {
     if (cn.dataset.h !== nowTxt) { cn.dataset.h = nowTxt; cn.innerHTML = nowTxt; cn.style.display = nowTxt ? "block" : "none"; }
     // carros
     let cars = live() ? data.cars || [] : previewing ? previewCars(t) : [];
-    const small = style === "thin";
+    const small = style === "thin" || style === "neon";
     if (cfg.cars) {
       for (const c of cars) {
         if (me && c.id === me.id) continue;
@@ -390,9 +405,11 @@ function cornerOverlay() {
     { n: 4, apex: 0.78, brake: 0.745, dir: "L", angle: 80, min_speed: 62, entry_speed: 190, name: "" }];
   const mod1 = (v) => ((v % 1) + 1) % 1;
   function render() {
-    $("#cnr").classList.toggle("compact", cfg.cstyle === "compact");
-    $("#cnr").classList.toggle("nodist", cfg.cstyle === "compact" && !cfg.dist);       // só a seta: ela fica no centro
-    const compact = cfg.cstyle === "compact";
+    const cst = pickStyle("corner", "cstyle", "full");
+    $("#cnr").classList.toggle("compact", cst === "compact");
+    $("#cnr").classList.toggle("line", cst === "line");
+    $("#cnr").classList.toggle("nodist", cst === "compact" && !cfg.dist);       // só a seta: ela fica no centro
+    const compact = cst === "compact" || cst === "line";
     const usePlan = plan.length ? plan : previewing ? prevPlan : [];
     const L = length || (previewing ? 5200 : 0);
     const sp = live() && data.me ? data.me.spline : previewing ? (performance.now() / 1000 / 40) % 1 : null;
@@ -452,7 +469,12 @@ function pedalsOverlay() {
         <path d="M24 6h16" stroke="#ff3b4e" stroke-width="6" stroke-linecap="round"/></g></svg>
         <div class="ang num" id="ang">0°</div></div>
       <div class="info" id="info"><div class="gear num" id="gear">N</div><div class="spd num" id="spd">0<small>KM/H</small></div>
-      <div class="legend" id="lg"></div></div></div>`;
+      <div class="legend" id="lg"></div></div>
+      <div class="alt hb"><div class="hrow r"><span>FREIO</span><div class="hbar"><i id="hbr"></i></div><b class="num" id="hbrv">0</b></div>
+        <div class="hrow g"><span>ACEL</span><div class="hbar"><i id="hat"></i></div><b class="num" id="hatv">0</b></div></div>
+      <div class="alt dash"><div class="dbars"><div class="vbar b"><i id="dbr"></i></div></div>
+        <div class="dmid"><div class="dgear num" id="dgear">N</div><div class="dspd num" id="dspd">0</div><small>KM/H</small></div>
+        <div class="dbars"><div class="vbar t"><i id="dat"></i></div></div></div></div>`;
   const cv = root.querySelector("#cv"), ctx = cv.getContext("2d");
   const wh = root.querySelector("#wh"), ang = root.querySelector("#ang");
   const vb = root.querySelector("#vb"), vt = root.querySelector("#vt"), gear = root.querySelector("#gear"), spd = root.querySelector("#spd"), lg = root.querySelector("#lg");
@@ -484,8 +506,18 @@ function pedalsOverlay() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (previewing) previewFeed();
-    const T = clamp(cfg.seconds, 3, 30);
+    const ps = pickStyle("pedals", "pstyle", "classic");
+    root.firstChild.className = "card pedals p-" + ps;
+    const Tm = clamp(cfg.seconds, 3, 30);
     const last = samples.length ? samples[samples.length - 1] : null;
+    if (ps === "horizontal" || ps === "driver") {         // modelos sem gráfico: só os valores de agora
+      const q = (id) => root.querySelector(id), g = last ? last[1] : 0, b = last ? last[2] : 0;
+      q("#hbr").style.width = b * 100 + "%"; q("#hat").style.width = g * 100 + "%";
+      q("#hbrv").textContent = Math.round(b * 100); q("#hatv").textContent = Math.round(g * 100);
+      q("#dbr").style.height = b * 100 + "%"; q("#dat").style.height = g * 100 + "%";
+      q("#dgear").textContent = last ? gearTxt(last[5]) : "N"; q("#dspd").textContent = last ? Math.round(last[4]) : 0;
+      return;
+    }
     // grade
     ctx.fillStyle = "rgba(255,255,255,.05)"; ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = "rgba(255,255,255,.09)"; ctx.lineWidth = 1;
@@ -493,9 +525,9 @@ function pedalsOverlay() {
     if (!last) { lg.innerHTML = ""; return; }
     const age = previewing ? 0 : Math.min(0.15, (performance.now() - recvAt) / 1000);
     const tNow = last[0] + age;
-    const X = (t) => W * (1 - (tNow - t) / T), Y = (v) => H - 4 - v * (H - 10);
+    const X = (t) => W * (1 - (tNow - t) / Tm), Y = (v) => H - 4 - v * (H - 10);
     let i0 = samples.length - 1;
-    while (i0 > 0 && samples[i0 - 1][0] >= tNow - T - 0.1) i0--;
+    while (i0 > 0 && samples[i0 - 1][0] >= tNow - Tm - 0.1) i0--;
     const vis = samples.slice(i0);
     // trechos sem pedal nenhum (nem acelerador nem freio): faixa âmbar embaixo
     let coastN = 0, coastT = 0;
@@ -598,7 +630,11 @@ function standingsOverlay() {
       for (const i of [...idx].sort((x, y) => x - y)) { if (prev >= 0 && i - prev > 1) out.push(null); out.push(list[i]); prev = i; }
       return out;
     };
-    const cols = cfg.cols.filter((c) => COLS[c] && (c !== "cls" || rows.some((r) => r.cls)) && (c !== "car" || rows.some((r) => r.brand)));
+    const ss = pickStyle("standings", "sstyle", "classic");
+    st.className = "card stand shadow s-" + ss;
+    let want = ss === "tower" ? ["pos", "number", "name", s.race ? "interval" : "best"] : cfg.cols;
+    if (ss === "compact") want = want.filter((c) => !["car", "trend", "laps", "cls", "gap_leader"].includes(c));
+    const cols = want.filter((c) => COLS[c] && (c !== "cls" || rows.some((r) => r.cls)) && (c !== "car" || rows.some((r) => r.brand)));
     const bestAll = Math.min(...rows.map((r) => r.best_ms || 1e12));
     const bestCls = {};                                    // com várias classes, o mais rápido de cada classe fica roxo
     for (const r of rows) { const k = r.cls || ""; if (r.best_ms && (!bestCls[k] || r.best_ms < bestCls[k])) bestCls[k] = r.best_ms; }
@@ -755,7 +791,11 @@ function tyresACC() {
 // escolhe o estilo (ACC ou cartões) e refaz a janela se ele mudar
 function tyresOverlay() {
   let style = null, impl = null;
-  const pick = () => { const s = cfg.tystyle === "cards" ? "cards" : "acc"; if (s !== style) { style = s; impl = s === "cards" ? tyresCards() : tyresACC(); lastSize = ""; } return impl; };
+  const pick = () => {
+    const s = ["cards", "minimal", "row"].includes(cfg.tystyle) ? pickStyle("tyres", "tystyle", "acc") : "acc";
+    if (s !== style) { style = s; impl = s === "cards" ? tyresCards() : s === "minimal" ? tyresMini(false) : s === "row" ? tyresMini(true) : tyresACC(); lastSize = ""; }
+    return impl;
+  };
   pick();
   return { onData() { pick().onData(); }, onCfg() { pick().onCfg(); } };
 }
@@ -767,6 +807,7 @@ function deltaOverlay() {
     <div class="row"><span class="num" id="fuel"></span><span class="num" id="fend"></span></div></div>`;
   const $ = (s) => root.querySelector(s);
   function render() {
+    root.firstChild.className = "card delta shadow d-" + pickStyle("delta", "dstyle", "classic");
     let d = live() ? data.delta : previewing ? { state: "recording", delta_ms: -234, predicted_ms: 98260, ref_ms: 98494, ref_kind: "pb", fuel_laps: 12.4, fuel_to_end: -1.8 } : null;
     const big = $("#big");
     if (!d || d.state !== "recording") { big.textContent = "—"; big.className = "big num"; $("#ref").textContent = "aguardando o jogo…"; $("#bar").style.width = "0"; $("#pred").textContent = $("#fuel").textContent = $("#fend").textContent = ""; return; }
@@ -782,6 +823,37 @@ function deltaOverlay() {
     const fe = d.fuel_to_end;
     $("#fend").textContent = cfg.fuel && fe != null ? (fe > 0 ? `falta ${String(fe).replace(".", ",")} L` : `sobra ${String(-fe).replace(".", ",")} L`) : "";
     $("#fend").style.color = fe > 0 ? "var(--bad)" : "var(--good)";
+  }
+  return { onData: render, onCfg: render };
+}
+
+// ------------------------------------------------------------------ PNEUS (modelos enxutos: quadrados 2x2 ou faixa horizontal)
+function tyresMini(row) {
+  root.innerHTML = `<div class="card tymini ${row ? "row" : ""} shadow">${[0, 1, 2, 3].map((i) => `<div class="tm" data-w="${i}"><b class="num tt">—</b><small class="num tp">—</small>${row ? `<div class="tb"><i></i></div><div class="tw"><i></i></div>` : ""}</div>`).join("")}</div>`;
+  const hsl = (h, l = 52) => `hsl(${Math.round(h)} 78% ${l}%)`;
+  const tcol = (t) => t <= 0 ? "#3a4352" : t < cfg.tmin ? hsl(205 - clamp((t - (cfg.tmin - 20)) / 20, 0, 1) * 65) : t <= cfg.tmax ? hsl(140) : hsl(140 - clamp((t - cfg.tmax) / 25, 0, 1) * 140);
+  const bcol = (b) => b <= 0 ? "#3a4352" : b < cfg.bmin ? hsl(205 - clamp((b - (cfg.bmin - 200)) / 200, 0, 1) * 65) : b <= cfg.bmax ? hsl(172, 60) : hsl(140 - clamp((b - cfg.bmax) / 200, 0, 1) * 140);
+  const wcol = (left) => hsl(clamp(left, 0, 1) * 125);
+  const preview = () => { const t = performance.now() / 1000;
+    return { temp: [88, 94, 82, 86].map((v, i) => v + 4 * Math.sin(t / 2 + i)), press: [26.8, 26.1, 26.8, 26.3], brake: [520, 540, 380, 360].map((v, i) => v + 120 * Math.sin(t + i)), wear: [0.12, 0.14, 0.1, 0.1] }; };
+  function render() {
+    const T = live() ? data.tyres : previewing ? preview() : null;
+    const box = root.firstChild;
+    box.style.opacity = T ? 1 : .35;
+    if (!T) return;
+    for (let i = 0; i < 4; i++) {
+      const el = box.children[i], t = T.temp[i], p = T.press[i], c = tcol(t), bar = cfg.punit === "bar", pv = bar ? p * 0.0689476 : p;
+      el.style.background = `linear-gradient(180deg, ${c}, color-mix(in srgb, ${c} 55%, #0b0d10))`;
+      const tt = el.querySelector(".tt"), tp = el.querySelector(".tp");
+      tt.style.display = cfg.temp ? "" : "none"; tt.textContent = t > 0 ? Math.round(t) + "°" : "—";
+      tp.style.display = cfg.press ? "" : "none"; tp.textContent = p > 0 ? pv.toFixed(bar ? 2 : 1) : "—";
+      if (row) {
+        const tb = el.querySelector(".tb"), tw = el.querySelector(".tw"), b = T.brake ? T.brake[i] : 0, w = T.wear ? T.wear[i] : null;
+        tb.style.display = cfg.brake ? "" : "none"; tb.firstChild.style.width = clamp((b - 100) / (cfg.bmax + 250 - 100), 0.04, 1) * 100 + "%"; tb.firstChild.style.background = bcol(b);
+        tw.style.display = cfg.wear && w != null ? "" : "none";
+        if (w != null) { tw.firstChild.style.width = clamp(1 - w, 0, 1) * 100 + "%"; tw.firstChild.style.background = wcol((1 - w) * 1.3 - 0.1); }
+      }
+    }
   }
   return { onData: render, onCfg: render };
 }
@@ -842,6 +914,7 @@ function tyresCards() {
 let current = null;
 const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay, corner: cornerOverlay };
 (async function init() {
+  await loadFeatures(); featAt = performance.now();
   try { applyCfg((await getJSON("/api/settings")).settings || {}); } catch (e) { /* ok */ }
   current = (KIND[NAME] || mapOverlay)();
   const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres", corner: "pos" }[NAME] || "all";

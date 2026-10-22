@@ -3059,7 +3059,13 @@ OV_COLS.splice(6, 0, ["trend", "Tendência (aproximando / afastando)"]);
 
 // peças da tela de opções
 const ovChip = (n, k, label, v, tip) => `<button type="button" class="ovchip ${v ? "on" : ""}" data-ov="${n}" data-k="${k}" data-chip="1" title="${esc(tip || "")}"><i></i>${label}</button>`;
-const ovSeg = (n, k, opts, val, num) => `<div class="ovseg">${opts.map(([v, t]) => `<button type="button" class="${String(val) === String(v) ? "on" : ""}" data-ov="${n}" data-k="${k}" data-val="${v}" ${num ? 'data-num="1"' : ""}>${t}</button>`).join("")}</div>`;
+const OV_FEATS = new Set();
+const OV_TIER = { overlay_styles: "Pro", overlay_styles_team: "Equipe" };
+const ovSeg = (n, k, opts, val, num) => `<div class="ovseg">${opts.map(([v, t, need]) => {
+  const lock = need && !OV_FEATS.has(need);
+  return `<button type="button" class="${String(val) === String(v) ? "on" : ""} ${lock ? "locked" : ""}" data-ov="${n}" data-k="${k}" data-val="${v}" ${num ? 'data-num="1"' : ""} ${need ? `data-need="${need}"` : ""}>${t}${need ? `<em class="tier ${need === "overlay_styles_team" ? "team" : ""}">${lock ? "🔒 " : ""}${OV_TIER[need]}</em>` : ""}</button>`;
+}).join("")}</div>`;
+const OV_P = "overlay_styles", OV_T = "overlay_styles_team";
 const ovSlider = (n, k, label, v, min, max, step, unit) => `<label class="ovslide"><span>${label}</span><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}"><output data-unit="${unit}">${v}${unit}</output></label>`;
 const ovGroup = (title, body, hint) => `<section class="ovg"><h3>${title}${hint ? `<small>${hint}</small>` : ""}</h3>${body}</section>`;
 
@@ -3070,8 +3076,8 @@ function ovPanel(n, S) {
     c.mode === "game" ? "abre ao entrar numa sessão e fecha ao sair" : "");
   g += ovGroup("Tamanho e fundo", ovSlider(n, "scale", "Tamanho", c.scale, 50, 250, 5, "%") + ovSlider(n, "bg", "Fundo", c.bg, 0, 90, 5, "%"), "fundo 0% = transparente");
   if (n === "map") {
-    g += ovGroup("Estilo da pista", ovSeg(n, "mapstyle", [["asphalt", "Asfalto"], ["thin", "Fino"], ["classic", "Clássico"]], c.mapstyle || "asphalt"),
-      "o Fino é uma linha só, discreta");
+    g += ovGroup("Estilo da pista", ovSeg(n, "mapstyle", [["asphalt", "Asfalto"], ["thin", "Fino"], ["classic", "Clássico"], ["neon", "Neon", OV_P]], c.mapstyle || "asphalt"),
+      "o Fino é uma linha só, discreta; o Neon brilha e some no escuro");
     g += ovGroup("Modo do mapa", ovSeg(n, "mapmode", [["full", "Pista inteira"], ["follow", "Seguir o carro"], ["follow_rot", "Seguir e girar"]], c.mapmode || "full") +
       ovSlider(n, "fzoom", "Aproximação (seguindo)", c.fzoom || 350, 150, 900, 10, "%"),
       "“Seguir e girar” mantém a frente do carro sempre para cima");
@@ -3088,8 +3094,8 @@ function ovPanel(n, S) {
         <div class="sub" style="margin:6px 0">O jogo não informa os nomes das curvas: escreva o que quiser (ex.: “Eau Rouge”). A numeração é a da Análise e pode diferir da oficial.</div>
         <select id="cnTrack"><option value="">Escolha a pista…</option></select><div id="cnList" style="margin-top:8px"></div></details>`;
   } else if (n === "corner") {
-    g += ovGroup("Estilo", ovSeg(n, "cstyle", [["full", "Completo"], ["compact", "Compacto · seta e distância"]], c.cstyle || "full"),
-      "o compacto mostra só a seta, a distância ao lado e (se ligar) a barra de frenagem");
+    g += ovGroup("Estilo", ovSeg(n, "cstyle", [["full", "Completo"], ["compact", "Compacto · seta e distância"], ["line", "Em linha", OV_P]], c.cstyle || "full"),
+      "o compacto mostra só a seta, a distância ao lado e (se ligar) a barra de frenagem; em linha cabe numa faixa fina");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "dist", "Distância até a curva", c.dist)}
       ${ovChip(n, "brakepoint", "Ponto de frenagem", c.brakepoint, "Contagem regressiva até o ponto onde você começa a frear no seu melhor tempo desta pista")}
       ${ovChip(n, "speed", "Velocidades (mínima e entrada)", c.speed)}${ovChip(n, "next", "Curva seguinte", c.next)}${ovChip(n, "name", "Nome da curva", c.name, "Os nomes são os que você escreveu no mapa")}</div>`);
@@ -3097,10 +3103,14 @@ function ovPanel(n, S) {
       "a barra enche conforme você chega ao ponto de frenagem");
     g += `<p class="sub" style="margin:8px 0 0">As curvas, o lado delas e o ponto de frenagem vêm do seu melhor tempo no carro e na pista (o ACC e o iRacing não informam isso). Grave uma volta limpa na pista para o overlay aprender. O ponto é onde você começou a frear nessa volta: não é um cálculo de frenagem ideal.</p>`;
   } else if (n === "pedals") {
+    g += ovGroup("Modelo", ovSeg(n, "pstyle", [["classic", "Clássico · gráfico"], ["minimal", "Minimalista", OV_P], ["horizontal", "Barras horizontais", OV_P], ["driver", "Painel do piloto", OV_T]], c.pstyle || "classic"),
+      "os modelos extras não têm gráfico: só os valores de agora");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "coast", "Sem pedal", c.coast, "Faixa âmbar quando você não pisa em nenhum dos dois, e a porcentagem do tempo")}
       ${ovChip(n, "bars", "Barras", c.bars)}${ovChip(n, "wheel", "Roda do volante", c.wheel, "Desenho do volante que gira junto com o seu")}${ovChip(n, "steer", "Volante no gráfico", c.steer)}${ovChip(n, "gear", "Marcha", c.gear)}${ovChip(n, "speed", "Velocidade", c.speed)}</div>`);
     g += ovGroup("Gráfico", ovSlider(n, "seconds", "Janela de tempo", c.seconds, 3, 20, 1, " s"));
   } else if (n === "standings") {
+    g += ovGroup("Modelo", ovSeg(n, "sstyle", [["classic", "Clássico"], ["compact", "Compacto", OV_P], ["tower", "Torre de transmissão", OV_T]], c.sstyle || "classic"),
+      "a torre mostra só posição, número, piloto e a diferença; ignora as colunas escolhidas abaixo");
     g += ovGroup("Quais pilotos", ovSeg(n, "view", [["around", "Em volta de mim"], ["top", "Os primeiros"]], c.view) + ovSlider(n, "rows", "Linhas", c.rows, 3, 30, 1, ""));
     g += ovGroup("Velocidade da tendência", ovSeg(n, "trend_secs", [[8, "Rápida · 8 s"], [25, "Normal · 25 s"], [60, "Lenta · 60 s"]], c.trend_secs, true) +
       ovSlider(n, "trend_secs", "Janela de cálculo", c.trend_secs, 5, 90, 1, " s"),
@@ -3126,7 +3136,7 @@ function ovPanel(n, S) {
       ${ovChip(n, "wear", "Desgaste", c.wear, "Quanto resta de cada pneu (o ACC não informa o desgaste; o iRacing sim)")}
       ${ovChip(n, "compound", "Composto", c.compound)}
       ${ovChip(n, "weather", "Clima (agora, 10 e 30 min)", c.weather, "Previsão de chuva e estado da pista, como no widget do ACC (a previsão só o ACC informa)")}</div>`);
-    g += ovGroup("Estilo", ovSeg(n, "tystyle", [["acc", "Como o ACC (vista de cima)"], ["cards", "Cartões"]], c.tystyle || "acc"));
+    g += ovGroup("Estilo", ovSeg(n, "tystyle", [["acc", "Como o ACC (vista de cima)"], ["cards", "Cartões"], ["minimal", "Minimalista · 4 quadrados", OV_P], ["row", "Faixa horizontal", OV_T]], c.tystyle || "acc"));
     g += ovGroup("Unidade da pressão", ovSeg(n, "punit", [["psi", "psi"], ["bar", "bar"]], c.punit));
     g += ovGroup("Faixa ideal", ovSlider(n, "tmin", "Temp. mínima", c.tmin, 40, 120, 1, " °C") + ovSlider(n, "tmax", "Temp. máxima", c.tmax, 50, 140, 1, " °C") +
       ovSlider(n, "pmin", "Pressão mínima", c.pmin, 20, 35, 0.1, " psi") + ovSlider(n, "pmax", "Pressão máxima", c.pmax, 20, 35, 0.1, " psi") +
@@ -3134,6 +3144,7 @@ function ovPanel(n, S) {
       "abaixo = azul, dentro = verde, acima = vermelho") .replace("</section>", `<div class="ovreset"><button type="button" class="btn sm" id="tyReset">Restaurar padrão</button>
         <span class="sub">Padrão do ACC (1.9 em diante, todas as classes): 70–100 °C e 26,0–27,0 psi com o pneu quente. No iRacing a faixa muda de carro para carro: ajuste à mão. A faixa do freio (350–800 °C) é uma estimativa minha, sem fonte oficial: ajuste ao seu carro.</span></div></section>`);
   } else if (n === "delta") {
+    g += ovGroup("Modelo", ovSeg(n, "dstyle", [["classic", "Clássico"], ["minimal", "Só o número", OV_P], ["bar", "Barra larga", OV_T]], c.dstyle || "classic"));
     g += ovGroup("Comparar contra", ovSeg("", "ref", [["pb", "Seu recorde"], ["ideal", "Volta ideal"]], S.overlay_reference));
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "predicted", "Tempo previsto", c.predicted)}${ovChip(n, "fuel", "Combustível", c.fuel, "Voltas restantes e quanto falta/sobra até o fim")}</div>`);
   }
@@ -3148,6 +3159,7 @@ async function renderOverlays() {
   let S;
   try { S = (await api("/api/settings")).settings; } catch (e) { view.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`; return; }
   if (current.name !== "overlays") return;
+  try { const l = await api("/api/license"); OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); } catch (e) { /* sem licença: só os modelos clássicos */ }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const sw = screen.width || 1920, sh = screen.height || 1080;
   const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36], tyres: [24, sh - 330], corner: [Math.round(sw / 2 - 165), 120] };
@@ -3285,6 +3297,10 @@ function bindOverlayPanel(box, n, put, putModes) {
       el.onclick = () => { el.classList.toggle("on"); send(name, key, el.classList.contains("on")); };
     } else if (el.dataset.val !== undefined) {
       el.onclick = async () => {
+        if (el.dataset.need && !OV_FEATS.has(el.dataset.need)) {
+          toast(`Este modelo é do plano ${OV_TIER[el.dataset.need]}. Veja o menu Plano (teste grátis de 10 dias).`);
+          return;
+        }
         const v = el.dataset.num ? +el.dataset.val : el.dataset.val;
         if (key === "carstyle") {                      // escolher o estilo do carro liga a coluna Carro, se estiver desligada
           const chip = box.querySelector('[data-col="car"]');

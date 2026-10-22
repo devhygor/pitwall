@@ -394,6 +394,44 @@ class Engineer:
         self.speaker.start()
         return lines
 
+    # ---- armazenamento (vozes, modelos e cache de áudio baixados/gerados) ----------------------------------
+    def storage(self) -> dict:
+        now = time.time()
+        if getattr(self, "_st_cache", None) and now - self._st_cache[0] < 3:
+            return self._st_cache[1]
+
+        def dsize(path):
+            try:
+                return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
+            except OSError:
+                return 0
+        cache = self.tts.cache_dir
+        try:
+            nfiles = sum(1 for p in cache.glob("*.wav"))
+        except OSError:
+            nfiles = 0
+        piper = [{"id": i, "name": n, "installed": self.tts.piper.installed(i), "size_mb": self.tts.piper.size_mb(i)} for i, n, _ in PIPER_VOICES]
+        whisper = [{"id": i, "name": n, "installed": self.stt.installed(i), "size_mb": self.stt.size_mb(i)} for i, n in STT_MODELS]
+        out = {"path": str(self.root), "cache_mb": round(dsize(cache) / 1e6, 1), "cache_files": nfiles, "piper": piper, "whisper": whisper}
+        out["total_mb"] = round(out["cache_mb"] + sum(x["size_mb"] for x in piper) + sum(x["size_mb"] for x in whisper), 1)
+        self._st_cache = (now, out)
+        return out
+
+    def clear_storage(self, what: str):
+        import shutil
+        if what in ("cache", "all"):
+            shutil.rmtree(self.tts.cache_dir, ignore_errors=True)
+            self._applied = None                 # refaz as frases urgentes na próxima vez
+        if what in ("piper", "all"):
+            for i, _n, _ in PIPER_VOICES:
+                self.tts.piper.remove(i)
+        if what in ("whisper", "all"):
+            for i, _n in STT_MODELS:
+                self.stt.remove(i)
+            self.listener.stop()
+        self._st_cache = None
+        self.apply()
+
     def stop_audio(self):
         """Para na hora o que estiver falando/tocando (teste, amostra ou fala) e limpa a fila."""
         self._sample_gen += 1
@@ -437,7 +475,7 @@ class Engineer:
                         "capture": self.keys.capture_state},
             "spotter": {"source": sp.source, "left": sp.left, "right": sp.right, "calibrated": sp.tf is not None},
             "game": {"live": bool(f and f.status == "live"), "track": f.track if f else "", "cars": len(self.state.rows)},
-            "plan": self.license.plan if self.license is not None else "pro", "mood": {"label": self.mood.label(), "score": round(self.mood.score, 2)}, "test": self.test, "log": list(self._log)[-40:], "errors": list(self.errors),
+            "storage": self.storage(), "plan": self.license.plan if self.license is not None else "pro", "mood": {"label": self.mood.label(), "score": round(self.mood.score, 2)}, "test": self.test, "log": list(self._log)[-40:], "errors": list(self.errors),
             "audio": {"available": audio.available()},
         }
 

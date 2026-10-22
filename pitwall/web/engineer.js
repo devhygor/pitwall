@@ -2,6 +2,7 @@
 // Usa os helpers do app.js ($, api, esc, view, setRow, current, lfmTimer).
 
 const ENG_ENGINES = { piper: "Piper (offline)", windows: "Windows (offline)", edge: "Microsoft Edge (online)" };
+const ENG_TABS = [["voz", "Voz"], ["audio", "Microfone e fone"], ["falar", "Falar com ele"], ["avisos", "Avisos"], ["pers", "Personalidade"], ["testar", "Testar"], ["downloads", "Downloads"]];
 const ENG_STATE = { off: "desligado", idle: "pronto", listening: "ouvindo…", thinking: "entendendo…" };
 
 async function renderVoiceEngineer() {
@@ -29,14 +30,15 @@ async function renderVoiceEngineer() {
 
   view.innerHTML = `
     <div class="head"><div><h1>Engenheiro</h1><div class="sub">Um engenheiro de rádio que fala português: responde às suas perguntas e avisa sozinho durante a pilotagem.</div></div></div>
-    <div class="set-sec on">
-      <div class="set-card">
+    <div class="set-card eng-top">
         ${setRow("Engenheiro ligado", "Quando ligado, ele escuta (conforme o modo abaixo) e fala durante a sessão. Funciona no ACC e no iRacing.", tgl("eEnable", S.eng_enabled))}
         <div class="eng-chips" id="eChips"></div>
         <div class="eng-warn" id="eWarn"></div>
-      </div>
+    </div>
+    <div class="set-tabs" id="eTabs" role="tablist">${ENG_TABS.map(([k, t]) => `<button class="set-tab" data-tab="${k}" role="tab"><span>${t}</span></button>`).join("")}</div>
 
-      <div class="set-card"><h2>Voz</h2>
+    <section class="set-sec" data-sec="voz">
+      <div class="set-card"><h2>Qual voz</h2>
         ${setRow("Tipo de voz", "Offline funciona sem internet e é grátis. Online (Microsoft Edge) tem voz mais natural, também é grátis e não pede chave nem cadastro, mas precisa de internet e envia o texto falado para a Microsoft. Se a internet cair, ele volta sozinho para a voz offline.",
           sel("eMode", [["offline", "100% offline"], ["online", "Online (voz neural da Microsoft)"]], S.eng_voice_mode))}
         <div id="eOfflineBox">
@@ -49,6 +51,8 @@ async function renderVoiceEngineer() {
           sel("eWin", [["", "Automática (português do Brasil)"], ...winAll.map((v) => [v.name, `${v.name} (${v.culture})`])], S.eng_win_voice))}</div>
         </div>
         <div id="eOnlineBox">${setRow("Voz online", "Neural, da Microsoft (a mesma da leitura em voz alta do Edge).", sel("eEdge", dev.edge_voices.map((v) => [v.id, v.name]), S.eng_edge_voice))}</div>
+      </div>
+      <div class="set-card"><h2>Velocidade, volume e rádio</h2>
         ${setRow("Velocidade da fala", "", `<div class="eng-inline"><input type="range" id="eRate" min="70" max="150" step="5" value="${S.eng_rate}"><span id="eRateV" class="sub">${S.eng_rate}%</span></div>`)}
         ${setRow("Volume do engenheiro", "Só do engenheiro. Não mexe no volume do jogo nem do Windows.", `<div class="eng-inline"><input type="range" id="eVol" min="0" max="100" step="5" value="${S.eng_volume}"><span id="eVolV" class="sub">${S.eng_volume}%</span></div>`)}
         ${setRow("Efeito de rádio", "Voz de rádio de equipe, com bipe ao abrir e fechar o canal.", tgl("eRadio", S.eng_radio))}
@@ -57,6 +61,8 @@ async function renderVoiceEngineer() {
         ${setRow("Testar a voz", "Fala uma frase com a configuração atual. Dá para mexer no volume enquanto toca.", `<div class="eng-inline"><button class="btn" id="eTest">Testar</button><button class="btn sm" id="eStop">Parar</button></div>`)}
       </div>
 
+    </section>
+    <section class="set-sec" data-sec="audio">
       <div class="set-card"><h2>Microfone e fone</h2>
         ${dev.inputs.length || dev.outputs.length ? "" : `<div class="note warn">Não achei dispositivos de áudio (pacote sounddevice ausente?). Ele vai usar o padrão do Windows.</div>`}
         ${setRow("Microfone", "Onde ele ouve você.", sel("eMic", [["", "Padrão do Windows"], ...dev.inputs.map((d) => [d.name, d.name])], S.eng_mic))}
@@ -64,6 +70,8 @@ async function renderVoiceEngineer() {
         ${setRow("Fone / alto-falante do engenheiro", "Onde ele fala com você. Pode ser outro aparelho que o do jogo.", sel("eOut", [["", "Padrão do Windows"], ...dev.outputs.map((d) => [d.name, d.name])], S.eng_out))}
       </div>
 
+    </section>
+    <section class="set-sec" data-sec="falar">
       <div class="set-card"><h2>Falar com o engenheiro</h2>
         ${setRow("Ouvir minha voz", "Desligue se quiser só receber os avisos dele.", tgl("eListen", S.eng_listen !== false))}
         ${setRow("Como falar", "Segurar: aperte e segure a tecla enquanto fala. Apertar e falar: aperte uma vez, fale e ele para quando você se calar. Microfone aberto: ele escuta o tempo todo (use fone, ou o som do jogo atrapalha).",
@@ -77,6 +85,8 @@ async function renderVoiceEngineer() {
         <div class="dl" id="eSttBox"></div>
       </div>
 
+    </section>
+    <section class="set-sec" data-sec="pers">
       <div class="set-card"><h2>Personalidade</h2>
         ${setRow("Jeito do engenheiro", "Profissional só dá os avisos. Bem-humorado brinca com os erros e comemora os acertos. Bravo dá bronca e elogia de má vontade. Variável muda de humor conforme o seu desempenho: sobe com recordes e ultrapassagens, cai com rodadas, voltas invalidadas e posições perdidas. Sem palavrão.",
           sel("ePers", [["profissional", "Profissional (só o essencial)"], ["humor", "Parceiro bem-humorado"], ["bravo", "Bravo (dá bronca)"], ["variavel", "Variável (muda com o seu desempenho)"]], S.eng_personality))}
@@ -84,6 +94,8 @@ async function renderVoiceEngineer() {
         ${setRow("Ouvir exemplo", "Fala três comentários no jeito escolhido (não precisa salvar nem estar no jogo).", `<div class="eng-inline"><button class="btn" id="ePersDemo">Ouvir exemplo</button><span class="sub" id="eMood"></span></div>`)}
       </div>
 
+    </section>
+    <section class="set-sec" data-sec="avisos">
       <div class="set-card"><h2>Avisos automáticos</h2>
         ${setRow("Quanto ele fala", "Controla a frequência dos avisos.", sel("eVerb", [["pouco", "Pouco (só o importante)"], ["normal", "Normal"], ["muito", "Muito"]], S.eng_verbosity))}
         <div class="eng-cats" id="eCats">${cat.categories.map((c) => `<label class="eng-cat"><input class="tgl" type="checkbox" data-cat="${c.id}" ${ev[c.id] === false ? "" : "checked"}><span>${esc(c.name)}</span></label>`).join("")}</div>
@@ -91,6 +103,8 @@ async function renderVoiceEngineer() {
         <div class="kv"><span>Observador agora</span><span id="eSpot" class="sub">—</span></div>
       </div>
 
+    </section>
+    <section class="set-sec" data-sec="testar">
       <div class="set-card"><h2>Conversar (teste)</h2>
         <div class="sub" style="margin-bottom:8px">Digite uma pergunta ou clique em “Falar” e pergunte pelo microfone (ele para sozinho quando você se calar). Funciona com os dados do jogo, ou do simulador (modo demo).</div>
         <div class="eng-ask"><input id="eAsk" type="text" placeholder="Ex.: quem está atrás de mim?" style="flex:1"><button class="btn primary" id="eAskBtn">Perguntar</button><button class="btn" id="eMicBtn" title="Fale uma pergunta no microfone escolhido">🎤 Falar</button></div>
@@ -102,7 +116,18 @@ async function renderVoiceEngineer() {
         <div class="sub" style="margin-bottom:10px">Clique numa pergunta para testar. Ele entende variações, gírias e números por extenso (“carro vinte e três”).</div>
         ${cat.examples.map((g) => `<div class="eng-exg"><b>${esc(g.group)}</b><div>${g.items.map((q) => `<button class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div></div>`).join("")}
       </div>
-    </div>`;
+    </section>
+    <section class="set-sec" data-sec="downloads"><div id="eStore"><div class="sub">Carregando…</div></div></section>`;
+
+  // ---- abas
+  const showEngTab = (k) => {
+    if (!ENG_TABS.some((t) => t[0] === k)) k = "voz";
+    view.querySelectorAll("#eTabs .set-tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === k));
+    view.querySelectorAll(".set-sec").forEach((x) => x.classList.toggle("on", x.dataset.sec === k));
+    try { localStorage.setItem("pitwall.engtab", k); } catch (e) { /* ok */ }
+  };
+  view.querySelectorAll("#eTabs .set-tab").forEach((b) => b.onclick = () => showEngTab(b.dataset.tab));
+  showEngTab((() => { try { return localStorage.getItem("pitwall.engtab"); } catch (e) { return null; } })());
 
   // ---- ligações ------------------------------------------------------------------------------
   const bindSel = (id, key, conv = (x) => x) => $(id).addEventListener("change", async (e) => { await put({ [key]: conv(e.target.value) }); sync(); });
@@ -200,6 +225,50 @@ async function renderVoiceEngineer() {
   const chip = (txt, cls) => `<span class="eng-chip ${cls || ""}">${esc(txt)}</span>`;
   let lastLog = "";
   let wasDl = false;
+  // aba Downloads: tudo o que foi baixado/gerado, com tamanho, estado e como limpar
+  function paintStore(sg, pp, sp) {
+    const box = $("#eStore");
+    if (!box || !sg) return;
+    const mb = (n) => (n >= 100 ? Math.round(n) : n.toFixed(1).replace(".", ",")) + " MB";
+    const row = (kind, it) => {
+      const busy = (kind === "piper" ? pp : sp).state === "baixando" && (kind === "piper" ? pp : sp).name === it.id;
+      const pr = kind === "piper" ? pp : sp;
+      const anyBusy = pp.state === "baixando" || sp.state === "baixando";
+      return `<div class="st-row"><div class="st-name"><b>${esc(it.name)}</b>
+        <small>${busy ? `⬇ Baixando… ${pr.pct || 0}%` : it.installed ? `<span class="ok">✓ Baixada · ${mb(it.size_mb)}</span>` : "Não baixada"}</small>
+        ${busy ? `<div class="dl-bar"><i style="width:${Math.max(2, pr.pct || 0)}%"></i></div>` : ""}</div>
+        <div class="st-acts">${it.installed ? `<button class="btn sm quiet" data-rm="${kind}:${it.id}" ${anyBusy ? "disabled" : ""}>Remover</button>`
+          : `<button class="btn sm primary" data-dl="${kind}:${it.id}" ${anyBusy ? "disabled" : ""}>Baixar</button>`}</div></div>`;
+    };
+    const html = `
+      <div class="set-card"><h2>Espaço usado</h2>
+        ${setRow("Total do engenheiro", `Vozes, modelo de reconhecimento e frases em cache. Fica na pasta <code>${esc(sg.path)}</code>.`,
+          `<div class="eng-inline"><b class="st-total">${mb(sg.total_mb)}</b><button class="btn sm" id="stOpen">Abrir pasta</button></div>`)}
+        ${setRow("Limpar tudo", "Remove vozes, modelo de reconhecimento e cache. Dá para baixar de novo quando quiser.", `<button class="btn danger" id="stAll">Remover tudo</button>`)}
+      </div>
+      <div class="set-card"><h2>Vozes offline (Piper)</h2>${sg.piper.map((i) => row("piper", i)).join("")}
+        <div class="st-foot"><button class="btn sm quiet" id="stPiperAll" ${sg.piper.some((i) => i.installed) ? "" : "disabled"}>Remover todas as vozes</button></div></div>
+      <div class="set-card"><h2>Reconhecimento de voz (Whisper)</h2>${sg.whisper.map((i) => row("stt", i)).join("")}
+        <div class="st-foot"><button class="btn sm quiet" id="stSttAll" ${sg.whisper.some((i) => i.installed) ? "" : "disabled"}>Remover todos os modelos</button></div></div>
+      <div class="set-card"><h2>Frases em cache</h2>
+        ${setRow("Áudio já gerado", `${sg.cache_files} frases guardadas (${mb(sg.cache_mb)}). Elas deixam o engenheiro rápido; se apagar, ele gera de novo conforme fala. É seguro limpar.`,
+          `<button class="btn" id="stCache" ${sg.cache_files ? "" : "disabled"}>Limpar cache</button>`)}
+      </div>`;
+    if (box.dataset.h === html) return;
+    box.dataset.h = html; box.innerHTML = html;
+    const done = () => setTimeout(() => poll(), 150);
+    box.querySelectorAll("[data-dl]").forEach((b) => b.onclick = async () => { const [k, id] = b.dataset.dl.split(":");
+      await post(k === "piper" ? "/api/engineer/piper/download" : "/api/engineer/stt/download", { name: id }); done(); });
+    box.querySelectorAll("[data-rm]").forEach((b) => b.onclick = async () => { const [k, id] = b.dataset.rm.split(":");
+      if (!confirm("Remover do computador? Dá para baixar de novo quando quiser.")) return;
+      await post(k === "piper" ? "/api/engineer/piper/remove" : "/api/engineer/stt/remove", { name: id }); done(); });
+    const clear = (what, msg) => async () => { if (confirm(msg)) { await post("/api/engineer/storage/clear", { what }); done(); } };
+    $("#stAll").onclick = clear("all", "Remover vozes, modelo de reconhecimento e cache? O engenheiro volta a precisar baixar a voz e o modelo.");
+    $("#stPiperAll").onclick = clear("piper", "Remover todas as vozes baixadas?");
+    $("#stSttAll").onclick = clear("whisper", "Remover todos os modelos de reconhecimento? O engenheiro para de te ouvir até baixar de novo.");
+    $("#stCache").onclick = clear("cache", "Limpar as frases em cache?");
+    $("#stOpen").onclick = () => post("/api/engineer/storage/open").catch((e) => alert(e.message));
+  }
   const prevDl = {}, flashDl = {};
   const NOMINAL = { tiny: 75, base: 145, small: 484 };
   // estado claro de cada download: baixado (com tamanho), não baixado, baixando (barra) ou erro; rótulos do botão acompanham
@@ -286,6 +355,7 @@ async function renderVoiceEngineer() {
     // downloads
     const pp = st.tts.piper.progress;
     const sp = st.stt.progress;
+    paintStore(st.storage, pp, sp);
     paintDl({ box: "#ePiperBox", dl: "#ePiperDl", rm: "#ePiperRm", sel: "#ePiper", kind: "piper", items: st.tts.piper.voices, prog: pp, nominal: 63, what: "voz", baseNames: dev.piper_voices });
     paintDl({ box: "#eSttBox", dl: "#eSttDl", rm: "#eSttRm", sel: "#eStt", kind: "stt", items: st.stt.models, prog: sp, nominal: 0, what: "modelo", baseNames: dev.stt_models });
     const sps = st.spotter;

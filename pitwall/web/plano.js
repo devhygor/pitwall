@@ -8,6 +8,9 @@ const PLAN_FEATURES = [
   ["Voz online (mais natural) e personalidade (humor, bronca, elogio)", "pro"],
   ["Observador: carros ao lado, três de lado, livre", "pro"],
   ["Vídeos das voltas sem limite (grátis guarda as últimas 5 sessões)", "pro"],
+  ["Modelos extras de overlay: pedais minimalista e horizontal, delta só número, participantes compacto, pneus minimalista, curva em linha, mapa neon", "pro"],
+  ["Modelos de transmissão: pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa", "team"],
+  ["Pro incluído para até 10 pilotos da sua equipe e painel do dono", "team"],
   ["Sem anúncios no site", "pro"],
 ];
 const SRC_NAMES = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", free: "", dev: "Desenvolvimento" };
@@ -59,8 +62,8 @@ async function renderPlano() {
       <div class="set-card"><h2>O que cada plano libera</h2>
         <div class="plan-table">
           ${PLAN_FEATURES.map(([t, need]) => {
-            const ok = need === "free" || paid;
-            return `<div class="plan-row ${ok ? "on" : ""}"><i>${ok ? "✓" : "🔒"}</i><span>${esc(t)}</span>${need === "pro" ? `<em>Pro</em>` : ""}</div>`;
+            const ok = need === "free" || (need === "pro" ? paid : s.plan === "team");
+            return `<div class="plan-row ${ok ? "on" : ""}"><i>${ok ? "✓" : "🔒"}</i><span>${esc(t)}</span>${need === "pro" ? `<em>Pro</em>` : need === "team" ? `<em>Equipe</em>` : ""}</div>`;
           }).join("")}
         </div>
       </div>
