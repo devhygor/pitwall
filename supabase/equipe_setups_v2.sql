@@ -5,3 +5,7 @@
 -- * laps: revoga o SELECT geral e libera as colunas menos setup_json (antes qualquer pessoa logada lia os setups de todos).
 --   Consequências no app: select "*" em laps não funciona mais (usar a lista de colunas) e o setup vai num PATCH depois do upsert.
 -- * plans: recurso team_setups em pro e team.
+
+-- v3 (migração "equipe_setups_v3_tabela_separada", já aplicada): os setups das voltas vivem na tabela fechada lap_setups (RLS sem políticas; só as funções acima leem).
+-- Um gatilho em laps move qualquer setup_json recebido para lá e deixa a coluna sempre NULL; por isso versões antigas do app continuam enviando/lendo laps sem erro
+-- (o "select *" volta a funcionar). O SELECT geral de laps foi restaurado. Quem está em versão antiga só não consegue baixar setups (a coluna vem vazia) até atualizar.

@@ -47,8 +47,8 @@ Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/_
 `supabase/equipe_setups.sql` e `supabase/equipe_setups_v2.sql`. **Só para quem está na mesma equipe E tem o plano Pro ou Equipe ativo** (assinatura, cortesia, chave de equipe ou teste). O plano Grátis não envia nem baixa setups.
 Reúne, por equipe, (1) o setup usado no melhor tempo de cada piloto (vai junto com o recorde quando "Enviar o setup usado junto" está ligado) e (2) setups que alguém compartilha de propósito
 (app: Setups > detalhe > *Compartilhar com a equipe*, com nota). Ver e baixar: app (Setups > *Setups da equipe*, instala no ACC com um clique; e o botão "⚙ setup" nas voltas) e site (página da equipe).
-A checagem é no banco: a coluna `laps.setup_json` não pode mais ser lida direto (antes qualquer pessoa logada lia); o acesso é por `lap_setup_get`, `team_setup_library`, `team_setup_get` e `share_team_setup`, que exigem ser da equipe e ter Pro/Equipe (`_has_pro`).
-Por isso o app envia o setup num segundo passo (PATCH) depois de enviar a volta.
+A checagem é no banco: os setups das voltas ficam na tabela fechada `lap_setups` (antes qualquer pessoa logada lia a coluna `laps.setup_json`); o acesso é por `lap_setup_get`, `team_setup_library`, `team_setup_get` e `share_team_setup`, que exigem ser da equipe e ter Pro/Equipe (`_has_pro`).
+Um gatilho move o `setup_json` recebido para `lap_setups`, então versões antigas do app continuam enviando normalmente (só não baixam setups até atualizar).
 O app descobre o setup do recorde assim: o escolhido na sessão, senão o sugerido pela temperatura, senão o único/mais recente do carro e pista (`setups.detect_used`; o ACC não informa qual setup está carregado, por isso é uma estimativa).
 
 ### Plano Equipe: chaves para dividir
