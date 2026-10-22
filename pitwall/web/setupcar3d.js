@@ -818,8 +818,12 @@ export async function createStage(host, opts) {
   function resize() { const w = host.clientWidth || 600, h = host.clientHeight || 400; renderer.setSize(w, h, false); renderer.domElement.style.width = w + "px"; renderer.domElement.style.height = h + "px"; camera.aspect = w / h; camera.updateProjectionMatrix(); }
   const ro = new ResizeObserver(resize); ro.observe(host); resize();
   let raf = 0, alive = true;
+  // qualidade automática: em PCs fracos (menos de ~22 quadros por segundo) desliga o piso espelhado e as sombras
+  let fN = 0, fSum = 0, fLast = performance.now(), degraded = false;
   function frame() {
     if (!alive) return; raf = requestAnimationFrame(frame);
+    const now = performance.now(), dt = now - fLast; fLast = now;
+    if (!degraded && dt < 500) { fN++; fSum += dt; if (fN === 90) { if (fSum / fN > 45) { degraded = true; mirror.visible = false; floor.material.opacity = 1; renderer.shadowMap.enabled = false; renderer.setPixelRatio(1); resize(); scene.traverse((o) => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); } }); console.info("editor 3D: qualidade reduzida (" + Math.round(fSum / fN) + " ms por quadro)"); } fN = 91; } }
     if (tween) { tween.t = Math.min(1, tween.t + 0.045); const e = 1 - Math.pow(1 - tween.t, 3); camera.position.lerpVectors(tween.p0, tween.p1, e); controls.target.lerpVectors(tween.t0, tween.t1, e); if (tween.t >= 1) tween = null; }
     controls.update(); renderer.render(scene, camera); project();
   }
