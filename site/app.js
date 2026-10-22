@@ -716,7 +716,7 @@ function rowsHtml(g, me, showCar) {
     <span class="time">${fmtLap(r.lap_time_ms)}</span>
     <span class="gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
     <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span>
-    <span class="racts">${r.clip_path ? `<span class="pill" title="Tem vídeo da volta">▶</span>` : ""}${r.setup_name ? `<button class="pill" data-setup="${r.id}" title="Baixar o setup: ${esc(r.setup_name)}">⚙</button>` : ""}
+    <span class="racts">${r.clip_path ? `<span class="pill" title="Tem vídeo da volta">▶</span>` : ""}${r.setup_name ? ((typeof myPlan !== "undefined" && (myPlan.features || []).includes("team_setups")) ? `<button class="pill" data-setup="${r.id}" title="Baixar o setup: ${esc(r.setup_name)}">⚙</button>` : `<span class="pill" title="Os setups da comunidade são do plano Pro ou Equipe">🔒</span>`) : ""}
       <button class="btn small" data-cmp="${r.id}" data-combo="${esc(r.track + "|" + r.car + "|" + r.game)}" data-me="${r.user_id === me ? 1 : ""}" title="Abrir a análise completa: curvas, dicas, gráficos, mapa e vídeo">📈 ${r.user_id === me ? "Analisar" : "Comparar"}</button></span></div>`; }).join("");
 }
 function bindRows(root) {

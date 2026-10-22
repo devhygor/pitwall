@@ -1766,7 +1766,7 @@ async function showSetup(id) {
     ${st ? (st.estimated ? `<div class="sd-note">Tempos estimados: você não marcou este setup nas sessões, então usei o que o Pitwall detectou.</div>` : "")
       : `<div class="sd-note">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para juntar seus tempos aqui.</div>`}
     <div class="sd-actions">
-      <button class="btn primary" id="sEditor" title="Desenho do carro com os ajustes em cada parte">🏎 Editor visual</button>
+      <button class="btn primary ${genLock ? "locked" : ""}" id="sEditor" title="Desenho do carro com os ajustes em cada parte">${genLock ? "🔒 " : ""}🏎 Editor visual<em class="tier">Pro</em></button>
       <button class="btn ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup<em class="tier">Pro</em></button>
       ${s.parent_id ? `<button class="btn" id="sVsParent" title="Ver se os ajustes funcionaram">Comparar com o original</button>` : ""}
       ${others.length ? `<div id="sCmpWith"></div>` : ""}
@@ -1783,7 +1783,9 @@ async function showSetup(id) {
     <div id="sShare" style="margin-top:14px"></div>
     <div id="sDel" style="margin-top:14px"><button class="btn sm quiet danger" id="sDelBtn">Apagar este setup</button></div>`;
   shareBox(id);
-  $("#sEditor").onclick = () => SetupCar.open(s, { genLock, onSaved: (r) => { if (r && r.id) setupsState.open = r.id; renderSetups(); } });
+  $("#sEditor").onclick = () => genLock
+    ? ($("#eOut").innerHTML = `<div class="note warn" style="margin-top:8px">O <b>editor visual</b> (ajustar o setup clicando nas partes do carro, com recomendações) é do plano <b>Pro</b> ou <b>Equipe</b>. No Grátis você usa os seus próprios setups da pasta do ACC. <a href="#/plano">Ver planos</a></div>`)
+    : SetupCar.open(s, { genLock, onSaved: (r) => { if (r && r.id) setupsState.open = r.id; renderSetups(); } });
   const startCmp = (x, y) => { setupsState.cmp = [x, y]; setupsState.sel = [x, y]; renderSetups(); };
   const vp = $("#sVsParent"); if (vp) vp.onclick = () => startCmp(s.parent_id, id);
   const cw = $("#sCmpWith");
@@ -2999,7 +3001,7 @@ function towerRows(rows, recs, mode) {
       <b class="num t">${fmtLap(r.lap_time_ms)}</b>
       <span class="num gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
       <span class="secs3 num">${[r.s1_ms, r.s2_ms, r.s3_ms].map(fmtSec).join(" · ")}</span>
-      <span class="tags">${r.setup_name ? `<button class="tag2" data-setup="${r.id}" title="${esc(r.setup_name)}">⚙ setup</button>` : ""}${r.clip_url ? `<span class="tag2" title="Tem vídeo da volta">▶ vídeo</span>` : ""}</span>
+      <span class="tags">${r.setup_name && OV_FEATS.has("team_setups") ? `<button class="tag2" data-setup="${r.id}" title="${esc(r.setup_name)}">⚙ setup</button>` : r.setup_name ? `<span class="tag2" title="Os setups da comunidade são do plano Pro ou Equipe">🔒 setup</span>` : ""}${r.clip_url ? `<span class="tag2" title="Tem vídeo da volta">▶ vídeo</span>` : ""}</span>
       <span class="acts">${r.me ? "" : `<button class="btn xs" data-imp="${r.id}" data-mode="compare" data-a="${mine ? mine.lap_id : ""}">Analisar</button>
         <button class="btn xs" data-imp="${r.id}" data-mode="replay" data-a="${mine ? mine.lap_id : ""}">Replay</button>`}</span>
     </div>`; }).join("");
@@ -3930,6 +3932,9 @@ async function backupList() {
   });
 }
 
+const loadFeats = () => api("/api/license").then((l) => { OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); }).catch(() => { /* sem licença: tratado como grátis */ });
+loadFeats().finally(() => { if (current && ["community", "team"].includes(current.name)) route(); });
+setInterval(loadFeats, 300000);
 route();
 if (!location.hash.startsWith("#/overlay")) { pollLive(); maybeTour(); }
 

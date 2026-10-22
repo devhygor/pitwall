@@ -129,6 +129,7 @@
   }
 
   async function open(info, ctx) {
+    if (ctx.genLock) return;                               // editor visual: só Pro/Equipe (a tela já mostra o aviso)
     document.getElementById("scOverlay")?.remove();
     const brandKey = brandOf(info.car), prof = { ...BRANDS[brandKey], key: brandKey }, g = geometry(prof), pos = spotPos(prof, g);
     const items = info.editable || [], byPath = Object.fromEntries(items.map((x) => [x.path, x]));
