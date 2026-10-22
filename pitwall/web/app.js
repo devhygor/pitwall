@@ -3046,8 +3046,8 @@ async function openOverlay() {
 }
 
 // ---------------------------------------------------------------- Overlays (ferramenta completa: palco + um overlay por vez)
-const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["tyres", "Pneus"], ["corner", "Curva"], ["radar", "Radar"], ["delta", "Delta"]];
-const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", tyres: "Pneus", corner: "Próxima curva", radar: "Radar", delta: "Delta da volta" };
+const OV_NAMES = [["map", "Mapa"], ["pedals", "Pedais"], ["standings", "Participantes"], ["tyres", "Pneus"], ["corner", "Curva"], ["radar", "Radar"], ["blindl", "Ponto cego esq."], ["blindr", "Ponto cego dir."], ["delta", "Delta"]];
+const OV_TITLE = { map: "Mapa da pista", pedals: "Pedais", standings: "Participantes", tyres: "Pneus", corner: "Próxima curva", radar: "Radar", blindl: "Ponto cego esquerdo", blindr: "Ponto cego direito", delta: "Delta da volta" };
 const OV_ICON = {
   map: '<path d="M4 15c3-9 6 3 9-5s5 2 7-2"/><circle cx="19" cy="6" r="1.6"/>',
   pedals: '<path d="M3 20V9M9 20V5M15 20v-8M21 20V8"/>',
@@ -3056,6 +3056,8 @@ const OV_ICON = {
   tyres: '<rect x="7" y="3" width="10" height="18" rx="4"/><path d="M7 9h10M7 15h10"/>',
   corner: '<path d="M7 20V11a5 5 0 0 1 5-5h6"/><path d="M15 2l4 4-4 4"/>',
   radar: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l6-6"/>',
+  blindl: '<circle cx="9" cy="12" r="4"/><path d="M3 6v12"/>',
+  blindr: '<circle cx="15" cy="12" r="4"/><path d="M21 6v12"/>',
 };
 const OV_MODE_TXT = { off: "Desligado", game: "Só na pista", always: "Sempre aberto" };
 const OV_COLS = [["pos", "Posição"], ["number", "Nº do carro"], ["name", "Piloto"], ["cls", "Classe"], ["vs_me", "Δ para mim"],
@@ -3109,6 +3111,13 @@ function ovPanel(n, S) {
     g += ovGroup("Aviso de frenagem", ovSlider(n, "lead", "Começar a contar a", c.lead, 100, 500, 10, " m"),
       "a barra enche conforme você chega ao ponto de frenagem");
     g += `<p class="sub" style="margin:8px 0 0">As curvas, o lado delas e o ponto de frenagem vêm do seu melhor tempo no carro e na pista (o ACC e o iRacing não informam isso). Grave uma volta limpa na pista para o overlay aprender. O ponto é onde você começou a frear nessa volta: não é um cálculo de frenagem ideal.</p>`;
+  } else if (n === "blindl" || n === "blindr") {
+    g += ovGroup("Modelo", ovSeg(n, "bstyle", [["dot", "Luz redonda"], ["bar", "Barra"], ["icon", "Carro com ondas", OV_P]], c.bstyle || "dot"),
+      "amarelo: tem carro no seu ponto cego; vermelho e piscando: carro colado ao lado");
+    g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "always", "Aparecer apagada quando livre", c.always !== false, "Desligado, a luz só aparece quando há carro")}</div>`);
+    g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
+      "se a luz acender do lado errado, ligue isto");
+    g += `<p class="sub" style="margin:8px 0 0">Use um overlay para cada lado: ligue o esquerdo e o direito, clique em “Editar na tela do jogo” e arraste cada luz para a borda da tela (ou ao lado do retrovisor). Dá para ligar só um dos lados.</p>`;
   } else if (n === "radar") {
     g += ovGroup("Modelo", ovSeg(n, "rstyle", [["sides", "Luzes laterais"], ["top", "Visto de cima", OV_P], ["circle", "Circular", OV_P], ["halo", "Halo ao redor do carro", OV_T]], c.rstyle || "top"),
       "mostra se há carro ao lado, atrás ou à frente de você");
@@ -3177,7 +3186,7 @@ async function renderOverlays() {
   try { const l = await api("/api/license"); OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); } catch (e) { /* sem licença: só os modelos clássicos */ }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const sw = screen.width || 1920, sh = screen.height || 1080;
-  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36], tyres: [24, sh - 330], corner: [Math.round(sw / 2 - 165), 120], radar: [Math.round(sw / 2 + 300), Math.round(sh / 2 - 130)] };
+  const defPos = { map: [sw - 460, 60], pedals: [Math.round(sw / 2 - 260), sh - 260], standings: [24, 180], delta: [Math.round(sw / 2 - 190), 36], tyres: [24, sh - 330], corner: [Math.round(sw / 2 - 165), 120], radar: [Math.round(sw / 2 + 300), Math.round(sh / 2 - 130)], blindl: [40, Math.round(sh / 2 - 60)], blindr: [sw - 130, Math.round(sh / 2 - 60)] };
   let sel = localStorage.getItem("pitwall.ovSel");
   if (!OV_NAMES.some((x) => x[0] === sel)) sel = "map";
   view.innerHTML = `<div class="ovpage">

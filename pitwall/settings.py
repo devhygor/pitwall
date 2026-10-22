@@ -20,6 +20,8 @@ OVERLAY_DEFAULTS = {
     "delta": {**_BASE, "bg": 35, "dstyle": "classic", "fuel": True, "predicted": True},
     "corner": {**_BASE, "bg": 30, "dist": True, "brakepoint": True, "speed": True, "next": True, "name": True, "lead": 250, "cstyle": "full"},
     "radar": {**_BASE, "bg": 20, "rstyle": "sides", "range": 40, "numbers": False, "gap": True},
+    "blindl": {**_BASE, "bstyle": "dot", "always": True},
+    "blindr": {**_BASE, "bstyle": "dot", "always": True},
     "tyres": {**_BASE, "bg": 25, "temp": True, "press": True, "brake": True, "wear": True, "compound": True, "punit": "psi",
               "tmin": 70, "tmax": 100, "pmin": 26.0, "pmax": 27.0, "pads": True, "bmin": 350, "bmax": 800, "tystyle": "acc", "weather": True, "tynum": True},   # faixas do ACC 1.9+ (todas as classes)
 }

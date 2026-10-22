@@ -3,7 +3,7 @@
 // Os dados vêm de /api/overlay/data; as opções, de /api/settings (overlays.<nome>), relidas a cada 1,5 s.
 
 const NAME = (location.pathname.split("/").pop() || "map").replace(/[^a-z]/g, "");
-const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta", tyres: "Pneus", corner: "Curva", radar: "Radar" };
+const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta", tyres: "Pneus", corner: "Curva", radar: "Radar", blindl: "Ponto cego esquerdo", blindr: "Ponto cego direito" };
 const PREVIEW = /[?&]preview/.test(location.search);       // dentro do palco da página Overlays: só mostra, com dados de exemplo
 const root = document.getElementById("root");
 root.dataset.title = TITLES[NAME] || NAME;
@@ -18,7 +18,7 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true,
   mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full",
-  rstyle: "top", range: 40, gap: true };
+  rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true };
 
 let cfg = { ...DEFAULT_CFG };
 // modelos extras de overlay: Pro (overlay_styles) e Equipe (overlay_styles_team); sem o recurso, volta para o modelo clássico
@@ -28,8 +28,8 @@ const F_PRO = "overlay_styles", F_TEAM = "overlay_styles_team";
 const STYLE_NEED = {
   map: { asphalt: F_PRO, neon: F_PRO }, mapmode: { follow: F_PRO, follow_rot: F_PRO },
   pedals: { classic: F_PRO, horizontal: F_PRO, driver: F_TEAM }, delta: { classic: F_PRO, bar: F_TEAM },
-  standings: { classic: F_PRO, tower: F_TEAM }, radar: { top: F_PRO, circle: F_PRO, halo: F_TEAM }, tyres: { acc: F_PRO, cards: F_PRO, row: F_TEAM }, corner: { full: F_PRO, compact: F_PRO } };
-const STYLE_FALLBACK = { map: "classic", mapmode: "full", pedals: "minimal", delta: "minimal", standings: "compact", radar: "sides", tyres: "minimal", corner: "line" };
+  standings: { classic: F_PRO, tower: F_TEAM }, radar: { top: F_PRO, circle: F_PRO, halo: F_TEAM }, tyres: { acc: F_PRO, cards: F_PRO, row: F_TEAM }, corner: { full: F_PRO, compact: F_PRO }, blind: { icon: F_PRO } };
+const STYLE_FALLBACK = { map: "classic", mapmode: "full", pedals: "minimal", delta: "minimal", standings: "compact", radar: "sides", blind: "dot", tyres: "minimal", corner: "line" };
 function pickStyle(group, key, def) {
   const v = cfg[key] || def, need = (STYLE_NEED[group] || {})[v];
   return !need || FEATS.has(need) ? v : STYLE_FALLBACK[group];
@@ -587,10 +587,47 @@ function pedalsOverlay() {
   return { onData() {}, onCfg };
 }
 
+// carro visto de cima (frente para cima): rodas, carroceria, para-brisa, vidro traseiro, faróis e lanternas
+function drawCar(ctx, cx, cy, h, col, o = {}) {
+  const w = h * 0.46, x = cx - w / 2, y = cy - h / 2;
+  ctx.save(); ctx.lineJoin = "round";
+  if (o.glow) { ctx.shadowColor = o.glow; ctx.shadowBlur = 14; }
+  ctx.fillStyle = "#0b0d10";                                                   // rodas
+  for (const fy of [0.13, 0.67]) {
+    ctx.beginPath(); ctx.roundRect(x - w * 0.05, y + h * fy, w * 0.17, h * 0.2, w * 0.05); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(x + w * 0.88, y + h * fy, w * 0.17, h * 0.2, w * 0.05); ctx.fill();
+  }
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);                          // carroceria com volume
+  g.addColorStop(0, col); g.addColorStop(0.5, o.hi || col); g.addColorStop(1, col);
+  ctx.fillStyle = g; ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineWidth = Math.max(1, h * 0.03);
+  ctx.beginPath(); ctx.roundRect(x + w * 0.07, y, w * 0.86, h, [w * 0.44, w * 0.44, w * 0.24, w * 0.24]); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,255,255,.22)";                                    // capô
+  ctx.beginPath(); ctx.roundRect(x + w * 0.38, y + h * 0.04, w * 0.24, h * 0.24, w * 0.1); ctx.fill();
+  ctx.fillStyle = "rgba(8,16,30,.9)";                                          // para-brisa e vidro traseiro
+  ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.3); ctx.lineTo(x + w * 0.8, y + h * 0.3); ctx.lineTo(x + w * 0.72, y + h * 0.48); ctx.lineTo(x + w * 0.28, y + h * 0.48); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(x + w * 0.26, y + h * 0.66, w * 0.48, h * 0.12, w * 0.08); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.fillRect(x + w * 0.3, y + h * 0.5, w * 0.4, h * 0.14);   // teto
+  ctx.fillStyle = "#fff6c8";                                                   // faróis
+  ctx.beginPath(); ctx.roundRect(x + w * 0.14, y + h * 0.045, w * 0.2, h * 0.05, w * 0.03); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(x + w * 0.66, y + h * 0.045, w * 0.2, h * 0.05, w * 0.03); ctx.fill();
+  ctx.fillStyle = "#ff3b4e";                                                   // lanternas
+  ctx.beginPath(); ctx.roundRect(x + w * 0.14, y + h * 0.93, w * 0.22, h * 0.035, w * 0.02); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(x + w * 0.64, y + h * 0.93, w * 0.22, h * 0.035, w * 0.02); ctx.fill();
+  if (o.label != null) { ctx.fillStyle = o.labelCol || "#fff"; ctx.font = `800 ${Math.max(8, h * 0.2)}px Segoe UI`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(o.label), cx, y + h * 0.58); }
+  ctx.restore();
+}
+const carSVG = (col) => `<svg viewBox="0 0 46 100" width="40" height="86" aria-hidden="true"><g stroke="rgba(0,0,0,.75)" stroke-width="1.6" stroke-linejoin="round">
+  <rect x="0" y="14" width="8" height="19" rx="2.5" fill="#0b0d10"/><rect x="38" y="14" width="8" height="19" rx="2.5" fill="#0b0d10"/><rect x="0" y="66" width="8" height="19" rx="2.5" fill="#0b0d10"/><rect x="38" y="66" width="8" height="19" rx="2.5" fill="#0b0d10"/>
+  <rect x="3.5" y="1" width="39" height="98" rx="19" fill="${col}"/></g>
+  <rect x="17" y="5" width="12" height="24" rx="5" fill="rgba(255,255,255,.22)"/><path d="M9.5 30h27l-3.5 18H13z" fill="rgba(8,16,30,.9)"/><rect x="14" y="66" width="18" height="12" rx="4" fill="rgba(8,16,30,.9)"/>
+  <rect x="14" y="50" width="18" height="14" fill="rgba(255,255,255,.12)"/><rect x="7" y="5" width="9" height="5" rx="1.5" fill="#fff6c8"/><rect x="30" y="5" width="9" height="5" rx="1.5" fill="#fff6c8"/>
+  <rect x="7" y="93" width="10" height="3.5" rx="1" fill="#ff3b4e"/><rect x="29" y="93" width="10" height="3.5" rx="1" fill="#ff3b4e"/></svg>`;
+
 // ------------------------------------------------------------------ RADAR (carros ao lado, atrás e à frente)
 function radarOverlay() {
   root.innerHTML = `<div class="card radar shadow"><canvas id="cv"></canvas>
-    <div class="rd-sides" id="sd"><i class="L"></i><div class="mycar"></div><i class="R"></i></div><div class="rd-gap" id="gp"></div><div class="rd-note" id="nt"></div></div>`;
+    <div class="rd-sides" id="sd"><i class="L"></i><div class="mycar">${carSVG("#e8f0ff")}</div><i class="R"></i></div><div class="rd-gap" id="gp"></div><div class="rd-note" id="nt"></div></div>`;
   const card = root.firstChild, cv = root.querySelector("#cv"), ctx = cv.getContext("2d"), sd = root.querySelector("#sd"), gp = root.querySelector("#gp"), nt = root.querySelector("#nt");
   const SIZE = { top: [170, 250], circle: [230, 230], halo: [250, 250], sides: [0, 0] };
   const hsl = (h, a = 1) => `hsl(${Math.round(h)} 85% 55% / ${a})`;
@@ -632,13 +669,10 @@ function radarOverlay() {
       ctx.setLineDash([]);
       ctx.strokeStyle = "rgba(255,255,255,.1)"; ctx.beginPath(); ctx.moveTo(10, cy - R / 2 * ky); ctx.lineTo(W - 10, cy - R / 2 * ky); ctx.moveTo(10, cy + R / 2 * ky); ctx.lineTo(W - 10, cy + R / 2 * ky); ctx.stroke();
       for (const c of cars) {
-        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, w = 2.0 * kx * 0.9, h = 4.6 * ky;
-        const d = Math.hypot(c.fwd, c.side * 1.5);
-        ctx.fillStyle = hsl(heat(d, R * 0.8), .95); ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.roundRect(x - w / 2, y - Math.max(h, 12) / 2, w, Math.max(h, 12), 4); ctx.fill(); ctx.stroke(); label(c, x, y);
+        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = hsl(heat(d, R * 0.8));
+        drawCar(ctx, x, y, 42, col, { glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null, hi: hsl(heat(d, R * 0.8), 1) });
       }
-      ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.beginPath(); ctx.roundRect(cx - 9, cy - 14, 18, 28, 5); ctx.fill(); ctx.stroke();   // seu carro
-      ctx.fillStyle = "#3ee08f"; ctx.fillRect(cx - 9, cy - 14, 18, 5);
+      drawCar(ctx, cx, cy, 46, "#e8f0ff", { glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
     } else if (style === "circle") {
       const cx = W / 2, cy = H / 2, k = (W / 2 - 12) / R;
       ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 1.5;
@@ -648,10 +682,10 @@ function radarOverlay() {
       for (const c of cars) {
         const x = cx + clamp(c.side * 2.2, -R, R) * k * 0.62, y = cy - c.fwd * k, d = Math.hypot(c.fwd, c.side * 1.5);
         if (Math.hypot(x - cx, y - cy) > W / 2 - 8) continue;
-        ctx.fillStyle = hsl(heat(d, R * 0.8)); ctx.shadowColor = hsl(heat(d, R * 0.8)); ctx.shadowBlur = alongside(c) ? 12 : 4;
-        ctx.beginPath(); ctx.arc(x, y, cfg.numbers ? 9 : 7, 0, 7); ctx.fill(); ctx.shadowBlur = 0; label(c, x, y);
+        const col = hsl(heat(d, R * 0.8));
+        drawCar(ctx, x, y, 30, col, { glow: alongside(c) ? col : null, label: cfg.numbers ? c.n : null });
       }
-      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(cx, cy - 11); ctx.lineTo(cx + 8, cy + 9); ctx.lineTo(cx - 8, cy + 9); ctx.closePath(); ctx.fill();
+      drawCar(ctx, cx, cy, 38, "#e8f0ff", { glow: "#3ee08f", hi: "#ffffff" });
     } else {                                                                                         // halo: oito setores ao redor do carro acendem conforme a proximidade
       const cx = W / 2, cy = H / 2, r0 = W / 2 - 38, sec = new Array(8).fill(0), near = new Array(8).fill(1e9);
       for (const c of cars) {
@@ -665,14 +699,42 @@ function radarOverlay() {
         if (v > 0.5) { ctx.shadowColor = hsl(0); ctx.shadowBlur = 16; }
         ctx.beginPath(); ctx.arc(cx, cy, r0, a - Math.PI / 8 + 0.07, a + Math.PI / 8 - 0.07); ctx.stroke(); ctx.shadowBlur = 0;
       }
-      ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.roundRect(cx - 17, cy - 30, 34, 60, 9); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#3d8bff"; ctx.beginPath(); ctx.roundRect(cx - 12, cy - 22, 24, 14, 4); ctx.fill();
+      drawCar(ctx, cx, cy, 84, "#e8f0ff", { hi: "#ffffff" });
     }
   }
   const loop = () => { draw(); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
   return { onData() {}, onCfg() {} };
+}
+
+// ------------------------------------------------------------------ PONTO CEGO (uma luz por lado, cada uma numa janela para pôr onde quiser)
+function blindOverlay(side) {                                    // side: "L" | "R"
+  const left = side === "L";
+  root.innerHTML = `<div class="card blind"><div class="bs" id="bs"></div></div>`;
+  const bs = root.querySelector("#bs");
+  const ICON = `<svg viewBox="0 0 64 64" width="72" height="72" aria-hidden="true" style="${left ? "transform:scaleX(-1)" : ""}">
+    <rect x="6" y="18" width="24" height="40" rx="9" fill="rgba(255,255,255,.9)" stroke="rgba(0,0,0,.6)" stroke-width="2"/><rect x="11" y="26" width="14" height="9" rx="3" fill="rgba(8,16,30,.9)"/>
+    <path class="a1" d="M38 30a9 9 0 0 1 0 14" fill="none" stroke-width="5" stroke-linecap="round"/><path class="a2" d="M45 24a17 17 0 0 1 0 26" fill="none" stroke-width="5" stroke-linecap="round"/><path class="a3" d="M52 18a25 25 0 0 1 0 38" fill="none" stroke-width="5" stroke-linecap="round"/></svg>`;
+  function preview() {                                          // sem o jogo: acende e apaga para mostrar como fica
+    const t = (performance.now() / 1000 + (left ? 0 : 3)) % 8;
+    return { cars: t > 1 && t < 6 ? [{ fwd: t < 3 ? -7 + (t - 1) * 3.5 : t < 4.5 ? 0 : 2.5, side: left ? -3.4 : 3.4 }] : [], left: 0, right: 0, source: "preview" };
+  }
+  function draw() {
+    const style = pickStyle("blind", "bstyle", "dot"), D = live() ? (data.radar || null) : previewing ? preview() : null;
+    const zone = (D && D.cars ? D.cars : []).filter((c) => (left ? c.side < 0 : c.side > 0) && Math.abs(c.side) < 7 && c.fwd > -9 && c.fwd < 4.2);
+    const n = Math.max(zone.length, D ? (left ? D.left : D.right) || 0 : 0), close = zone.some((c) => Math.abs(c.fwd) < 3.2) || n > 1;
+    const state = !n ? "off" : close ? "danger" : "warn";
+    if (bs.dataset.st !== state + style) {
+      bs.dataset.st = state + style;
+      bs.className = `bs b-${style} ${state}${cfg.always === false && state === "off" ? " hid" : ""}`;
+      bs.innerHTML = style === "icon" ? ICON : "";
+    }
+    bs.dataset.n = n > 1 ? n : "";
+    bs.classList.toggle("hid", cfg.always === false && state === "off");
+  }
+  const loop = () => { draw(); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  return { onData() {}, onCfg() { bs.dataset.st = ""; } };
 }
 
 // ------------------------------------------------------------------ PARTICIPANTES
@@ -1008,13 +1070,13 @@ function tyresCards() {
 
 // ------------------------------------------------------------------ início
 let current = null;
-const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay, corner: cornerOverlay, radar: radarOverlay };
+const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay, corner: cornerOverlay, radar: radarOverlay, blindl: () => blindOverlay("L"), blindr: () => blindOverlay("R") };
 (async function init() {
   await loadFeatures(); featAt = performance.now();
   try { applyCfg((await getJSON("/api/settings")).settings || {}); } catch (e) { /* ok */ }
   current = (KIND[NAME] || mapOverlay)();
-  const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres", corner: "pos", radar: "radar" }[NAME] || "all";
-  const every = { map: 100, pedals: 50, standings: 250, delta: 100, tyres: 200, corner: 100, radar: 60 }[NAME] || 200;
+  const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres", corner: "pos", radar: "radar", blindl: "radar", blindr: "radar" }[NAME] || "all";
+  const every = { map: 100, pedals: 50, standings: 250, delta: 100, tyres: 200, corner: 100, radar: 60, blindl: 60, blindr: 60 }[NAME] || 200;
   dataLoop(parts, every);
   settingsLoop();
   new ResizeObserver(reportSize).observe(root);

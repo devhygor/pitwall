@@ -186,8 +186,8 @@ class OverlayHub:
 
     def _radar_on(self) -> bool:
         try:
-            ov = (self.settings.get("overlays") or {}).get("radar") or {}
-            return ov.get("mode", "off") != "off" or bool(self.settings.get("overlay_edit"))
+            ovs = self.settings.get("overlays") or {}
+            return any((ovs.get(k) or {}).get("mode", "off") != "off" for k in ("radar", "blindl", "blindr")) or bool(self.settings.get("overlay_edit"))
         except Exception:  # noqa: BLE001
             return False
 

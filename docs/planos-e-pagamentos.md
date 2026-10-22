@@ -34,7 +34,7 @@ app / site (#/conta)       ──────────►  função license  
 | `team_seats` Pro incluído para até 10 integrantes da equipe do dono | não | não | sim |
 | `team_admin` painel da equipe | não | não | sim |
 
-Escada dos overlays: Grátis = versão simples de cada um (mapa clássico/fino, pedais minimalistas, delta só número, participantes compacto, pneus 4 quadrados, curva em linha, radar com luzes laterais); Pro = os completos; Equipe = transmissão. Sem o recurso, o overlay cai sozinho para a versão simples (`pickStyle`/`STYLE_FALLBACK` em `overlay.js`). Esquema em `supabase/planos_v2.sql`.
+Escada dos overlays: Grátis = versão simples de cada um (mapa clássico/fino, pedais minimalistas, delta só número, participantes compacto, pneus 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego; o modelo "carro com ondas" é Pro); Pro = os completos; Equipe = transmissão. Sem o recurso, o overlay cai sozinho para a versão simples (`pickStyle`/`STYLE_FALLBACK` em `overlay.js`). Esquema em `supabase/planos_v2.sql`.
 
 Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/__init__.py` (spotter), `voice/events.py`
 (categorias de aviso), `voice/answers.py` (perguntas), `voice/humor.py` (personalidade), `voice/tts.py` (voz online) e
