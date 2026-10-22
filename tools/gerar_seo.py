@@ -267,6 +267,7 @@ PAGINAS = [
             ]),
             ("Como assinar", [
                 "O pagamento é por Pix, cartão ou boleto, com renovação automática, e você pode cancelar quando quiser. Emitimos nota fiscal. O teste grátis do plano Pro não pede cartão.",
+                "Indique e ganhe: quem entra pelo seu link ganha 5% de desconto no primeiro pagamento, e você ganha 1% de desconto na sua próxima assinatura a cada 2 amigos que começarem a usar o Pitwall, até 50%.",
             ]),
         ],
         "faq": [
@@ -331,22 +332,34 @@ IMAGENS = {
     "estrategia-de-corrida-acc": [
         ("app-estrategia-de-corrida", "Planejador de estratégia de corrida do Pitwall: voltas previstas, combustível total, paradas e plano por stint para o menu de pit do ACC", "O plano por stint, com o valor para colocar no menu de pit do ACC."),
     ],
+    "planos-e-precos": [
+        ("site-planos", "Página de planos do Pitwall com Grátis, Pro e Equipe e o que cada plano libera", "Os planos: Grátis, Pro e Equipe. Os valores atuais ficam na página de planos."),
+        None, None,
+        ("site-indique-e-ganhe", "Página Indique e ganhe do Pitwall: link de indicação, desconto acumulado e como funciona", "Indique e ganhe: o seu link, o seu desconto e quantos amigos já usaram."),
+    ],
     "setups-acc": [
         ("app-biblioteca-de-setups", "Biblioteca de setups do Pitwall para o ACC, com busca, filtros por carro e pista e botão para instalar", "Biblioteca de setups: busque, filtre por carro e pista e instale no ACC com um clique."),
+        None,
+        [("app-editor-3d-carro", "Editor visual 3D de setup do Pitwall: carro em 3D com pontos clicáveis nas rodas, eixos, asa e splitter", "O editor visual 3D: clique nas partes do carro para ajustar o setup."),
+         ("app-editor-3d-suspensao", "Editor visual 3D do Pitwall com a suspensão em raio-x e os ajustes da roda (pressão, cambagem, convergência, mola e amortecedores)", "A suspensão em raio-x e os ajustes da roda ao lado."),
+         ("app-editor-3d-freios", "Editor visual 3D do Pitwall mostrando os ajustes de cockpit e freios: balanço de freio, pressão, ABS, TC e mapa do motor", "Cockpit e freios: balanço de freio, ABS, TC e mapa do motor.")],
     ],
 }
-LARG = {k: 1400 for k in ("app-ranking-da-equipe", "app-ranking-da-comunidade", "app-perfil-lfm", "app-engenheiro-conversa", "app-estrategia-de-corrida")}
-ALTURA = {"app-analise-de-volta": 1000, "app-ranking-da-equipe": 735, "app-ranking-da-comunidade": 735, "app-perfil-lfm": 733, "app-engenheiro-conversa": 735, "app-estrategia-de-corrida": 736}
 
 
 def figura(slug, i):
-    """Figura que entra depois da seção de índice i (se houver)."""
+    """Figuras que entram depois da seção de índice i (uma tupla, uma lista de tuplas ou None)."""
     it = IMAGENS.get(slug, [])
-    if i >= len(it):
+    if i >= len(it) or not it[i]:
         return ""
-    f, alt, cap = it[i]
-    return (f'<figure><img src="/img/{f}.webp" alt="{esc(alt)}" width="{LARG.get(f, 1360)}" height="{ALTURA.get(f, 900)}" loading="lazy" decoding="async">'
-            f'<figcaption>{esc(cap)}</figcaption></figure>')
+    itens = it[i] if isinstance(it[i], list) else [it[i]]
+    from PIL import Image
+    out = ""
+    for f, alt, cap in itens:
+        w, h = Image.open(RAIZ / "img" / f"{f}.webp").size
+        out += (f'<figure><img src="/img/{f}.webp" alt="{esc(alt)}" width="{w}" height="{h}" loading="lazy" decoding="async">'
+                f'<figcaption>{esc(cap)}</figcaption></figure>')
+    return out
 
 
 CSS = """
@@ -442,12 +455,19 @@ def pagina(p):
 </main>{rodape()}</body></html>'''
 
 
+def todas_imagens(slug):
+    r = []
+    for it in IMAGENS.get(slug, []):
+        r += it if isinstance(it, list) else ([it] if it else [])
+    return r
+
+
 def sitemap():
     urls = [("/", "1.0", "weekly")] + [(f"/{p['slug']}/", "0.8", "monthly") for p in PAGINAS]
 
     def imgs(u):
         return "".join(f"<image:image><image:loc>{BASE}/img/{f}.webp</image:loc><image:caption>{esc(cap)}</image:caption></image:image>"
-                       for f, _, cap in IMAGENS.get(u.strip("/"), []))
+                       for f, _, cap in todas_imagens(u.strip("/")))
     cab = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n'
     return cab + "".join(f"  <url><loc>{BASE}{u}</loc><lastmod>{HOJE}</lastmod><changefreq>{c}</changefreq><priority>{pr}</priority>{imgs(u)}</url>\n" for u, pr, c in urls) + "</urlset>\n"
 
