@@ -428,6 +428,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
 
     @app.get("/api/team/status")
     def team_status():
+        _publish_lfm()          # com a conta do Pitwall conectada, mantém o LFM do perfil em dia sem precisar abrir a tela LFM
         return _team().status()
 
     @app.get("/api/profile")
@@ -674,7 +675,8 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
                 snap = lfm.snapshot() if lfm else None
                 t._rpc("set_my_lfm", {"p": snap})
                 _lfm_push["t"] = time.time()
-            except Exception:
+            except Exception as e:
+                print("lfm: não deu para publicar no perfil:", repr(e))
                 _lfm_push["t"] = time.time() - 1500      # tenta de novo em ~5 min
             finally:
                 _lfm_push["busy"] = False
