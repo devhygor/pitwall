@@ -395,6 +395,15 @@ class DB:
             c.execute("UPDATE setups SET sha1 = ?, content = ?, file_mtime = ?, imported_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
                       (sha1, content, file_mtime, imported_at, notes, setup_id))
 
+    def delete_setup(self, setup_id: int) -> int:
+        """Remove o setup; as sessões que o usavam ficam sem setup (as voltas continuam). Devolve quantas sessões foram desligadas."""
+        with self._lock, self.connect() as c:
+            n = c.execute("SELECT COUNT(*) FROM sessions WHERE setup_id = ? OR suggested_setup_id = ?", (setup_id, setup_id)).fetchone()[0]
+            c.execute("UPDATE sessions SET setup_id = NULL WHERE setup_id = ?", (setup_id,))
+            c.execute("UPDATE sessions SET suggested_setup_id = NULL WHERE suggested_setup_id = ?", (setup_id,))
+            c.execute("DELETE FROM setups WHERE id = ?", (setup_id,))
+        return n
+
     def setup(self, setup_id: int) -> dict | None:
         with self.connect() as c:
             r = c.execute("SELECT * FROM setups WHERE id = ?", (setup_id,)).fetchone()

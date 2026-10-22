@@ -204,14 +204,85 @@ def info(db, setup_id: int) -> dict:
     return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s)}
 
 
+TRACK_ABBR = {
+    "monza": "MNZ", "spa": "SPA", "imola": "IMO", "zolder": "ZOL", "nurburgring": "NUR", "nurburgring_24h": "N24", "paul_ricard": "PRC", "barcelona": "BAR",
+    "hungaroring": "HUN", "brands_hatch": "BRH", "misano": "MIS", "silverstone": "SIL", "zandvoort": "ZAN", "kyalami": "KYA", "laguna_seca": "LGS",
+    "mount_panorama": "MTP", "suzuka": "SUZ", "oulton_park": "OUL", "donington": "DON", "snetterton": "SNE", "red_bull_ring": "RBR", "cota": "COTA",
+    "indianapolis": "IND", "watkins_glen": "WGL", "valencia": "VAL",
+}
+_CAR_NOISE = {"gt3", "gt4", "gt2", "gtc", "cup", "evo", "r", "st", "tcx", "2019", "2020", "2021", "2022", "2023", "2024"}
+
+
+def track_abbr(track: str) -> str:
+    """Abreviação de 3 letras da pista (MNZ, SPA, IMO…); pistas fora da lista usam as 3 primeiras consoantes."""
+    t = re.sub(r"[^a-z0-9_]", "", str(track or "").lower())
+    t = re.sub(r"_\d{4}$", "", t)                      # monza_2023 -> monza
+    if t in TRACK_ABBR:
+        return TRACK_ABBR[t]
+    letters = re.sub(r"[^a-z]", "", t)
+    cons = re.sub(r"[aeiou]", "", letters)
+    return (cons[:3] if len(cons) >= 3 else letters[:3]).upper() or "TRK"
+
+
+def car_abbr(car: str) -> str:
+    """Abreviação do carro: 3 letras da marca + o modelo (mclaren_720s_gt3_evo -> MCL720S, bmw_m4_gt3 -> BMWM4)."""
+    parts = [p for p in re.split(r"[_\s-]+", str(car or "").lower()) if p]
+    if not parts:
+        return "CAR"
+    brand = parts[0][:3].upper()
+    model = next((p for p in parts[1:] if p not in _CAR_NOISE), "")
+    return (brand + re.sub(r"[^A-Za-z0-9]", "", model).upper())[:9]
+
+
+def version_name_stem(s: dict) -> str:
+    """Início padrão do nome de um setup criado pelo Pitwall: 'Pitwall MNZ MCL720S R Safe 28C' (pista, carro, Q/R, variante, temperatura)."""
+    bits = ["Pitwall", track_abbr(s["track"]), car_abbr(s["car"])]
+    if s.get("kind") in ("Q", "R"):
+        bits.append(s["kind"])
+    if s.get("variant"):
+        bits.append(re.sub(r"[^A-Za-z0-9+]", "", str(s["variant"]).split()[0]))
+    if s.get("temp_c") is not None:
+        bits.append(f"{s['temp_c']}C")
+    try:
+        from . import gameinfo
+        g = gameinfo.short("acc")
+        if g:
+            bits.append(f"ACC{g}")                     # versão do jogo: os setups mudam entre atualizações
+    except Exception:  # noqa: BLE001
+        pass
+    return " ".join(b for b in bits if b)
+
+
 def next_version_name(db, s: dict) -> str:
-    """Nome da próxima versão: 'Setup', 'Setup v2', 'Setup v3'..."""
-    base = re.sub(r"\s+v\d+$", "", s["name"])
+    """Nome da próxima versão: 'Pitwall MNZ MCL720S R 28C v1', 'v2'… (continua a contagem entre os setups da mesma pista e carro)."""
+    stem = version_name_stem(s)
     taken = {x["name"] for x in db.setups_list() if x["car"] == s["car"] and x["track"] == s["track"]}
-    n = 2
-    while f"{base} v{n}" in taken:
+    n = 1
+    while f"{stem} v{n}" in taken:
         n += 1
-    return f"{base} v{n}"
+    return f"{stem} v{n}"
+
+
+def delete_setup(db, setup_id: int, remove_file: bool = True) -> dict:
+    """Apaga um setup do banco do Pitwall (e, se quiser, da pasta do ACC: o arquivo vai para uma pasta de segurança, nunca some de vez)."""
+    import shutil
+    s = load(db, setup_id)
+    moved = None
+    root = setups_root()
+    if remove_file and s.get("rel_path"):
+        f = root / s["rel_path"]
+        if f.exists():
+            dest = data_dir() / "setups_apagados" / s["car"] / s["track"]
+            dest.mkdir(parents=True, exist_ok=True)
+            target = dest / f.name
+            n = 2
+            while target.exists():
+                target = dest / f"{f.stem} ({n}){f.suffix}"
+                n += 1
+            shutil.move(str(f), str(target))
+            moved = str(target)
+    used = db.delete_setup(int(setup_id))
+    return {"ok": True, "name": s["name"], "file_moved_to": moved, "sessions_unlinked": used}
 
 
 def advice(db, setup_id: int, target: float = 26.5) -> dict:
@@ -301,7 +372,7 @@ def generate(db, base_id: int, changes: list[dict], name: str | None = None) -> 
             full = db.setup(s["id"])
             if full and full["sha1"] == sha and s["rel_path"] and (setups_root() / s["rel_path"]).exists():
                 return {"id": s["id"], "name": s["name"], "path": str(setups_root() / s["rel_path"]), "already": True}
-    stem = name or f"Pitwall - {base['name']}"
+    stem = (name or "").strip() or next_version_name(db, base)
     path = _write_acc(base["car"], base["track"], stem, new)
     sid, _ = db.upsert_setup(
         sha1=sha, car=base["car"], track=base["track"], name=path.stem,

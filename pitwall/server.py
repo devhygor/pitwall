@@ -269,6 +269,13 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         except FileNotFoundError as e:
             raise HTTPException(404, str(e))
 
+    @app.delete("/api/setups/{setup_id}")
+    def setup_delete(setup_id: int, remove_file: bool = True):
+        try:
+            return setups.delete_setup(db, setup_id, remove_file)
+        except (FileNotFoundError, OSError) as e:
+            raise HTTPException(400, str(e))
+
     @app.post("/api/setups/{setup_id}/install")
     def setup_install(setup_id: int):
         try:

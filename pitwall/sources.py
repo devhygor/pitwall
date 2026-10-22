@@ -162,6 +162,11 @@ class ACCSource:
                  "orange": "ORANGE" in fname}
         clean = lambda v: str(v or "").split("\x00")[0].strip()
         player = " ".join(n for n in (clean(s.player_name), clean(s.player_surname)) if n) or clean(s.player_nick)
+        try:
+            from . import gameinfo
+            gameinfo.set_version("acc", getattr(s, "ac_version", ""))
+        except Exception:  # noqa: BLE001 — a versão do jogo é só um detalhe do nome dos setups
+            pass
         return Frame(
             t=time.monotonic(),
             wall=time.time(),

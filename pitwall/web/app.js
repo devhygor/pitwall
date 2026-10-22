@@ -1422,7 +1422,7 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
             <td class="num"><b>${c.from == null ? (c.delta > 0 ? "+" : "") + c.delta + " clique(s)" : fmtV(c, c.to, c.to_disp)}</b></td>
             <td class="why">${c.reasons.map(esc).join("; ")}</td></tr>`).join("")}</tbody></table>
         ${setupId ? `
-        <div class="gen"><input id="eName" value="${esc(opt.nextName || "Pitwall - " + (setupName || "setup"))}">
+        <div class="gen"><input id="eName" value="${esc(opt.nextName || "Pitwall - " + (setupName || "setup"))}" title="Padrão: Pitwall + pista + carro + Q/R + versão. Pode trocar pelo nome que quiser." style="min-width:260px">
           <button class="btn primary" id="eGen">Criar versão nova no ACC</button>
           <button class="btn" id="eUpd" title="Aplica os ajustes marcados no próprio arquivo deste setup (guarda um backup antes)">Atualizar este setup</button></div>
         <div id="eGenOut"></div>` :
@@ -1676,8 +1676,25 @@ async function showSetup(id) {
       ${s.rows.filter((r) => r.group === g).map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${
         r.values.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ")}${r.unit ? " " + r.unit : ""}</td></tr>`).join("")}
     </tbody></table>`).join("")}
-    <div id="sShare" style="margin-top:14px"></div>`;
+    <div id="sShare" style="margin-top:14px"></div>
+    <div id="sDel" style="margin-top:14px"><button class="btn sm quiet danger" id="sDelBtn">Apagar este setup</button></div>`;
   shareBox(id);
+  $("#sDelBtn").onclick = () => {
+    $("#sDel").innerHTML = `<div class="note warn"><b>Apagar “${esc(s.name)}”?</b>
+      <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="sDelFile" checked> Apagar também o arquivo da pasta do ACC (guardo uma cópia de segurança em <code>setups_apagados</code>)</label>
+      ${s.stats ? `<div class="sub">As ${s.stats.laps} volta(s) com ele continuam; só deixam de apontar para este setup.</div>` : ""}
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn sm danger" id="sDelYes">Apagar</button><button class="btn sm quiet" id="sDelNo">Cancelar</button></div></div>`;
+    $("#sDelNo").onclick = () => { $("#sDel").innerHTML = `<button class="btn sm quiet danger" id="sDelBtn2">Apagar este setup</button>`; $("#sDelBtn2").onclick = () => showSetup(id); };
+    $("#sDelYes").onclick = async () => {
+      $("#sDelYes").disabled = true;
+      try {
+        const r = await api(`/api/setups/${id}?remove_file=${$("#sDelFile").checked}`, { method: "DELETE" });
+        toast(`Setup apagado${r.file_moved_to ? " (cópia de segurança guardada)" : ""}`, "ok");
+        setupsState.open = null; setupsState.sel = setupsState.sel.filter((x) => x !== id);
+        renderSetups();
+      } catch (e) { $("#sDelYes").disabled = false; toast(e.message, "err"); }
+    };
+  };
   $("#sAdvice").onclick = async () => {
     if (genLock) { $("#eOut").innerHTML = `<div class="note warn" style="margin-top:8px">O <b>gerador de setup</b> (recomendações e criação de versões) é do plano <b>Pro</b> ou <b>Equipe</b>. <a href="#/plano">Ver planos</a></div>`; return; }
     $("#eOut").innerHTML = `<div class="sub" style="margin-top:8px">Analisando as suas voltas…</div>`;
