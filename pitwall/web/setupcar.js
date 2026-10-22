@@ -273,16 +273,18 @@
       sel = k; paintAll();
       if (stage) { stage.view(k); stage.setXray(["w0", "w1", "w2", "w3", "axle_f", "axle_r", "fuel"].includes(k)); paintTools(); }
     }
-    let stage = null;
+    let stage = null, paintMode = "pitwall";
     paintAll();
 
     // ---- modelo 3D (Three.js); sem WebGL, fica o desenho 2D
     const paintTools = () => {
       const t = $q("#sc3dTools"); if (!stage) return;
       t.innerHTML = `${[["car", "Carro"], ["front", "Frente"], ["side", "Lateral"], ["rear", "Traseira"], ["top", "Topo"]].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}
+        ${stage.isModel ? `<button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura original do modelo e a pintura Pitwall (sem decalques de marcas)">🎨 Pintura ${paintMode === "pitwall" ? "Pitwall" : "original"}</button>` : ""}
         <button type="button" class="${stage.xray ? "on" : ""}" id="sc3dX" title="Mostra molas, amortecedores, braços e barras estabilizadoras (o carro fica transparente)">🔧 Suspensão</button>`;
       t.querySelectorAll("[data-v]").forEach((b) => b.onclick = () => stage.view(b.dataset.v));
       $q("#sc3dX").onclick = () => { stage.setXray(!stage.xray); paintTools(); };
+      const pb = $q("#sc3dP"); if (pb) pb.onclick = () => { paintMode = paintMode === "pitwall" ? "original" : "pitwall"; stage.setPaint(paintMode); paintTools(); };
     };
     try {
       if (!window.WebGL2RenderingContext && !window.WebGLRenderingContext) throw new Error("sem WebGL");

@@ -411,6 +411,33 @@ function helix(a, b, coils, radius, wire, mat0) {
 }
 
 
+
+// "Pintura Pitwall" para modelos locais: troca a pintura/livery pela cor do sistema, tira decalques, banners e texto do pneu.
+// É só visual e acontece no PC de quem usa; não altera nem redistribui o arquivo do modelo.
+function makeRestyle(model, car) {
+  const mats = new Map(), hid = [];
+  const reg = (m, kind) => { if (!mats.has(m)) mats.set(m, { kind, map: m.map, color: m.color && m.color.clone(), metal: m.metalness, rough: m.roughness, cc: m.clearcoat }); };
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    const list = Array.isArray(o.material) ? o.material : [o.material], nm = `${o.name} ${list.map((m) => m.name).join(" ")}`;
+    if (/decal|banner|logo|sticker|sponsor/i.test(nm) && !/glass|window/i.test(nm)) hid.push(o);
+    for (const m of list) {
+      if (/carpaint|body_paint|^paint/i.test(m.name)) reg(m, "paint");
+      else if (/tyre|tire/i.test(m.name) && !/glass|rim/i.test(m.name)) reg(m, "tire");
+    }
+  });
+  return (mode) => {
+    const on = mode === "pitwall";
+    for (const [m, o] of mats) {
+      if (!on) { m.map = o.map; if (o.color) m.color.copy(o.color); m.metalness = o.metal; m.roughness = o.rough; if (o.cc !== undefined) m.clearcoat = o.cc; }
+      else if (o.kind === "paint") { m.map = null; m.color.set("#0f9f66"); m.metalness = 0.35; m.roughness = 0.28; if ("clearcoat" in m) m.clearcoat = 1; }
+      else { m.map = null; m.color.set("#15171b"); m.roughness = 0.9; m.metalness = 0; }
+      m.needsUpdate = true;
+    }
+    hid.forEach((o) => { o.visible = !on; });
+  };
+}
+
 // ------------------------------------------------------------------ modelo .glb do próprio usuário (opcional)
 // Procura rodas/discos/suspensão pelos nomes (WHEEL_LF, DISC_RF, SUSP_LR...), alinha o modelo às medidas do editor
 // e prende as peças em pivôs para a cambagem, a convergência e a altura mexerem de verdade.
@@ -466,7 +493,8 @@ async function adoptModel(url, onProgress) {
   corners.forEach((cn) => cn.piv.traverse((o) => { if (o.isMesh) { o.castShadow = true; (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => materials.add(m)); } }));
   const wingGroup = new THREE.Group(), wing = new THREE.Group(), splitter = new THREE.Group();
   const keep = new Map(); materials.forEach((m) => keep.set(m, { t: m.transparent, o: m.opacity, d: m.depthWrite }));
-  return { isModel: true, root, body, P: PROFILES.generic, corners, wing, wingGroup, splitter, ducts: [], dashLed: { material: { emissiveIntensity: 1 } }, modelMats: keep,
+  const restyle = makeRestyle(model, null);
+  return { isModel: true, restyle, root, body, P: PROFILES.generic, corners, wing, wingGroup, splitter, ducts: [], dashLed: { material: { emissiveIntensity: 1 } }, modelMats: keep,
     paint: null, paintPlain: null, carbon: null, dark: null, bodyMats: [], cabinMeshes: [], glass: null };
 }
 
@@ -569,6 +597,7 @@ export async function createStage(host, opts) {
     sus.grp.visible = on;
   }
   setXray(false);
+  if (car.isModel) car.restyle(opts.paint || "pitwall");
 
   // ----- pontos clicáveis (3D -> tela)
   const spotPos = { aero_f: [2.3, 0.28, 0], aero_r: [-2.2, 1.22, 0], w0: [WB.front, 0.78, -fzTop()], w1: [WB.front, 0.78, fzTop()], w2: [WB.rear, 0.78, -rzTop()], w3: [WB.rear, 0.78, rzTop()],
@@ -620,6 +649,7 @@ export async function createStage(host, opts) {
   }
   apply(); frame();
   return {
+    isModel: !!car.isModel, setPaint(mode) { if (car.isModel) car.restyle(mode); },
     setEdits(e) { for (const k of Object.keys(edits)) delete edits[k]; Object.assign(edits, e); apply(); },
     setXray, view, els, destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); host.innerHTML = ""; },
     get xray() { return xray; }, renderer, scene, camera, car, sus,
