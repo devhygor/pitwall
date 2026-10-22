@@ -68,8 +68,8 @@ function drawCar(ctx, cx, cy, h, col, o = {}) {
 }
 
 // ---- o que cada plano libera nas opções de cada overlay ------------------------------------------------------
-// Sem o recurso, a opção volta ao valor da coluna "Grátis" (valor abaixo). overlay_custom = Pro; overlay_styles_team = Equipe.
-const OPT_FEATURE = "overlay_custom", OPT_FEATURE_TEAM = "overlay_styles_team";
+// Sem o recurso, a opção volta ao valor da coluna "Grátis" (valor abaixo). Tudo isto é do plano Pro (o Equipe inclui o Pro).
+const OPT_FEATURE = "overlay_custom", OPT_FEATURE_TEAM = "overlay_styles";          // escolher o carrinho de cada classe agora também é do Pro
 const OPT_LOCK = {
   map: { width: 9, rotate: 0, fzoom: 350, brakepts: false, corners: false, corner_now: false, numbers: false },
   pedals: { seconds: 8, steer: false, coast: false, wheel: false },
@@ -80,4 +80,4 @@ const OPT_LOCK = {
   radar: { range: 40, gap: false, numbers: false },
   blindl: { always: true }, blindr: { always: true },
 };
-const OPT_LOCK_TEAM = { radar: { carmap: null } };                    // escolher o carrinho de cada classe: Equipe
+const OPT_LOCK_TEAM = { radar: { carmap: null } };                    // escolher o carrinho de cada classe: Pro

@@ -3193,10 +3193,10 @@ OV_COLS.splice(6, 0, ["trend", "Tendência (aproximando / afastando)"]);
 
 // peças da tela de opções
 const OV_FEATS = new Set();
-const OV_TIER = { overlay_styles: "Pro", overlay_styles_team: "Equipe", overlay_custom: "Pro" };
+const OV_TIER = { overlay_styles: "Pro", overlay_styles_team: "Pro", overlay_custom: "Pro" };
 // opções com plano: sem o recurso a opção fica travada no valor básico (tabela OPT_LOCK em carshapes.js)
 const ovLocked = (n, k) => !!(OPT_LOCK[n] && k in OPT_LOCK[n] && !OV_FEATS.has(OPT_FEATURE));
-const ovTag = (need, lock) => `<em class="tier ${need === "overlay_styles_team" ? "team" : ""}">${lock ? "🔒 " : ""}${OV_TIER[need]}</em>`;
+const ovTag = (need, lock) => `<em class="tier ">${lock ? "🔒 " : ""}${OV_TIER[need]}</em>`;
 const ovChip = (n, k, label, v, tip) => {
   const lk = ovLocked(n, k);
   if (lk) v = !!OPT_LOCK[n][k];
@@ -3210,7 +3210,7 @@ const ovSeg = (n, k, opts, val, num) => {
     return `<button type="button" class="${String(val) === String(v) ? "on" : ""} ${lock ? "locked" : ""}" data-ov="${n}" data-k="${k}" data-val="${v}" ${num ? 'data-num="1"' : ""} ${nd ? `data-need="${nd}"` : ""}>${t}${nd ? ovTag(nd, lock) : ""}</button>`;
   }).join("")}</div>`;
 };
-const OV_P = "overlay_styles", OV_T = "overlay_styles_team";
+const OV_P = "overlay_styles", OV_T = "overlay_styles";
 const ovSlider = (n, k, label, v, min, max, step, unit) => {
   const lk = ovLocked(n, k);
   if (lk) v = OPT_LOCK[n][k];
@@ -3266,7 +3266,7 @@ function ovPanel(n, S) {
     const cm = c.carmap || {}, cmLock = !OV_FEATS.has(OV_T);
     g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => `<div class="cm-row"><canvas data-prev="${k}" width="56" height="88"></canvas>
         <span>${t}</span><select data-carmap="${k}" ${cmLock ? "disabled" : ""}>${CAR_KINDS.map(([v, tt]) => `<option value="${v}" ${(cm[k] || k) === v ? "selected" : ""}>${tt}</option>`).join("")}</select></div>`).join("")}
-      ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe o desenho sozinho pela classe do carro. No plano Equipe você escolhe o carrinho de cada classe.</div>`
+      ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe o desenho sozinho pela classe do carro. No plano Pro você escolhe o carrinho de cada classe.</div>`
         : `<div class="sub">O radar escolhe o desenho pela classe de cada carro (ACC e iRacing). Aqui você troca o carrinho de cada classe. <button type="button" class="btn xs" id="cmReset">Voltar ao automático</button></div>`}</div>`,
       "ex.: mostrar todos os GT3 como carro de turismo");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,

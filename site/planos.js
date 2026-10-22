@@ -75,8 +75,8 @@ async function renderPlans() {
     const cur = myPlan.plan === pl.code;
     const LISTS = {
       free: ["Gravar, analisar e comparar voltas", "Replay e overlays básicos no jogo (mapa simples, pedais, delta, pneus e curva enxutos)", "Engenheiro de voz: avisos e perguntas básicas", "Compare com amigos em 1 equipe", "Vídeos das últimas 5 sessões"],
-      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box) e totalmente personalizável", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Personalização completa de todos os overlays", "Overlays completos: pedais com gráfico, delta com combustível, participantes com classes, pneus como no ACC, curva completa, mapa com asfalto, radar visto de cima e circular", "Setups da equipe: baixe o setup do melhor tempo dos companheiros e compartilhe os seus", "Várias equipes", "Sem anúncios no site"],
-      team: ["Tudo do plano Pro, e mais:", "10 chaves do Pro para dividir com a equipe: todas vencem junto com o seu plano", "Modelos de transmissão: torre de participantes, painel do piloto, delta em barra larga, pneus em faixa", "Painel do dono para gerenciar os pilotos", "Até 3 computadores por licença"],
+      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box) e totalmente personalizável", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Personalização completa de todos os overlays", "Todos os modelos dos overlays: pedais com gráfico e painel do piloto, delta completo e em barra larga, participantes completo e em torre, pneus como no ACC e em faixa, curva completa, mapa com asfalto, radar (de cima, circular e halo) com carrinhos por classe", "Setups da equipe: baixe o setup do melhor tempo dos companheiros e compartilhe os seus", "Várias equipes", "Sem anúncios no site"],
+      team: ["Tudo do plano Pro, e mais:", "10 chaves do Pro para dividir com a equipe: todas vencem junto com o seu plano (quem ativar mais tarde não ganha dias a mais)", "Você gerencia as chaves na sua conta: pode revogar uma e passar para outra pessoa", "Até 3 computadores por licença"],
     };
     const feats = (LISTS[pl.code] || (pl.features || []).map((f) => FEATURE_NAME[f] || f)).map((t, i) => `<li${i === 0 && /^Tudo do/.test(t) ? ' class="all"' : ""}>${esc(t)}</li>`).join("");
     // com preço Fundador ativo, é ele que o botão cobra: mostramos esse valor e o normal ao lado
@@ -105,7 +105,7 @@ async function renderPlans() {
       ${fund ? `<div class="fundador"><b>Preço Fundador</b>: o valor de hoje não sobe para quem assinar agora.</div>` : ""}
       <ul>${feats}</ul>
       ${btn}
-      ${pl.code !== "free" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial="${pl.code}">Testar o ${esc(pl.name)} por ${TRIAL_DAYS} dias grátis</button>` : ""}
+      ${pl.code === "pro" && !cur && myPlan.plan === "free" ? `<button class="btn quiet small" data-trial="pro">Testar o Pro por ${TRIAL_DAYS} dias grátis</button>` : ""}
     </article>`;
   };
   draw();
@@ -247,7 +247,7 @@ async function renderAccount() {
           <p>${paid ? (far ? "Sem data para acabar." : `Válido até <b>${dt(a.ends_at)}</b>${left != null && left <= 10 ? ` (faltam ${left} dia${left === 1 ? "" : "s"})` : ""}.`) : "Você está no plano Grátis."}</p>
           <div class="row-actions">
             ${paid && a.source !== "grant" ? "" : `<a class="btn go small" href="#/planos">${paid ? "Ver planos" : "Assinar o Pro"}</a>`}
-            ${!paid && !a.trial ? `<button class="btn small" id="aTrial">Testar o Pro por ${TRIAL_DAYS} dias</button><button class="btn small" id="aTrialTeam">Testar o Equipe por ${TRIAL_DAYS} dias</button>` : ""}
+            ${!paid && !a.trial ? `<button class="btn small" id="aTrial">Testar o Pro por ${TRIAL_DAYS} dias</button>` : ""}
           </div>
           ${a.trial ? `<p class="sub">Teste grátis: de ${dt(a.trial.started_at)} até ${dt(a.trial.ends_at)}.</p>` : ""}
         </div>

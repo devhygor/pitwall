@@ -21,10 +21,10 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true };
 
 let cfg = { ...DEFAULT_CFG };
-// modelos extras de overlay: Pro (overlay_styles) e Equipe (overlay_styles_team); sem o recurso, volta para o modelo clássico
+// modelos extras de overlay: Pro (overlay_styles); sem o recurso, volta para o modelo simples
 const FEATS = new Set();
-const F_PRO = "overlay_styles", F_TEAM = "overlay_styles_team";
-// escada dos planos: Grátis = versões simples; Pro = os modelos completos; Equipe = modelos de transmissão
+const F_PRO = "overlay_styles", F_TEAM = F_PRO;           // o plano Equipe é o Pro + as chaves: os modelos de transmissão agora são do Pro
+// escada dos planos: Grátis = versões simples; Pro (e Equipe) = todos os modelos
 const STYLE_NEED = {
   map: { asphalt: F_PRO, neon: F_PRO }, mapmode: { follow: F_PRO, follow_rot: F_PRO },
   pedals: { classic: F_PRO, horizontal: F_PRO, driver: F_TEAM }, delta: { classic: F_PRO, bar: F_TEAM },

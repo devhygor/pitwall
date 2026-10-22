@@ -11,10 +11,9 @@ const PLAN_FEATURES = [
   ["Observador: carros ao lado, três de lado, livre", "pro"],
   ["Vídeos das voltas sem limite (grátis guarda as últimas 5 sessões)", "pro"],
   ["Overlays básicos: mapa simples, pedais minimalistas, delta só número, participantes compacto, pneus em 4 quadrados, curva em linha, radar com luzes laterais, luzes de ponto cego (uma por lado)", "free"],
-  ["Overlays completos: gráfico de pedais com volante, delta com previsão e combustível, participantes com colunas e classes, pneus como no ACC, próxima curva completa, mapa com asfalto e modo seguir, radar visto de cima e circular", "pro"],
-  ["Modelos de transmissão: pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo ao redor do carro", "team"],
+  ["Todos os modelos dos overlays: gráfico de pedais com volante e painel do piloto, delta completo e em barra larga, participantes completo e em torre, pneus como no ACC e em faixa, próxima curva completa, mapa com asfalto e modo seguir, radar (de cima, circular e halo) com carrinhos por classe", "pro"],
   ["Setups da equipe: o setup de cada melhor tempo dos companheiros, com notas e instalação em 1 clique no ACC (para quem está na equipe)", "pro"],
-  ["10 chaves do Pro para dividir com a equipe (todas vencem junto com o plano do dono), painel do dono e carrinhos por classe no radar", "team"],
+  ["Equipe: tudo do Pro e mais 10 chaves do Pro para dividir com a equipe (todas vencem junto com o plano do dono)", "team"],
   ["Sem anúncios no site", "pro"],
 ];
 const SRC_NAMES = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", team: "Chave da equipe", free: "", dev: "Desenvolvimento" };
@@ -44,7 +43,7 @@ async function renderPlano() {
         ${s.error ? `<div class="note warn">${esc(s.error)}</div>` : ""}
         ${s.needs_refresh ? `<div class="note warn">A licença salva venceu ou não confere. Abra o Pitwall com internet para renovar.</div>` : ""}
         <div class="plan-actions">
-          ${paid ? "" : s.logged_in ? `<button class="btn primary" id="pTrial">Testar o Pro por ${s.trial_days || 10} dias</button><button class="btn" id="pTrialTeam">Testar o Equipe por ${s.trial_days || 10} dias</button>`
+          ${paid ? "" : s.logged_in ? `<button class="btn primary" id="pTrial">Testar o Pro por ${s.trial_days || 10} dias</button>`
             : `<button class="btn primary" id="pLogin">Entrar com o Google</button>`}
           <button class="btn ${paid ? "" : "primary"}" id="pUp">${paid ? "Gerenciar minha conta" : "Ver planos e assinar"}</button>
           <button class="btn sm" id="pRef">Atualizar agora</button>
