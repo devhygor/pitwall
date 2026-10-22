@@ -622,7 +622,7 @@ class Team:
     def import_library_item(self, team_id: str, kind: str, item_id: str) -> dict:
         r = self._rpc("team_setup_get", {"p_team": team_id, "p_kind": kind, "p_id": item_id}) or {}
         if not r.get("ok"):
-            raise TeamError({"plano": "Os setups da equipe são do plano Pro ou Equipe. Veja o menu Plano.", "membro": "Você não é desta equipe."}.get(r.get("error"), "Setup não encontrado."))
+            raise TeamError({"plano": "Os setups da equipe são do plano Pro ou Equipe. Veja o menu Plano.", "membro": "Você não é desta equipe.", "limite_teste": "No teste grátis dá para baixar só 2 setups. Assine o Pro ou o Equipe para baixar sem limite."}.get(r.get("error"), "Setup não encontrado."))
         from . import setups
         return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {r.get('who') or 'Equipe'} - {r['name']}", json.loads(r["content"]))
 
@@ -634,6 +634,6 @@ class Team:
         r = self._rpc("lap_setup_get", {"p_lap": remote_id}) or {}
         if not r.get("ok"):
             raise TeamError({"plano": "Os setups da equipe são do plano Pro ou Equipe. Veja o menu Plano.", "membro": "Esse setup é só para quem está na mesma equipe.",
-                             "nao_achou": "Essa volta não tem setup."}.get(r.get("error"), "Não foi possível baixar o setup."))
+                             "nao_achou": "Essa volta não tem setup.", "limite_teste": "No teste grátis dá para baixar só 2 setups. Assine o Pro ou o Equipe para baixar sem limite."}.get(r.get("error"), "Não foi possível baixar o setup."))
         from . import setups
         return setups.save_shared(self.db, r["car"], r["track"], f"Equipe - {r.get('who') or 'Equipe'} - {r['name']}", json.loads(r["content"]))

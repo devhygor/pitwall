@@ -677,7 +677,7 @@ function bindRows(root) {
   root.querySelectorAll("[data-setup]").forEach((b) => b.onclick = async () => {
     let g = null;
     try { g = await rpc("lap_setup_get", { p_lap: b.dataset.setup }); } catch (e) { /* abaixo */ }
-    if (!g || !g.ok) { alert(g && g.error === "plano" ? "Os setups da equipe são do plano Pro ou Equipe." : g && g.error === "membro" ? "Esse setup é só para quem está na mesma equipe." : "Não foi possível baixar o setup."); return; }
+    if (!g || !g.ok) { alert(g && g.error === "limite_teste" ? "No teste grátis dá para baixar só 2 setups. Assine o Pro ou o Equipe para baixar sem limite." : g && g.error === "plano" ? "Os setups da equipe são do plano Pro ou Equipe." : g && g.error === "membro" ? "Esse setup é só para quem está na mesma equipe." : "Não foi possível baixar o setup."); return; }
     const blob = new Blob([JSON.stringify(JSON.parse(g.content), null, "\t")], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `${(g.name || "setup").replace(/[^\w.-]+/g, "_")}.json`; a.click();
@@ -707,7 +707,7 @@ async function loadTeamSetups(teamId) {
   box.querySelectorAll("[data-tsd]").forEach((b) => b.onclick = async () => {
     const [kind, sid] = b.dataset.tsd.split(":");
     const g = await rpc("team_setup_get", { p_team: teamId, p_kind: kind, p_id: sid });
-    if (!g || !g.ok) { alert("Não foi possível baixar este setup."); return; }
+    if (!g || !g.ok) { alert(g && g.error === "limite_teste" ? "No teste grátis dá para baixar só 2 setups. Assine o Pro ou o Equipe para baixar sem limite." : "Não foi possível baixar este setup."); return; }
     const blob = new Blob([JSON.stringify(JSON.parse(g.content), null, "\t")], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `${(g.name || "setup").replace(/[^\w.-]+/g, "_")}.json`; a.click();

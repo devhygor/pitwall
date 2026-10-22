@@ -44,7 +44,7 @@ Onde o app confere: `pitwall/license.py` (`has("recurso")`) é usado em `voice/_
 `video.py` (vídeos guardados).
 
 ### Setups da equipe (Pro e Equipe)
-`supabase/equipe_setups.sql` e `supabase/equipe_setups_v2.sql`. **Ver e baixar**: só quem está na mesma equipe E tem o plano Pro ou Equipe ativo (assinatura, cortesia, chave de equipe ou teste). **Enviar** (o setup vai com o recorde e dá para compartilhar com nota): qualquer membro, inclusive no Grátis.
+`supabase/equipe_setups.sql` e `supabase/equipe_setups_v2.sql`. **Ver e baixar**: só quem está na mesma equipe E tem o plano Pro ou Equipe ativo (assinatura, cortesia, chave de equipe ou teste). **No teste grátis só dá para baixar 2 setups** (tabela `setup_downloads`; o limite está em `app_config.trial_setup_downloads`, mude com SQL; repetir um já baixado não conta). **Enviar** (o setup vai com o recorde e dá para compartilhar com nota): qualquer membro, inclusive no Grátis.
 Reúne, por equipe, (1) o setup usado no melhor tempo de cada piloto (vai junto com o recorde quando "Enviar o setup usado junto" está ligado) e (2) setups que alguém compartilha de propósito
 (app: Setups > detalhe > *Compartilhar com a equipe*, com nota). Ver e baixar: app (Setups > *Setups da equipe*, instala no ACC com um clique; e o botão "⚙ setup" nas voltas) e site (página da equipe).
 A checagem é no banco: os setups das voltas ficam na tabela fechada `lap_setups` (antes qualquer pessoa logada lia a coluna `laps.setup_json`); o acesso é por `lap_setup_get`, `team_setup_library`, `team_setup_get` e `share_team_setup`, que exigem ser da equipe e ter Pro/Equipe (`_has_pro`).
