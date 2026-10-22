@@ -28,7 +28,9 @@ function priceStats(prices) {
     const year12 = mc ? mc * 12 : null;
     out[code] = { m: mc, y: yc, f: fc, year12, saveC: mc && yc ? year12 - yc : null, savePct: mc && yc ? Math.round((1 - yc / year12) * 1000) / 10 : null, yMonth: yc ? yc / 12 : null };
   }
-  const P = out.pro, T = out.team;
+  const P = out.pro, T = out.team, PEOPLE = 11;                                   // dono + 10 chaves
+  const bundle = (pc, tc) => (pc && tc ? { all: pc * PEOPLE, save: pc * PEOPLE - tc, pct: Math.round((1 - tc / (pc * PEOPLE)) * 100), per: tc / PEOPLE, min: Math.ceil(tc / pc) } : null);
+  out.people = PEOPLE; out.bm = bundle(P.m, T.m); out.by = bundle(P.y, T.y);
   out.diff = { m: P.m && T.m ? T.m - P.m : null, y: P.y && T.y ? T.y - P.y : null,
     mPct: P.m && T.m ? Math.round((T.m / P.m - 1) * 100) : null, yPct: P.y && T.y ? Math.round((T.y / P.y - 1) * 100) : null };
   return out;
@@ -121,9 +123,9 @@ async function renderPlans() {
         : `<div class="cmp">No anual sai ${brl(Math.round(sPl.yMonth))}/mês: <b>−${pctTxt(sPl.savePct)}</b> (economiza ${brl(sPl.saveC)} por ano)</div>`;
     }
     if (pl.code === "team" && ST.diff.m != null) {
-      const d = period === "year" ? ST.diff.y : ST.diff.m, pc = period === "year" ? ST.diff.yPct : ST.diff.mPct;
-      cmpTxt += `<div class="cmp">Em relação ao Pro: <b>+${brl(d)}</b>${period === "year" ? " por ano" : " por mês"} (+${pc}%)</div>`;
-      if (ST.team.m) cmpTxt += `<div class="cmp good">Dividindo as 10 chaves entre 11 pessoas (você e mais 10): <b>${brl(Math.round(ST.team.m / 11))}/mês</b> por pessoa no mensal${ST.pro.m ? `, contra ${brl(ST.pro.m)} de um Pro individual` : ""}.</div>`;
+      const bd = period === "year" ? ST.by : ST.bm, perTxt = period === "year" ? "ano" : "mês", d = period === "year" ? ST.diff.y : ST.diff.m;
+      cmpTxt += `<div class="cmp">Em relação a 1 Pro: <b>+${brl(d)}</b> por ${perTxt}, mas o Equipe inclui <b>10 chaves do Pro</b> (${ST.people} pessoas com Pro, contando você).</div>`;
+      if (bd) cmpTxt += `<div class="cmp good">${ST.people} Pros avulsos custariam <b>${brl(bd.all)}</b> por ${perTxt}. No Equipe você paga ${brl(period === "year" ? ST.team.y : ST.team.m)}: <b>economia de ${brl(bd.save)} (−${bd.pct}%)</b>, ou ${brl(Math.round(bd.per))} por pessoa. Já compensa a partir de <b>${bd.min} pessoas</b>.</div>`;
     }
     let btn;
     if (pl.code === "free") btn = `<a class="btn quiet" href="${esc(PITWALL.download)}">Baixar grátis</a>`;
@@ -442,11 +444,15 @@ function priceCompare(prices) {
     <p class="sub">Calculado com os preços ativos acima (sem cupons). “Economia” = quanto o anual custa a menos que pagar 12 meses no mensal.</p>
     ${tbl(["Plano", "Mensal", "Anual", "12 × mensal", "Economia do anual", "Anual por mês"], rows, true)}
     ${warnTeam}
-    <h3 style="margin:14px 0 6px">Equipe x Pro</h3>
-    ${d.m != null ? tbl(["", "Pro", "Equipe", "Diferença", "%"], [
-      ["Mensal", brl(S.pro.m), brl(S.team.m), `<b>+${brl(d.m)}</b>`, `+${d.mPct}%`],
-      ["Anual", brl(S.pro.y), brl(S.team.y), `<b>${d.y >= 0 ? "+" : ""}${brl(d.y)}</b>`, `${d.yPct >= 0 ? "+" : ""}${d.yPct}%`],
-      ["Equipe por pessoa (11 pessoas, mensal)", "—", brl(Math.round(S.team.m / 11)), "—", "—"]], true) : `<p class="sub">Falta o preço mensal ou anual de um dos planos.</p>`}
+    <h3 style="margin:14px 0 6px">Equipe x Pro (o Equipe inclui 10 chaves: ${S.people} pessoas com Pro)</h3>
+    ${d.m != null ? tbl(["", "Mensal", "Anual"], [
+      ["1 Pro", brl(S.pro.m), brl(S.pro.y)],
+      ["Equipe", brl(S.team.m), brl(S.team.y)],
+      ["Diferença do Equipe para 1 Pro", `<b>+${brl(d.m)}</b> (+${d.mPct}%)`, `<b>${d.y >= 0 ? "+" : ""}${brl(d.y)}</b> (${d.yPct >= 0 ? "+" : ""}${d.yPct}%)`],
+      [`${S.people} Pros avulsos (o que a equipe pagaria sem o Equipe)`, S.bm ? brl(S.bm.all) : "—", S.by ? brl(S.by.all) : "—"],
+      ["<b>Economia do Equipe</b> sobre os Pros avulsos", S.bm ? `<b>${brl(S.bm.save)}</b> (−${S.bm.pct}%)` : "—", S.by ? `<b>${brl(S.by.save)}</b> (−${S.by.pct}%)` : "—"],
+      ["Custo por pessoa no Equipe", S.bm ? brl(Math.round(S.bm.per)) + "/mês" : "—", S.by ? brl(Math.round(S.by.per)) + "/ano" : "—"],
+      ["Compensa a partir de", S.bm ? `${S.bm.min} pessoas` : "—", S.by ? `${S.by.min} pessoas` : "—"]], true) : `<p class="sub">Falta o preço mensal ou anual de um dos planos.</p>`}
     <p class="sub">O desconto de 10% de cupom ou afiliado vem por cima disso, no primeiro pagamento (veja a aba Afiliados).</p></div>`;
 }
 
