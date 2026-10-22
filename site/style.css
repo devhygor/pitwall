@@ -620,3 +620,10 @@ html { scroll-padding-top: 76px; }
 .ref-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3ee08f, #3d8bff, #a855f7); }
 .ref-stats { display: flex; gap: 18px; margin-bottom: 10px; } .ref-stats div { display: flex; flex-direction: column; } .ref-stats b { font-size: 26px; } .ref-stats span { font-size: 12px; opacity: .7; }
 .ref-rules { margin: 0; padding-left: 18px; line-height: 1.6; }
+
+/* dados sensíveis com olho */
+.pii { display: inline-flex; align-items: center; gap: 6px; }
+.pii .piiv { font-variant-numeric: tabular-nums; word-break: break-all; }
+.eye { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; opacity: .6; cursor: pointer; flex: none; }
+.eye:hover { opacity: 1; background: rgba(255,255,255,.08); }
+.pii-field { display: inline-flex; align-items: center; gap: 6px; }

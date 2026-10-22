@@ -2607,7 +2607,7 @@ async function renderTeam(tab) {
           ${teams.length > 1 ? `<div class="tswitch">${teams.map((t) => `<button class="${t.id === teamState.sel ? "on" : ""}" data-team="${t.id}">${esc(t.name)}</button>`).join("")}</div>` : ""}
           <div id="thMembers" class="th-members"></div></div></div>
       <div class="th-side">
-        <div class="me-chip">${avatar(u)}<span>${esc(u.name || "")}<small>${esc(u.email || "")}</small></span><button class="btn xs" id="tOutBtn">Sair</button></div>
+        <div class="me-chip">${avatar(u)}<span>${esc(u.name || "")}<small>${pii(u.email || "", "email")}</small></span><button class="btn xs" id="tOutBtn">Sair</button></div>
         <div class="row">${syncChip(st, s)}<button class="btn xs" id="tSync" title="Enviar agora os recordes que faltam">Sincronizar</button>
           <a class="btn xs" href="${esc(st.site_url)}" target="_blank" rel="noopener">Site</a></div>
       </div>
@@ -2844,7 +2844,7 @@ async function teamAccess(team) {
       <div class="panel"><h2>Convidar por e-mail</h2>
         <div class="row"><input id="tMail" class="inp" type="email" placeholder="amigo@exemplo.com"><button class="btn primary sm" id="tMailBtn">Convidar</button></div>
         <div class="sub" id="tMailOut">O convite fica esperando a pessoa entrar com esse e-mail no app ou no site. Você também pode mandar o link por e-mail.</div>
-        ${mg.invites.length ? `<div class="invlist">${mg.invites.map((i) => `<div class="mrow"><div class="mname"><b>${esc(i.email)}</b><small>convidado ${agoText(i.created_at)} · aguardando</small></div>
+        ${mg.invites.length ? `<div class="invlist">${mg.invites.map((i) => `<div class="mrow"><div class="mname"><b>${pii(i.email, "email")}</b><small>convidado ${agoText(i.created_at)} · aguardando</small></div>
           <span class="spacer"></span><a class="btn xs" href="${mailto(i.email)}">Enviar e-mail</a><button class="btn xs" data-cinv="${i.id}">Cancelar</button></div>`).join("")}</div>` : ""}
       </div>
       <div class="panel"><h2>Link de convite</h2>

@@ -549,7 +549,7 @@ async function renderTeam(id) {
         ${manager ? `<div class="panel"><h2>Convidar por e-mail</h2>
           <form class="inline" id="mailForm"><input class="field" type="email" id="mailTo" placeholder="amigo@exemplo.com" required><button class="btn go small" type="submit">Convidar</button></form>
           <div class="msg" id="mailOut"></div>
-          ${invites.length ? invites.map((i) => `<div class="member"><span>${esc(i.email)}<br><em>aguardando · ${ago(i.created_at)}</em></span><span style="flex:1"></span>
+          ${invites.length ? invites.map((i) => `<div class="member"><span>${pii(i.email, "email")}<br><em>aguardando · ${ago(i.created_at)}</em></span><span style="flex:1"></span>
             <a class="btn small quiet" href="${mailto(i.email)}">Enviar e-mail</a><button class="btn small quiet" data-cinv="${i.id}">Cancelar</button></div>`).join("") : ""}
           <p class="help">A pessoa vê o convite ao entrar com esse e-mail aqui no site ou no app.</p></div>` : ""}
         <div class="panel"><h2>Chamar mais gente</h2>

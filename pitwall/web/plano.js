@@ -35,7 +35,7 @@ async function renderPlano() {
         <div class="plan-top">
           <div><span class="plan-chip ${paid ? "pro" : ""}">${esc(s.plan_name)}</span>
             ${SRC_NAMES[s.source] ? `<span class="sub"> · ${SRC_NAMES[s.source]}</span>` : ""}</div>
-          ${s.email ? `<span class="sub">${esc(s.email)}</span>` : ""}
+          ${s.email ? `<span class="sub">${pii(s.email, "email")}</span>` : ""}
         </div>
         <div class="plan-line">${paid ? esc(until) + " O Pitwall renova o plano sozinho sempre que abre com internet." : "Você está no plano Grátis. Assine o Pro ou comece o teste de 10 dias."}</div>
         ${s.error ? `<div class="note warn">${esc(s.error)}</div>` : ""}
@@ -51,7 +51,7 @@ async function renderPlano() {
       <div class="set-card"><h2>Chave de licença</h2>
         ${setRow("Tenho uma chave", "Se você pagou com um e-mail diferente do Google, cole a chave que aparece na sua conta no site (PW-XXXX-XXXX-XXXX-XXXX).",
           `<div class="eng-inline"><input id="pKey" type="text" placeholder="PW-XXXX-XXXX-XXXX-XXXX" value="" style="min-width:230px"><button class="btn" id="pKeyBtn">Ativar</button></div>`)}
-        ${s.license_key ? `<div class="kv"><span>Sua chave</span><code>${esc(s.license_key)}</code></div>` : ""}
+        ${s.license_key ? `<div class="kv"><span>Sua chave</span><code>${pii(s.license_key, "key")}</code></div>` : ""}
         ${(paid && s.source !== "dev") ? `<div class="sub" style="margin-top:8px"><button class="btn sm" id="pClear">Remover a licença deste computador</button></div>` : ""}
       </div>
 

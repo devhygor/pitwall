@@ -104,7 +104,7 @@ async function startTrialSite(plan) {
 async function buy(plan, priceId) {
   const html = `<div class="modal" id="buyModal"><div class="modal-box">
     <h2>Assinar o plano ${esc(PLAN_NAME[plan] || plan)}</h2>
-    <p class="sub">Precisamos do nome e do CPF ou CNPJ para emitir a cobrança e a nota fiscal. O acesso é liberado no e-mail <b>${esc(session.user.email)}</b>.</p>
+    <p class="sub">Precisamos do nome e do CPF ou CNPJ para emitir a cobrança e a nota fiscal. O acesso é liberado no e-mail <b>${pii(session.user.email, "email")}</b>.</p>
     <label>Nome completo ou razão social<input id="bName" type="text" autocomplete="name" value="${esc((profile && profile.name) || "")}"></label>
     <label>CPF ou CNPJ<input id="bDoc" type="text" inputmode="numeric" autocomplete="off" placeholder="somente números"></label>
     <label>Cupom ou código de afiliado (opcional)<input id="bCoupon" type="text" autocomplete="off" value="${esc(store.get("pw.ref") || "")}" placeholder="ex.: MEUCODIGO"></label>
@@ -179,7 +179,7 @@ async function renderAccount() {
   view.innerHTML = `
     <section class="sect"><div class="wrap acct">
       <span class="eyebrow">Minha conta</span>
-      <h1 class="plans-h">${esc(a.email || "")}</h1>
+      <h1 class="plans-h">${pii(a.email || "", "email")}</h1>
       <div class="acct-grid">
         <div class="panel"><h2>Plano</h2>
           <div class="plan-chip2 ${paid ? "pro" : ""}">${esc(PLAN_NAME[a.plan] || a.plan)}</div>
@@ -192,7 +192,7 @@ async function renderAccount() {
           ${a.trial ? `<p class="sub">Teste grátis: de ${dt(a.trial.started_at)} até ${dt(a.trial.ends_at)}.</p>` : ""}
         </div>
         <div class="panel"><h2>Chave de licença</h2>
-          ${a.license_key ? `<code class="lickey" id="licKey">${esc(a.license_key)}</code><button class="btn small quiet" id="copyKey">Copiar</button>
+          ${a.license_key ? `<code class="lickey" id="licKey">${pii(a.license_key, "key")}</code><button class="btn small quiet" id="copyKey">Copiar</button>
             <p class="sub">No Pitwall: menu <b>Plano</b> &gt; “Tenho uma chave”. Se entrar com o mesmo e-mail do Google, não precisa da chave.</p>`
             : `<p class="sub">A chave aparece aqui quando você tiver um plano pago, uma cortesia ou o teste grátis.</p>`}
         </div>
@@ -306,7 +306,7 @@ async function renderAffiliate() {
         </div>
         <div class="panel"><h2>Como você recebe</h2>
           <p class="sub">O pagamento é feito por Pix, manualmente, para a chave abaixo. A comissão fica 7 dias em espera e depois é aprovada; reembolso cancela a comissão.</p>
-          <div class="adm-form"><input id="afPix" type="text" placeholder="Sua chave Pix" value="${esc(a.pix_key || "")}"><button class="btn small" id="afPixSave">Salvar</button></div>
+          <div class="adm-form">${piiField("afPix", a.pix_key || "", "Sua chave Pix")}<button class="btn small" id="afPixSave">Salvar</button></div>
           <div class="modal-err" id="afMsg"></div>
         </div>
         <div class="panel"><h2>Comissões</h2>
@@ -366,11 +366,11 @@ async function renderAdmin() {
            ...D.grants.filter((g) => !g.revoked_at && g.expires_at).map((g) => [g.email, "Cortesia", PLAN_NAME[g.plan_code], g.expires_at]),
            ...D.trials.map((t) => [t.email, "Teste", "Pro", t.ends_at])]
             .filter((r) => { const d = days(r[3]); return d != null && d >= 0 && d <= 10; }).sort((a, b) => new Date(a[3]) - new Date(b[3]))
-            .map((r) => [esc(r[0]), r[1], r[2], `${dt(r[3])} <span class="sub">(${days(r[3])} d)</span>`]), true)}</div>`,
+            .map((r) => [pii(r[0], "email"), r[1], r[2], `${dt(r[3])} <span class="sub">(${days(r[3])} d)</span>`]), true)}</div>`,
       usuarios: () => `<div class="panel"><h2>Quem usa o Pitwall</h2>
         <p class="sub">A versão aparece depois que a pessoa abre o app novo (0.1.45 ou mais recente) com o login do Google.${LATEST ? ` Última versão publicada: <b>${esc(LATEST)}</b>.` : ""}</p>
         ${table(["E-mail", "Plano", "Versão do app", "Último acesso do app", "Computadores", "Cadastro", "Último login"],
-          U.filter(match).map((u) => [esc(u.email), `${PLAN_NAME[u.plan] || "Grátis"}${SRC_NAME[u.source] ? ` <small class="sub">(${SRC_NAME[u.source]})</small>` : ""}`,
+          U.filter(match).map((u) => [pii(u.email, "email"), `${PLAN_NAME[u.plan] || "Grátis"}${SRC_NAME[u.source] ? ` <small class="sub">(${SRC_NAME[u.source]})</small>` : ""}`,
             u.app_version ? `<b>${esc(u.app_version)}</b>${LATEST && verOlder(u.app_version, LATEST) ? ` <span class="st st-past_due">desatualizado</span>` : ` <span class="st st-active">em dia</span>`}` : `<span class="sub">ainda não apareceu</span>`,
             u.last_seen ? `${dtt(u.last_seen)}<br><small class="sub">${esc(u.device_label || "")}</small>` : "—", u.devices || 0, dt(u.created_at), dtt(u.last_sign_in_at)]), true)}</div>`,
       afiliados: () => `<div class="panel"><h2>Novo afiliado</h2>
@@ -383,7 +383,7 @@ async function renderAdmin() {
           <button class="btn go small" id="afGo">Criar afiliado</button></div>
         <p class="sub">O link de divulgação é <code>${esc(location.origin)}/?ref=CODIGO</code>: o código já vem preenchido na hora de assinar.</p></div>
         <div class="panel">${table(["Afiliado", "Código e link", "Condições", "Clientes", "A receber", "Pago", ""], AF.affiliates.filter(match).map((a) => [
-          `${esc(a.name)}<br><small class="sub">${esc(a.email || "")}</small><br><small class="sub">Pix: ${esc(a.pix_key || "—")}</small>`,
+          `${esc(a.name)}<br><small class="sub">${pii(a.email, "email")}</small><br><small class="sub">Pix: ${pii(a.pix_key || "", "txt") || "—"}</small>`,
           `<code>${esc(a.code)}</code> <button class="btn small quiet" data-cl="${esc(location.origin)}/?ref=${esc(a.code)}">copiar link</button>`,
           `${a.discount_pct}% ${a.discount_duration === "forever" ? "sempre" : "no 1º mês"}<br>${a.commission_pct}% ${a.commission_mode === "first" ? "no 1º pagamento" : "todo mês"}`,
           `${a.clients_active} ativos / ${a.clients_total}`,
@@ -414,19 +414,19 @@ async function renderAdmin() {
         return `<div class="kpis">${[["A pagar (aprovadas)", brl(sum((c) => c.status === "pending" && c.approved))], ["Em espera (7 dias)", brl(sum((c) => c.status === "pending" && !c.approved))], ["Já pagas", brl(sum((c) => c.status === "paid"))]]
           .map(([t, v]) => `<div class="kpi"><small>${t}</small><b>${v}</b></div>`).join("")}</div>
         <div class="panel">${table(["Data", "Afiliado", "Cliente", "Base", "%", "Comissão", "Status", ""], AF.commissions.filter(match).map((c) => [dt(c.created_at),
-          `${esc(c.affiliate_name)}<br><small class="sub">Pix: ${esc(c.pix_key || "—")}</small>`, esc(c.client_email || ""), brl(c.base_cents), c.pct + "%", `<b>${brl(c.amount_cents)}</b>`,
+          `${esc(c.affiliate_name)}<br><small class="sub">Pix: ${pii(c.pix_key || "", "txt") || "—"}</small>`, pii(c.client_email, "email"), brl(c.base_cents), c.pct + "%", `<b>${brl(c.amount_cents)}</b>`,
           c.status === "paid" ? `<span class="st st-active">Paga em ${dt(c.paid_at)}</span>` : c.status === "canceled" ? `<span class="st st-canceled">Cancelada</span> <small class="sub">${esc(c.note || "")}</small>`
             : c.approved ? `<span class="st st-active">Aprovada</span>` : `<span class="st st-pending">Em espera até ${dt(c.approve_at)}</span>`,
           c.status === "pending" ? (c.approved ? `<button class="btn small" data-cm="${c.id}" data-st="paid">Marcar como paga</button> ` : "") + `<button class="btn small quiet" data-cm="${c.id}" data-st="canceled">Cancelar</button>` : ""]), true)}
         <p class="sub">A comissão é calculada sobre o valor realmente pago (já com o desconto do cliente), sem descontar a taxa do Asaas. Reembolso cancela a comissão. Você paga o afiliado por Pix e marca aqui como paga.</p></div>`; },
       assinaturas: () => `<div class="panel">${table(["E-mail", "Nome / CPF-CNPJ", "Plano", "Status", "Vence", "Chave", ""],
-        D.subscriptions.filter(match).map((s) => [esc(s.email), `${esc(s.name || "")}<br><small class="sub">${esc(s.doc || "")}</small>`,
+        D.subscriptions.filter(match).map((s) => [pii(s.email, "email"), `${esc(s.name || "")}<br><small class="sub">${pii(s.doc || "", "doc")}</small>`,
           `${PLAN_NAME[s.plan_code]} ${s.period === "year" ? "anual" : "mensal"}`, badge(s.status) + (s.cancel_at_period_end ? ` <small class="sub">cancela no fim</small>` : ""),
-          dt(s.current_period_end), `<code>${esc(s.license_key || "")}</code>`,
+          dt(s.current_period_end), `<code>${pii(s.license_key || "", "key")}</code>`,
           `<button class="btn small quiet" data-ext="${s.id}" data-end="${s.current_period_end || ""}">+30 dias</button>
            <button class="btn small quiet" data-cancel="${s.id}">Cancelar</button>`]), true)}</div>`,
       pagamentos: () => `<div class="panel">${table(["Data", "E-mail", "Valor", "Status", "Forma", "Recibo"],
-        D.payments.filter(match).map((p) => [dt(p.paid_at || p.due_date || p.created_at), esc(p.email || ""), brl(p.amount_cents), badge(p.status), esc(p.method || ""),
+        D.payments.filter(match).map((p) => [dt(p.paid_at || p.due_date || p.created_at), pii(p.email, "email"), brl(p.amount_cents), badge(p.status), esc(p.method || ""),
           p.invoice_url ? `<a href="${esc(p.invoice_url)}" target="_blank" rel="noopener">abrir</a>` : ""]), true)}</div>`,
       cortesias: () => `<div class="panel"><h2>Dar um plano de cortesia</h2>
         <div class="adm-form"><input id="gMail" type="email" placeholder="e-mail do amigo (o do Google dele)">
@@ -434,14 +434,14 @@ async function renderAdmin() {
           <select id="gDays"><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">1 ano</option><option value="">Sem data para acabar</option></select>
           <input id="gWhy" type="text" placeholder="motivo (opcional)"><button class="btn go small" id="gGo">Liberar</button></div>
         <p class="sub">A pessoa entra no Pitwall com esse e-mail do Google (ou usa a chave) e já recebe o plano.</p></div>
-        <div class="panel">${table(["E-mail", "Plano", "Até", "Motivo", "Status", ""], D.grants.filter(match).map((g) => [esc(g.email), PLAN_NAME[g.plan_code],
+        <div class="panel">${table(["E-mail", "Plano", "Até", "Motivo", "Status", ""], D.grants.filter(match).map((g) => [pii(g.email, "email"), PLAN_NAME[g.plan_code],
           g.expires_at ? dt(g.expires_at) : "sem fim", esc(g.reason || ""), g.revoked_at ? `<span class="st st-canceled">Revogada</span>` : (!g.expires_at || new Date(g.expires_at) > new Date()) ? `<span class="st st-active">Ativa</span>` : `<span class="st st-expired">Vencida</span>`,
           g.revoked_at ? "" : `<button class="btn small quiet" data-rg="${g.id}">Revogar</button>`]), true)}</div>`,
-      testes: () => `<div class="panel">${table(["E-mail", "Começou", "Termina", "", ""], D.trials.filter(match).map((t) => [esc(t.email), dt(t.started_at),
+      testes: () => `<div class="panel">${table(["E-mail", "Começou", "Termina", "", ""], D.trials.filter(match).map((t) => [pii(t.email, "email"), dt(t.started_at),
         `${dt(t.ends_at)} <span class="sub">(${days(t.ends_at)} d)</span>`, `<button class="btn small quiet" data-xt="${esc(t.email)}">+7 dias</button>`, ""]), true)}</div>`,
-      licencas: () => `<div class="panel"><h2>Chaves</h2>${table(["Chave", "E-mail", "Criada", "Status", ""], D.licenses.filter(match).map((l) => [`<code>${esc(l.key)}</code>`, esc(l.email), dt(l.created_at),
+      licencas: () => `<div class="panel"><h2>Chaves</h2>${table(["Chave", "E-mail", "Criada", "Status", ""], D.licenses.filter(match).map((l) => [`<code>${pii(l.key, "key")}</code>`, pii(l.email, "email"), dt(l.created_at),
         l.revoked_at ? `<span class="st st-canceled">Revogada</span>` : `<span class="st st-active">Ativa</span>`, l.revoked_at ? "" : `<button class="btn small quiet" data-rl="${esc(l.key)}">Revogar</button>`]), true)}</div>
-        <div class="panel"><h2>Computadores</h2>${table(["E-mail", "Computador", "Versão", "Visto", ""], D.devices.filter(match).map((d) => [esc(d.email), esc(d.label || ""), esc(d.app_version || ""), dtt(d.last_seen),
+        <div class="panel"><h2>Computadores</h2>${table(["E-mail", "Computador", "Versão", "Visto", ""], D.devices.filter(match).map((d) => [pii(d.email, "email"), esc(d.label || ""), esc(d.app_version || ""), dtt(d.last_seen),
         d.revoked_at ? `<span class="st st-canceled">Removido</span>` : `<button class="btn small quiet" data-rd="${d.id}">Remover</button>`]), true)}</div>`,
       precos: () => `<div class="panel">${table(["Plano", "Período", "Nome", "Valor (R$)", "Ativo", ""], D.prices.map((p) => [PLAN_NAME[p.plan_code], p.period === "year" ? "Anual" : "Mensal", esc(p.label || "Padrão"),
         `<input class="adm-num" data-pv="${p.id}" type="number" step="0.01" min="0" value="${(p.amount_cents / 100).toFixed(2)}">`,
