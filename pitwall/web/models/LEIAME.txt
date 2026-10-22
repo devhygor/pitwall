@@ -1,12 +1,13 @@
 pitwall_gt.glb — carro padrão do editor visual de setup.
 
-Origem: modelo GT gerado por IA pelo próprio dono do projeto (Hygor), em 2026-10-22, a partir do arquivo
+Origem: ORIGEM A CONFIRMAR pelo dono do projeto (Hygor) — informado primeiro como gerado por IA e depois como modelado no Blender.
+Arquivo de partida (2026-10-22):
 "FErrariBrazilian_GT_Racer_1022155043_generate.glb" (só geometria, sem textura nem logos). Reduzido e suavizado com
 tools/decimar_modelo.py (700 mil triângulos, ~17 MB, 24 passos de suavização). A pintura, os vidros, pneus, aros e os
 decalques (número e PITWALL) são aplicados por código.
 
-Termos de uso: valem os termos da ferramenta de IA e do plano usados pelo dono do projeto na geração.
-PENDENTE: anotar aqui o nome da ferramenta, o plano e a data em que os termos permitiam uso comercial (guarde um print/PDF).
+Termos de uso: se foi gerado por IA, valem os termos da ferramenta e do plano usados; se foi modelado no Blender, vale a autoria do dono.
+PENDENTE: anotar aqui como foi feito (ferramenta/plano e data, ou guardar o arquivo .blend como prova de autoria).
 
 Cuidado de marca: o prompt citava "Ferrari". O modelo não tem logos, mas não anuncie o carro como Ferrari nem use o nome
 na interface ou no marketing.
