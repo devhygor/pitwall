@@ -364,8 +364,8 @@ async function renderSession(id) {
       scales: { x: { time: false } },
       axes: [axis({ label: "" , values: (u, v) => v.map((n) => Number.isInteger(n) ? n : "") }),
              axis({ values: (u, v) => v.map((n) => fmtLap(n * 1000).slice(0, -2)), size: 70 })],
-      series: [{}, { label: "Todas", stroke: "#5d6573", width: 1.5, points: { size: 6, fill: "#5d6573" }, spanGaps: true },
-               { label: "Válidas", stroke: css("--accent"), width: 0, points: { size: 8, fill: css("--accent") } }],
+      series: [{}, { label: "Todas", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: "#5d6573", width: 1.5, points: { size: 6, fill: "#5d6573" }, spanGaps: true },
+               { label: "Válidas", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: css("--accent"), width: 0, points: { size: 8, fill: css("--accent") } }],
       cursor: { drag: { x: false, y: false } },
     }, [xs, ys, yv], el));
   } else el.innerHTML = `<div class="sub">Poucas voltas para o gráfico.</div>`;
@@ -2584,8 +2584,8 @@ async function comboProgress(car, track) {
     plots.push(new uPlot({
       width: el.clientWidth, height: 220, scales: { x: { time: false } },
       axes: [axis({ values: dlabel(S) }), axis({ values: (u, v) => v.map((x) => fmtLap(x * 1000).slice(0, -2)), size: 70 })],
-      series: [{}, { label: "Melhor", stroke: css("--accent"), width: 2, points: { size: 6, fill: css("--accent") } },
-               { label: "Média", stroke: "#8a93a3", width: 1.5, dash: [5, 4], points: { size: 4 } }],
+      series: [{}, { label: "Melhor", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: css("--accent"), width: 2, points: { size: 6, fill: css("--accent") } },
+               { label: "Média", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: "#8a93a3", width: 1.5, dash: [5, 4], points: { size: 4 } }],
       cursor: { drag: { x: false, y: false } },
     }, [S.map((_, i) => i), S.map((s) => s.best_ms / 1000), S.map((s) => s.avg_ms / 1000)], el));
   } else el.innerHTML = `<div class="sub">Precisa de 2 sessões ou mais.</div>`;

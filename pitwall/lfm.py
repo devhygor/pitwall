@@ -215,6 +215,7 @@ class LFM:
         keep = ("id", "url", "name", "avatar", "country", "elo", "license", "safety_rating", "sr_license", "division", "acc", "team", "elo_delta", "stats")
         snap = {k: p.get(k) for k in keep}
         snap["elo_graph"] = (p.get("elo_graph") or [])[-80:]
+        snap["sr_graph"] = (p.get("sr_graph") or [])[-80:]
         snap["races"] = self.past_races(uid, 10, force)
         return snap
 

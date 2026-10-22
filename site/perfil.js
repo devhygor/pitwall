@@ -94,18 +94,26 @@ async function profileChart(uid, x) {
     width: Math.max(280, box.clientWidth), height: 260, legend: { show: false }, cursor: { drag: { x: false, y: false } },
     scales: { x: { time: true }, y: { range: (u, lo, hi) => [lo * 0.995, Math.min(hi, yMax) * 1.005] } },
     axes: [{ stroke: fog, grid: { stroke: line, width: 1 }, ticks: { stroke: line } }, { stroke: fog, grid: { stroke: line, width: 1 }, ticks: { stroke: line }, size: 70, values: (u, v) => v.map(fmtLap) }],
-    series: [{}, { stroke: "#3b9cff", width: 0, points: { show: true, size: 5, fill: "#3b9cff66", stroke: "#3b9cff" }, paths: () => null },
-      { stroke: "#2ee59d", width: 2, paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } }],
+    series: [{}, { label: "Volta", stroke: "#3b9cff", width: 0, points: { show: true, size: 5, fill: "#3b9cff66", stroke: "#3b9cff" }, paths: () => null },
+      { label: "Melhor até aqui", stroke: "#2ee59d", width: 2, paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } }],
   }, [xs, ys, pb], box);
 }
 
 // ---------------------------------------------------------------- LFM
-function eloSpark(g) {
-  const pts = (g || []).filter((p) => p.rating != null); if (pts.length < 2) return "";
-  const w = 320, h = 70, lo = Math.min(...pts.map((p) => p.rating)), hi = Math.max(...pts.map((p) => p.rating)), sp = hi - lo || 1;
-  const d = pts.map((p, i) => `${i ? "L" : "M"}${(i / (pts.length - 1) * w).toFixed(1)},${(h - 6 - (p.rating - lo) / sp * (h - 12)).toFixed(1)}`).join("");
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Evolução do ELO"><path d="${d}" fill="none" stroke="#a77bff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>
-    <div class="note">ELO de ${Math.round(lo)} a ${Math.round(hi)} nas últimas ${pts.length} medições.</div>`;
+// gráficos do LFM (ELO e Safety Rating) com eixos, pontos e caixinha de valores ao passar o mouse
+function lfmChart(box, series, color, label, dec) {
+  const pts = (series || []).filter((p) => p.rating != null && p.date);
+  if (!box) return;
+  if (pts.length < 2) { box.innerHTML = `<div class="sub">Poucas medições para o gráfico.</div>`; return; }
+  const cs = getComputedStyle(document.documentElement), fog = cs.getPropertyValue("--fog").trim() || "#8b93a1", line = cs.getPropertyValue("--line").trim() || "#2a3140";
+  const xs = pts.map((p) => new Date(p.date + "T12:00:00") / 1000), ys = pts.map((p) => p.rating);
+  const ax = { stroke: fog, grid: { stroke: line, width: 1 }, ticks: { stroke: line } };
+  box.innerHTML = "";
+  new uPlot({
+    width: Math.max(260, box.clientWidth), height: 200, legend: { show: false }, cursor: { drag: { x: false, y: false } }, scales: { x: { time: true } },
+    axes: [ax, { ...ax, size: 54, values: (u, v) => v.map((n) => (dec ? n.toFixed(dec).replace(".", ",") : Math.round(n))) }],
+    series: [{}, { label, value: (u, v) => (dec ? v.toFixed(dec).replace(".", ",") : String(Math.round(v))), stroke: color, width: 2.2, fill: color + "22", points: { size: 6, fill: color } }],
+  }, [xs, ys], box);
 }
 const pfNum = (n, d = 0) => (n == null ? "—" : d ? String(Math.round(n * 10 ** d) / 10 ** d).replace(".", ",") : String(Math.round(n)));
 function renderLfm(r, mine) {
@@ -123,13 +131,16 @@ function renderLfm(r, mine) {
     </div>
     <div class="lfm-stats">${[["Corridas", s.starts], ["Vitórias", s.wins], ["Pódios", s.podium], ["Poles", s.poles], ["Top 5", s.top5], ["Chegada média", s.avg_r, 1], ["Largada média", s.avg_q, 1]]
       .map(([t, v, d]) => `<div><b>${pfNum(v, d)}</b><small>${t}</small></div>`).join("")}</div>
-    ${eloSpark(l.elo_graph)}
+    <div class="lfm-charts"><div><h3>Evolução do ELO</h3><div id="pfElo" class="prof-chart"></div></div>
+      <div><h3>Evolução do Safety Rating</h3><div id="pfSr" class="prof-chart"></div></div></div>
     ${races.length ? `<h3 style="margin:16px 0 6px">Últimas corridas</h3><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Data</th><th>Evento</th><th>Carro · pista</th><th>Largada → chegada</th><th>ELO</th><th>SR</th><th>Inc.</th></tr></thead><tbody>
       ${races.map((x) => `<tr><td>${x.date ? fmtDate(x.date) : ""}</td><td>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.event || "")}</a>` : esc(x.event || "")}${x.sim_id === 1 ? "" : ` <small class="sub">outro sim</small>`}</td>
         <td class="sub">${esc(x.car || "")} · ${esc(x.track || "")}</td><td>P${x.start ?? "—"} → <b>P${x.finish ?? "—"}</b></td>
         <td class="${(x.elo_change || 0) >= 0 ? "up" : "down"}">${x.elo_change != null ? (x.elo_change > 0 ? "+" : "") + x.elo_change : "—"}</td>
         <td class="${(x.sr_change || 0) >= 0 ? "up" : "down"}">${x.sr_change != null ? (x.sr_change > 0 ? "+" : "") + String(x.sr_change).replace(".", ",") : "—"}</td><td>${x.incidents ?? "—"}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <div class="note">Dados do LFM, publicados pelo app do Pitwall${r.lfm_at ? ` (atualizado há ${pfAgo(r.lfm_at)})` : ""}.</div></div>`;
+  lfmChart($("#pfElo"), l.elo_graph, "#a77bff", "ELO");
+  lfmChart($("#pfSr"), l.sr_graph, "#2ee59d", "SR", 2);
 }
 
 // ---------------------------------------------------------------- edição do meu perfil
