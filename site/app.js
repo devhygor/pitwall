@@ -65,6 +65,7 @@ function route() {
   if ((m = h.match(/^#\/join\/([A-Za-z0-9]{8})/))) return joinRoute(m[1].toUpperCase());
   if (h.startsWith("#/planos")) { markTop(); return renderPlans(); }
   if (!session) return renderLanding();
+  if ((m = h.match(/^#\/perfil(?:\/([0-9a-f-]{36}))?/))) { markTop(); return renderProfile(m[1] || session.user.id); }
   if (h.startsWith("#/conta")) { markTop(); return renderAccount(); }
   if (h.startsWith("#/indicar")) { markTop(); return renderReferral(); }
   if (h.startsWith("#/afiliado")) { markTop(); return renderAffiliate(); }
@@ -79,7 +80,7 @@ window.addEventListener("hashchange", route);
 
 function markTop() {
   const h = location.hash || "#/";
-  const top = h.startsWith("#/ranking") ? "ranking" : h.startsWith("#/planos") ? "planos" : h.startsWith("#/conta") ? "conta" : h.startsWith("#/indicar") ? "indicar" : h.startsWith("#/afiliado") ? "afiliado" : h.startsWith("#/admin") ? "admin" : (h === "#/" || h === "#") ? "home" : "";
+  const top = h.startsWith("#/ranking") ? "ranking" : h.startsWith("#/planos") ? "planos" : h.startsWith("#/perfil") ? "perfil" : h.startsWith("#/conta") ? "conta" : h.startsWith("#/indicar") ? "indicar" : h.startsWith("#/afiliado") ? "afiliado" : h.startsWith("#/admin") ? "admin" : (h === "#/" || h === "#") ? "home" : "";
   document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === top));
 }
 
@@ -99,7 +100,7 @@ function renderMe() {
     return;
   }
   const u = profile || {};
-  el.innerHTML = `<button class="burger" id="burger" type="button" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/indicar" data-top="indicar">Indique e ganhe</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAffiliate !== "undefined" && isAffiliate ? `<a href="#/afiliado" data-top="afiliado">Painel do afiliado</a>` : ""}${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav>${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span>
+  el.innerHTML = `<button class="burger" id="burger" type="button" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><nav class="topnav"><a href="#/ranking" data-top="ranking">🏆 Comunidade</a><a href="#/" data-top="home">Minhas equipes</a><a href="#/planos" data-top="planos">Planos</a><a href="#/indicar" data-top="indicar">Indique e ganhe</a><a href="#/perfil" data-top="perfil">Perfil</a><a href="#/conta" data-top="conta">Conta</a>${typeof isAffiliate !== "undefined" && isAffiliate ? `<a href="#/afiliado" data-top="afiliado">Painel do afiliado</a>` : ""}${typeof isAdmin !== "undefined" && isAdmin ? `<a href="#/admin" data-top="admin">Admin</a>` : ""}</nav><a class="me-link" href="#/perfil" title="Meu perfil">${avatar(u)}<span class="name">${esc(u.name || session.user.email)}</span></a>
     <button class="btn small quiet" id="logout">Sair</button>`;
   markTop(); bindBurger();
   $("#logout").onclick = async () => { await sb.auth.signOut(); };
@@ -349,8 +350,10 @@ function renderLanding(invite) {
           <form class="mail" id="mailForm">
             <label for="email" style="position:absolute;left:-9999px">E-mail</label>
             <input class="field" id="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+            <input class="field" id="pw" type="password" autocomplete="current-password" placeholder="sua senha" style="display:none">
             <button class="btn go" type="submit" id="mailBtn">Enviar link</button>
           </form>
+          <p class="fine"><a href="#entrar" id="pwToggle">Entrar com senha</a><span id="pwForgot" style="display:none"> · <a href="#entrar" id="pwReset">Esqueci a senha</a></span></p>
           <div class="msg" id="loginMsg" role="status"></div>
           <p class="fine">Mesma conta no site e no app do PC.</p>
         </div>
@@ -367,9 +370,29 @@ function renderLanding(invite) {
     const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
     if (error) setMsg(error.message, "err");
   };
+  let usePw = false;
+  $("#pwToggle").onclick = (e) => {
+    e.preventDefault(); usePw = !usePw;
+    $("#pw").style.display = usePw ? "" : "none"; $("#pwForgot").style.display = usePw ? "" : "none";
+    $("#mailBtn").textContent = usePw ? "Entrar" : "Enviar link"; $("#pwToggle").textContent = usePw ? "Entrar por link no e-mail" : "Entrar com senha";
+  };
+  $("#pwReset").onclick = async (e) => {
+    e.preventDefault();
+    const email = $("#email").value.trim();
+    if (!email) { setMsg("Digite o seu e-mail acima primeiro.", "err"); return; }
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname + "#/perfil" } });
+    if (error) setMsg(error.message, "err"); else setMsg(`Mandamos um link para ${email}. Ao entrar por ele, defina uma senha nova em Perfil.`, "ok");
+  };
   $("#mailForm").onsubmit = async (e) => {
     e.preventDefault();
     const email = $("#email").value.trim();
+    if (usePw) {
+      $("#mailBtn").disabled = true;
+      const { error } = await sb.auth.signInWithPassword({ email, password: $("#pw").value });
+      $("#mailBtn").disabled = false;
+      if (error) setMsg(/invalid/i.test(error.message) ? "E-mail ou senha incorretos. Se nunca definiu uma senha, entre por Google ou por link e crie uma em Perfil." : error.message, "err");
+      return;
+    }
     $("#mailBtn").disabled = true;
     const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
     $("#mailBtn").disabled = false;
@@ -568,7 +591,7 @@ async function renderTeam(id) {
           ${requests.map((r) => `<div class="member">${avatar(r.profiles)}<span>${esc((r.profiles || {}).name || "?")}<br><em>${ago(r.created_at)}</em></span><span style="flex:1"></span>
             <button class="btn small go" data-ans="${r.user_id}" data-acc="1">Aceitar</button><button class="btn small quiet" data-ans="${r.user_id}" data-acc="0">Recusar</button></div>`).join("")}</div>` : ""}
         <div class="panel"><h2>Pilotos</h2>
-          ${sorted.map((m) => `<div class="member">${avatar(m.profiles)}<span>${esc((m.profiles || {}).name || "?")}${m.user_id === me ? " (você)" : ""}</span>
+          ${sorted.map((m) => `<div class="member">${avatar(m.profiles)}<span>${uname(m.user_id, (m.profiles || {}).name || "?")}${m.user_id === me ? " (você)" : ""}</span>
             <span class="role ${m.role}">${ROLE_NAME[m.role] || ""}</span>
             ${m.user_id !== me && m.role !== "owner" ? `<span class="macts">
               ${owner ? `<button class="btn small quiet" data-role="${m.user_id}" data-to="${m.role === "admin" ? "member" : "admin"}">${m.role === "admin" ? "Tirar de líder" : "Tornar líder"}</button>` : ""}
@@ -688,7 +711,7 @@ function rowsHtml(g, me, showCar) {
   const lead = g[0].lap_time_ms;
   return g.map((r, i) => { const pos = r._pos || i + 1; return `<div class="row ${pos === 1 ? "first" : ""} ${r.user_id === me ? "mine" : ""}">
     <span class="p">${pos}</span>
-    <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${esc(r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${showCar ? esc(pretty(r.car)) + " · " : ""}${fmtDate(r.recorded_at)}</em></span></span>
+    <span class="name">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span>${uname(r.user_id, r.driver)} ${r.user_id === me ? "<em>você</em>" : ""}<br><em>${showCar ? esc(pretty(r.car)) + " · " : ""}${fmtDate(r.recorded_at)}</em></span></span>
     <span class="time">${fmtLap(r.lap_time_ms)}</span>
     <span class="gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
     <span class="sec">${fmtSec(r.s1_ms)}</span><span class="sec">${fmtSec(r.s2_ms)}</span><span class="sec">${fmtSec(r.s3_ms)}</span>

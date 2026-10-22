@@ -361,17 +361,34 @@ class Team:
             allowed["description"] = (allowed["description"] or "").strip()[:200] or None
         self._rest("PATCH", "teams", {"id": f"eq.{team_id}"}, allowed, prefer="return=minimal")
 
+    def tiers(self, ids) -> dict:
+        """Selo de plano (pro/team) de cada piloto; vazio se não tiver plano pago. Nunca derruba a tela."""
+        ids = sorted({i for i in ids if i})
+        if not ids:
+            return {}
+        try:
+            rows = self._rest("POST", "rpc/plan_tiers", body={"p_ids": ids[:500]}) or []
+            return {r["user_id"]: r["tier"] for r in rows}
+        except Exception:
+            return {}
+
+    def my_profile(self) -> dict:
+        return self._rest("POST", "rpc/public_profile", body={"p_id": self.user["id"]}) or {}
+
     def board(self, team_id: str) -> dict:
         members = self._rest("GET", "team_members", {"select": "role,joined_at,user_id,profiles(name,avatar_url)",
                                                       "team_id": f"eq.{team_id}", "order": "joined_at.asc"}) or []
         laps = self._rest("POST", "rpc/team_board", body={"t": team_id}) or []
         me = self.user["id"]
+        tiers = self.tiers([m["user_id"] for m in members])
         for l in laps:
+            l["tier"] = tiers.get(l["user_id"])
             l["me"] = l["user_id"] == me
             l["clip_url"] = self.public_url("clips", l["clip_path"]) if l.get("clip_path") else None
         return {"members": [{"user_id": m["user_id"], "role": m["role"], "joined_at": m["joined_at"],
                              "name": (m.get("profiles") or {}).get("name") or "?",
                              "avatar_url": (m.get("profiles") or {}).get("avatar_url"),
+                             "tier": tiers.get(m["user_id"]),
                              "me": m["user_id"] == me} for m in members],
                 "laps": laps}
 
@@ -387,7 +404,9 @@ class Team:
             if len(part) < 1000:
                 break
         me = self.user["id"]
+        tiers = self.tiers([r["user_id"] for r in rows])
         for r in rows:
+            r["tier"] = tiers.get(r["user_id"])
             p = r.pop("profiles", None) or {}
             r["driver"], r["avatar_url"], r["me"] = p.get("name") or "?", p.get("avatar_url"), r["user_id"] == me
             r["clip_url"] = self.public_url("clips", r["clip_path"]) if r.get("clip_path") else None

@@ -72,6 +72,7 @@ const routes = [
   [/^#\/progress(?:\?(.*))?$/, (m) => renderProgress(new URLSearchParams(m[1] || ""))],
   [/^#\/team$/, () => renderTeam()],
   [/^#\/lfm$/, () => renderLfm()],
+  [/^#\/perfil$/, () => renderPerfil()],
   [/^#\/community$/, () => renderCommunity()],
   [/^#\/overlay$/, () => renderOverlay()],
   [/^#\/overlays$/, () => renderOverlays()],
@@ -97,7 +98,7 @@ function route() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : h.startsWith("#/guia") ? "guia" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/perfil") ? "perfil" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : h.startsWith("#/guia") ? "guia" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -2673,6 +2674,10 @@ function consistencyMap(el, cons) {
 const teamState = { sel: null, polling: null, tab: "ranking", filter: null, cfilter: null };
 try { teamState.sel = localStorage.getItem("pitwall.team") || null; } catch (e) { /* ok */ }
 const postJ = (url, body) => api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const PW_SITE = "https://pitwall.hygor.com.br/";
+const tierTag = (t) => (t === "team" ? `<em class="tier team" title="Plano Equipe">Equipe</em>` : t === "pro" ? `<em class="tier" title="Plano Pro">Pro</em>` : "");
+const pName = (id, name, tier) => `<a class="plink" href="#" data-prof="${esc(id || "")}">${esc(name)}</a>${tierTag(tier)}`;
+document.addEventListener("click", (e) => { const a = e.target.closest("[data-prof]"); if (!a) return; e.preventDefault(); openExt(PW_SITE + "#/perfil" + (a.dataset.prof ? "/" + a.dataset.prof : "")); });
 const avatar = (u, cls = "") => u && u.avatar_url
   ? `<img class="ava ${cls}" src="${esc(u.avatar_url)}" alt="" referrerpolicy="no-referrer">`
   : `<span class="ava ${cls}">${esc(((u && u.name) || "?").trim()[0] || "?").toUpperCase()}</span>`;
@@ -2800,7 +2805,7 @@ function towerRows(rows, recs, mode) {
   return rows.map((r, i) => { const mine = mineOf(r); const pos = r._pos || i + 1; return `
     <div class="trow ${pos === 1 ? "first" : ""} ${r.me ? "mine" : ""}">
       <span class="p">${pos}</span>
-      <span class="tw">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span><b>${esc(r.driver)}${r.me ? " <em>você</em>" : ""}</b><small>${mode === "track" ? `${esc(pretty(r.car))} · ` : ""}${fmtDate(r.recorded_at)}</small></span></span>
+      <span class="tw">${avatar({ name: r.driver, avatar_url: r.avatar_url })}<span><b>${pName(r.user_id, r.driver, r.tier)}${r.me ? " <em>você</em>" : ""}</b><small>${mode === "track" ? `${esc(pretty(r.car))} · ` : ""}${fmtDate(r.recorded_at)}</small></span></span>
       <b class="num t">${fmtLap(r.lap_time_ms)}</b>
       <span class="num gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
       <span class="secs3 num">${[r.s1_ms, r.s2_ms, r.s3_ms].map(fmtSec).join(" · ")}</span>
@@ -2942,7 +2947,7 @@ async function teamMembers(team, manager) {
         <button class="btn primary xs" data-ans="${r.user_id}" data-acc="1">Aceitar</button><button class="btn xs" data-ans="${r.user_id}" data-acc="0">Recusar</button></div>`).join("")}</div>` : ""}
     <div class="panel"><h2>${members.length} ${members.length === 1 ? "membro" : "membros"}</h2>
       ${members.map((m) => `<div class="mrow">${avatar(m)}
-        <div class="mname"><b>${esc(m.name)}${m.me ? " <em>você</em>" : ""}</b><small>desde ${fmtDate(m.joined_at)}</small></div>
+        <div class="mname"><b>${pName(m.user_id, m.name, m.tier)}${m.me ? " <em>você</em>" : ""}</b><small>desde ${fmtDate(m.joined_at)}</small></div>
         <span class="role ${m.role}">${ROLE_NAME[m.role]}</span><span class="spacer"></span>
         ${m.me || m.role === "owner" ? "" : `
           ${owner ? `<button class="btn xs" data-role="${m.user_id}" data-to="${m.role === "admin" ? "member" : "admin"}">${m.role === "admin" ? "Tirar de líder" : "Tornar líder"}</button>` : ""}
@@ -3765,6 +3770,27 @@ async function openExt(url) {
   }
   try { const r = await postJ("/api/open", { url }); if (r.opened) return; } catch (e) { /* abre no app */ }
   window.open(url, "_blank");
+}
+
+// perfil: resumo da sua conta do Pitwall; a página completa (editar foto, nome, senha, ver o progresso) fica no site
+async function renderPerfil() {
+  current = { name: "perfil" };
+  view.innerHTML = `<div class="sub">Carregando…</div>`;
+  let p = null, err = "";
+  try { p = await api("/api/profile"); } catch (e) { err = e.message || "Entre com a sua conta do Pitwall na tela Equipe."; }
+  if (!p || !p.ok) {
+    view.innerHTML = `<div class="head"><div><h1>Perfil</h1></div></div><div class="panel empty"><b>Conta do Pitwall não conectada</b>${esc(err || "Entre na tela Equipe para ter o seu perfil.")}<br><br><a class="btn primary" href="#/team">Ir para Equipe</a></div>`;
+    return;
+  }
+  const st = p.stats || {};
+  view.innerHTML = `<div class="head"><div><h1>Perfil</h1></div><span class="spacer"></span><button class="btn primary" data-prof="">Abrir meu perfil no site</button></div>
+    <div class="panel"><div class="row" style="gap:16px;align-items:center">${avatar({ name: p.name, avatar_url: p.avatar_url }, "xl")}
+      <div><h2 style="margin:0">${esc(p.name || "Piloto")} ${tierTag(p.tier)}</h2>
+        <div class="sub">Piloto desde ${new Date(p.since).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</div>${p.bio ? `<p>${esc(p.bio)}</p>` : ""}</div></div></div>
+    <div class="kgrid" style="margin-top:14px">${[["Voltas enviadas", st.laps || 0], ["Pistas", st.tracks || 0], ["Carros", st.cars || 0], ["Dias correndo", st.days || 0]]
+      .map(([t, v]) => `<div class="kpi"><span>${t}</span><b class="num">${v}</b></div>`).join("")}</div>
+    <div class="panel" style="margin-top:14px"><h2>No site</h2>
+      <p class="sub">Lá você edita a foto, o nome e a senha, vê o seu progresso por pista e carro e o resumo do LFM (ELO, SR e últimas corridas${p.lfm ? "" : ": abra a tela LFM e cole o seu perfil para publicar"}). Os outros pilotos também abrem o seu perfil pelo nome no ranking.</p></div>`;
 }
 
 async function renderLfm(force) {

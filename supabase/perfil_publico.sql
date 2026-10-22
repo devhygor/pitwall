@@ -1,0 +1,4 @@
+-- Pitwall · perfil público (já aplicado). profiles ganha bio, lfm (resumo do LFM publicado pelo app) e lfm_at.
+-- Bucket público 'avatars' (pasta = id do usuário). RPCs: plan_tiers(uuid[]) (selo Pro/Equipe; teste grátis não conta),
+-- public_profile(uuid) (dados + estatísticas + recordes por carro/pista), set_my_profile(nome, bio), set_my_lfm(jsonb).
+-- O app publica o LFM sozinho (pitwall/server.py _publish_lfm, no máx. a cada 30 min) e o site mostra em #/perfil/<id>.

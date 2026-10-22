@@ -685,3 +685,28 @@ html { scroll-padding-top: 76px; }
     background: var(--night); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px rgba(0,0,0,.5); }
   .topnav.open a { padding: 12px 14px; font-size: 17px; }
 }
+
+/* selos Pro/Equipe ao lado do nome e perfil do piloto */
+.tier { display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; margin-left: 6px; padding: 1px 7px; border-radius: 99px; vertical-align: middle; background: rgba(61,139,255,.22); color: #8fbcff; line-height: 1.5; }
+.tier.team { background: rgba(168,85,247,.24); color: #d1a5ff; }
+a.ulink { color: inherit; text-decoration: none; } a.ulink:hover { text-decoration: underline; text-decoration-color: var(--sodium); }
+.me-link { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.prof .panel { margin-bottom: 16px; }
+.prof-head { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.ava-xl .ava { width: 88px; height: 88px; font-size: 36px; }
+.prof-id h1 { font-size: 30px; margin: 0 0 4px; font-style: normal; max-width: none; } .prof-id h1 .tier { font-size: 13px; padding: 2px 10px; }
+.prof-bio { margin: 10px 0 0; max-width: 60ch; } .prof-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.prof-kpis { margin-bottom: 16px; }
+.prof-recs tbody tr { cursor: pointer; } .prof-recs tbody tr:hover, .prof-recs tbody tr.on { background: rgba(255,255,255,.05); }
+.prof-chart { min-height: 260px; width: 100%; overflow: hidden; }
+.pf-grid { display: grid; grid-template-columns: 220px 1fr; gap: 24px; } .pf-l { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--fog); }
+.pf-photo { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; } .pf-photo .ava { width: 96px; height: 96px; font-size: 38px; } .pf-photo div { display: flex; gap: 6px; flex-wrap: wrap; }
+.pf-row { margin-top: 14px; } .prof textarea.field { width: 100%; resize: vertical; }
+.lfm-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.lfm-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0; }
+.lfm-card { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.lfm-card small, .lfm-stats small { color: var(--fog); font-size: 12px; } .lfm-card b { font-size: 26px; } .lfm-card b.sm { font-size: 17px; }
+.lfm-stats { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin: 8px 0 14px; } .lfm-stats div { display: flex; flex-direction: column; } .lfm-stats b { font-size: 19px; }
+.spark { width: 100%; height: 70px; } .up { color: #2ee59d; } .down { color: #ff7a7a; }
+@media (max-width: 700px) { .pf-grid { grid-template-columns: 1fr; } .lfm-grid { grid-template-columns: repeat(2, 1fr); } .lfm-stats { grid-template-columns: repeat(4, 1fr); } .prof-id h1 { font-size: 24px; } }
+textarea.field { font: inherit; }

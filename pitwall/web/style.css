@@ -1201,3 +1201,6 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .toast.err { border-color: rgba(255, 90, 95, .6); } .toast.err i { color: var(--loss, var(--bad, #ff5a5f)); } .toast.err u { background: var(--loss, var(--bad, #ff5a5f)); }
 .toast.info { border-color: rgba(77, 163, 255, .55); } .toast.info i { color: var(--blue, #4da3ff); } .toast.info u { background: var(--blue, #4da3ff); }
 @media (max-width: 560px) { #toasts { right: 16px; left: 16px; bottom: 16px; width: auto; } }
+
+.plink { color: inherit; text-decoration: none; cursor: pointer; } .plink:hover { text-decoration: underline; }
+.ava.xl { width: 72px; height: 72px; font-size: 30px; }

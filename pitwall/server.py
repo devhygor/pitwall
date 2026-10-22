@@ -430,6 +430,15 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def team_status():
         return _team().status()
 
+    @app.get("/api/profile")
+    def my_profile():
+        if not _team().configured:
+            raise HTTPException(400, "Entre com a sua conta do Pitwall na tela Equipe.")
+        try:
+            return _team().my_profile()
+        except Exception as e:
+            raise HTTPException(400, str(e))
+
     @app.post("/api/team/login")
     def team_login():
         url = _team().login_url()
@@ -604,8 +613,32 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             raise HTTPException(400, "integração com o LFM indisponível")
         return lfm
 
+    _lfm_push = {"t": 0.0, "busy": False}
+
+    def _publish_lfm(force=False):
+        """Publica o resumo do LFM no perfil do site (no máx. a cada 30 min, em segundo plano; só com a conta do Pitwall conectada)."""
+        import threading, time
+        t = _team()
+        if not getattr(t, "configured", False) or _lfm_push["busy"]:
+            return
+        if not force and time.time() - _lfm_push["t"] < 1800:
+            return
+        _lfm_push["busy"] = True
+
+        def work():
+            try:
+                snap = lfm.snapshot() if lfm else None
+                t._rpc("set_my_lfm", {"p": snap})
+                _lfm_push["t"] = time.time()
+            except Exception:
+                _lfm_push["t"] = time.time() - 1500      # tenta de novo em ~5 min
+            finally:
+                _lfm_push["busy"] = False
+        threading.Thread(target=work, daemon=True).start()
+
     @app.get("/api/lfm")
     def lfm_overview(force: bool = False):
+        _publish_lfm(force)
         o = _lfm().overview(force)
         o["account"] = _lfm().account_status()
         o["in_app"] = app.state.ui_lfm is not None
@@ -625,6 +658,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
                 if "conexão" not in str(e):   # sem internet: salva assim mesmo
                     raise HTTPException(400, str(e))
         settings.update({"lfm_user_id": uid})
+        _publish_lfm(True)
         return _lfm().overview()
 
     @app.post("/api/open")

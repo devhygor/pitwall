@@ -189,6 +189,35 @@ class LFM:
             "age_s": round(age), "stale": stale,
         }
 
+    def past_races(self, uid: str | None = None, limit: int = 10, force=False) -> list[dict]:
+        """Últimas corridas ranqueadas do piloto (todas as sims; a do ACC vem marcada)."""
+        uid = parse_user_id(uid) or self.user_id()
+        if not uid:
+            return []
+        rows, *_ = self._safe(f"users/getUsersPastRaces/{uid}?start=0&limit={int(limit)}&event=false&season=false", TTL_PROFILE, force, [])
+        out = []
+        for r in rows if isinstance(rows, list) else []:
+            if not isinstance(r, dict):
+                continue
+            out.append({"race_id": r.get("race_id"), "date": _iso(r.get("race_date")), "event": r.get("event_name"),
+                        "sim_id": r.get("sim_id"), "car": r.get("car_name") or r.get("car"), "track": r.get("track_name"),
+                        "class": r.get("class"), "sof": r.get("sof"), "start": r.get("start_pos"), "finish": r.get("finishing_pos"),
+                        "elo_change": r.get("rating_change"), "sr_change": _num(r.get("sr_change")),
+                        "incidents": r.get("incidents"), "points": r.get("points"), "url": f"{SITE}/race/{r.get('race_id')}" if r.get("race_id") else None})
+        return out
+
+    def snapshot(self, force=False) -> dict | None:
+        """Resumo compacto do perfil + últimas corridas, para publicar no perfil do Pitwall (site)."""
+        uid = self.user_id()
+        if not uid:
+            return None
+        p = self.profile(uid, force)
+        keep = ("id", "url", "name", "avatar", "country", "elo", "license", "safety_rating", "sr_license", "division", "acc", "team", "elo_delta", "stats")
+        snap = {k: p.get(k) for k in keep}
+        snap["elo_graph"] = (p.get("elo_graph") or [])[-80:]
+        snap["races"] = self.past_races(uid, 10, force)
+        return snap
+
     def _safe(self, path, ttl, force, default):
         try:
             return self._get(path, ttl, force)
