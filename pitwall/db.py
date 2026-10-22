@@ -324,6 +324,15 @@ class DB:
         with self.connect() as c:
             return [dict(r) for r in c.execute(q + " ORDER BY s.started_at, l.lap_number", (car, track))]
 
+    def progress_laps(self) -> list[dict]:
+        """Todas as suas voltas (sem telemetria) com jogo, carro, pista e início da sessão, para o resumo de progresso do perfil."""
+        with self.connect() as c:
+            return [dict(r) for r in c.execute(rf"""
+                SELECT l.session_id, l.lap_time_ms, l.valid, l.out_lap, l.in_lap, s.game, s.car, s.track, s.started_at
+                FROM laps l JOIN sessions s ON s.id = l.session_id
+                WHERE {OWN} AND s.game != 'demo' AND s.track NOT LIKE 'demo\_%' ESCAPE '\'
+                ORDER BY s.started_at, l.lap_number""")]
+
     def all_own_laps_brief(self) -> list[dict]:
         with self.connect() as c:
             return [dict(r) for r in c.execute(f"""

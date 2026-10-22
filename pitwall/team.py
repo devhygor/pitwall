@@ -533,6 +533,39 @@ class Team:
                 break
         return {"sent": sent, "skipped": skipped, "errors": errors}
 
+    def progress_rows(self) -> list[dict]:
+        """Uma linha por sessão e combinação (jogo, carro, pista): data, melhor tempo, média das voltas limpas e rating. Sem telemetria."""
+        from statistics import mean
+        from . import analysis
+        groups: dict = {}
+        for l in self.db.progress_laps():
+            groups.setdefault((l["game"], l["car"], l["track"]), []).append(l)
+        rows = []
+        for (game, car, track), laps in groups.items():
+            rt = analysis.ratings(laps)
+            clean: dict = {}
+            for l in laps:
+                if l["valid"] and not l["out_lap"] and not l["in_lap"]:
+                    clean.setdefault(l["session_id"], []).append(l["lap_time_ms"])
+            for s in rt.get("sessions", []):
+                ts = clean.get(s["session_id"]) or []
+                rows.append({"game": game, "car": car, "track": track, "started_at": s["started_at"], "laps": s["laps"], "best_ms": s["best_ms"],
+                             "avg_ms": round(mean(ts)) if ts else None, "rating": s["rating"], "pace": s["pace"],
+                             "consistency": s["consistency"], "clean": s["clean"]})
+        return rows
+
+    def upload_progress(self) -> int:
+        """Manda o resumo de progresso para o perfil (só o que mudou desde o último envio)."""
+        import hashlib
+        rows = self.progress_rows()
+        digest = hashlib.sha1(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+        if digest == getattr(self, "_progress_digest", None) or not rows:
+            return 0
+        for i in range(0, len(rows), 400):
+            self._rpc("upsert_progress", {"p_rows": rows[i:i + 400]})
+        self._progress_digest = digest
+        return len(rows)
+
     # --- envio automático -------------------------------------------------------
     def sync_soon(self):
         """Pede uma sincronização agora (depois de entrar, criar ou entrar numa equipe)."""
@@ -552,6 +585,10 @@ class Team:
                 if self.configured and self.settings.get("team_auto_upload"):
                     self.sync_info.update(state="syncing")
                     try:
+                        try:
+                            self.upload_progress()
+                        except Exception as e:  # noqa: BLE001 — o resumo do perfil nunca derruba o envio dos recordes
+                            print("progresso: não deu para publicar no perfil:", repr(e))
                         r = self.upload_records()
                         self.sync_info.update(state="error" if r["errors"] else "ok", sent=r["sent"],
                                               total=r["sent"] + r["skipped"], error=(r["errors"] or [None])[0],

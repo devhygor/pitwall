@@ -37,6 +37,9 @@ const pfAgo = (iso) => {
   return m < 60 ? `${Math.round(m)} min` : m < 1440 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} dias`;
 };
 
+const pfSec = (ms) => fmtLap(Math.round(ms));
+const pfDiff = (ms) => (ms >= 0 ? "+" : "−") + (Math.abs(ms) / 1000).toFixed(3).replace(".", ",") + " s";
+
 async function renderProfile(id) {
   view.innerHTML = `<div class="loading">Carregando…</div>`;
   let r;
@@ -44,7 +47,29 @@ async function renderProfile(id) {
   if (!r || !r.ok) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">Perfil não encontrado.</div></div></section>`; return; }
   const mine = !!r.me, st = r.stats || {}, recs = r.records || [];
   _tiers.set(r.id, r.tier || "");
-  const top = [...recs].sort((a, b) => b.laps - a.laps)[0];
+  // resumo de sessões enviado pelo app (sem telemetria); some se o piloto deixou o progresso privado
+  let PR = [];
+  if (!r.progress_hidden) {
+    const q = await sb.from("progress_sessions").select("game,car,track,started_at,laps,best_ms,avg_ms,rating,pace,consistency,clean").eq("user_id", id).order("started_at").limit(5000);
+    PR = q.data || [];
+  }
+  // combinações: do resumo de sessões, completadas pelos recordes (que podem existir sem sessões)
+  const combos = new Map();
+  const key = (x) => `${x.game}|${x.car}|${x.track}`;
+  for (const p of PR) {
+    const c = combos.get(key(p)) || { game: p.game, car: p.car, track: p.track, sessions: [], laps: 0, best: null, last: null };
+    c.sessions.push(p); c.laps += p.laps || 0; c.best = c.best == null ? p.best_ms : Math.min(c.best, p.best_ms || c.best); c.last = p.started_at; combos.set(key(p), c);
+  }
+  for (const x of recs) {
+    const c = combos.get(key(x)) || { game: x.game, car: x.car, track: x.track, sessions: [], laps: x.laps || 0, best: null, last: x.last };
+    c.best = c.best == null ? x.best : Math.min(c.best, x.best); c.laps = Math.max(c.laps, x.laps || 0); c.last = c.last && c.last > x.last ? c.last : x.last; combos.set(key(x), c);
+  }
+  const list = [...combos.values()].sort((a, b) => b.sessions.length - a.sessions.length || b.laps - a.laps);
+  const top = list[0];
+  const days = new Set(PR.map((p) => String(p.started_at).slice(0, 10))).size;
+  const K = PR.length
+    ? [["Voltas", Math.max(st.laps || 0, PR.reduce((a, p) => a + (p.laps || 0), 0))], ["Sessões", PR.length], ["Pistas", new Set(list.map((c) => c.track)).size], ["Carros", new Set(list.map((c) => c.car)).size], ["Dias correndo", Math.max(days, st.days || 0)]]
+    : [["Voltas", st.laps || 0], ["Pistas", st.tracks || 0], ["Carros", st.cars || 0], ["Dias correndo", st.days || 0]];
   view.innerHTML = `<section class="sect"><div class="wrap prof">
     <div class="prof-head panel">
       <span class="ava-xl">${avatar({ name: r.name, avatar_url: r.avatar_url })}</span>
@@ -54,49 +79,81 @@ async function renderProfile(id) {
         ${mine ? `<div class="prof-actions"><button class="btn small" id="pfEdit">Editar perfil</button><a class="btn small quiet" href="#/conta">Meu plano e conta</a></div>` : ""}</div>
     </div>
     ${mine ? `<div class="panel" id="pfForm" hidden></div>` : ""}
-    <div class="kpis prof-kpis">${[["Voltas", st.laps || 0], ["Pistas", st.tracks || 0], ["Carros", st.cars || 0], ["Dias correndo", st.days || 0]]
-      .map(([t, v]) => `<div class="kpi"><small>${t}</small><b>${v}</b></div>`).join("")}</div>
+    <div class="kpis prof-kpis">${K.map(([t, v]) => `<div class="kpi"><small>${t}</small><b>${v}</b></div>`).join("")}</div>
     <div class="panel"><h2>Progresso</h2>
-      ${recs.length ? `<p class="sub">Melhor volta de cada combinação carro + pista. Toque numa linha para ver a evolução.</p>
-        <div class="tbl-wrap"><table class="tbl prof-recs"><thead><tr><th>Pista</th><th>Carro</th><th>Melhor volta</th><th>Voltas</th><th>Última</th></tr></thead><tbody>
-        ${recs.map((x, i) => `<tr data-i="${i}" class="${x === top ? "on" : ""}"><td>${esc(pretty(x.track))}</td><td>${esc(pretty(x.car))}${x.game && x.game !== "acc" ? ` <small class="sub">${esc(PF_GAME[x.game] || x.game)}</small>` : ""}</td>
-          <td><b>${fmtLap(x.best)}</b></td><td>${x.laps}</td><td>${fmtDate(x.last)}</td></tr>`).join("")}</tbody></table></div>
-        <h3 id="pfChartTitle" style="margin:16px 0 6px"></h3><div id="pfChart" class="prof-chart"></div>
-        <div class="note">Pontos: cada volta. Linha: o melhor tempo até aquele dia.</div>`
+      ${r.progress_hidden ? `<p class="sub">Este piloto prefere manter o progresso (sessões, médias e rating) privado. Os recordes continuam visíveis.</p>` : ""}
+      ${list.length ? `<p class="sub">Toque numa linha para ver a evolução daquela combinação de carro e pista.</p>
+        <div class="tbl-wrap"><table class="tbl prof-recs"><thead><tr><th>Pista</th><th>Carro</th><th>Melhor volta</th><th>Sessões</th><th>Voltas</th>${PR.length ? "<th>Rating</th>" : ""}<th>Última</th></tr></thead><tbody>
+        ${list.map((x, i) => `<tr data-i="${i}" class="${x === top ? "on" : ""}"><td>${esc(pretty(x.track))}</td><td>${esc(pretty(x.car))}${x.game && x.game !== "acc" ? ` <small class="sub">${esc(PF_GAME[x.game] || x.game)}</small>` : ""}</td>
+          <td><b>${fmtLap(x.best)}</b></td><td>${x.sessions.length || "—"}</td><td>${x.laps}</td>${PR.length ? `<td>${x.sessions.length ? (x.sessions[x.sessions.length - 1].rating ?? "—") : "—"}</td>` : ""}<td>${fmtDate(x.last)}</td></tr>`).join("")}</tbody></table></div>
+        <h3 id="pfChartTitle" style="margin:16px 0 4px"></h3><div id="pfSummary" class="sub"></div>
+        <div class="lfm-charts"><div><h3>Evolução por sessão</h3><div id="pfTrend" class="prof-chart"></div></div>
+          <div><h3>Rating por sessão</h3><div id="pfRate" class="prof-chart"></div></div></div>
+        ${PR.length ? `<h3 style="margin:16px 0 6px">Voltas por semana</h3><div id="pfWeeks" class="prof-chart"></div>` : ""}`
         : `<p class="sub">${mine ? "Ainda sem voltas enviadas. Grave sessões no app com a conta do Pitwall conectada." : "Ainda sem voltas enviadas."}</p>`}
     </div>
     <div id="pfLfm"></div>
   </div></section>`;
   if (mine) bindProfileEdit(r);
-  if (recs.length) {
-    const draw = (x) => profileChart(r.id, x);
+  if (list.length) {
     view.querySelectorAll(".prof-recs tr[data-i]").forEach((tr) => tr.onclick = () => {
-      view.querySelectorAll(".prof-recs tr").forEach((t) => t.classList.toggle("on", t === tr)); draw(recs[+tr.dataset.i]);
+      view.querySelectorAll(".prof-recs tr").forEach((t) => t.classList.toggle("on", t === tr)); comboCharts(list[+tr.dataset.i]);
     });
-    draw(top);
+    comboCharts(top);
+    weeksChart(PR);
   }
   renderLfm(r, mine);
 }
 
-async function profileChart(uid, x) {
-  const box = $("#pfChart"); if (!box) return;
-  $("#pfChartTitle").textContent = `${pretty(x.track)} · ${pretty(x.car)}`;
-  box.innerHTML = `<div class="sub">Carregando…</div>`;
-  const { data } = await sb.from("laps").select("recorded_at,lap_time_ms").eq("user_id", uid).eq("game", x.game).eq("car", x.car).eq("track", x.track).order("recorded_at").limit(1000);
-  if (!$("#pfChart") || !data || !data.length) { if (box) box.innerHTML = ""; return; }
-  const xs = data.map((d) => new Date(d.recorded_at) / 1000), ys = data.map((d) => d.lap_time_ms);
-  let m = Infinity; const pb = ys.map((v) => (m = Math.min(m, v)));
-  box.innerHTML = "";
-  if (typeof uPlot === "undefined") return;
+const pfAx = () => {
   const cs = getComputedStyle(document.documentElement), fog = cs.getPropertyValue("--fog").trim() || "#8b93a1", line = cs.getPropertyValue("--line").trim() || "#2a3140";
-  const yMax = Math.min(Math.max(...ys), Math.min(...ys) * 1.25);
+  return { stroke: fog, grid: { stroke: line, width: 1 }, ticks: { stroke: line } };
+};
+
+function comboCharts(c) {
+  $("#pfChartTitle").textContent = `${pretty(c.track)} · ${pretty(c.car)}`;
+  const S = c.sessions, trend = $("#pfTrend"), rate = $("#pfRate"), sum = $("#pfSummary");
+  if (S.length < 2) {
+    const msg = `<div class="sub">${S.length ? "Precisa de 2 sessões ou mais para o gráfico." : "Sem resumo de sessões para esta combinação ainda."}</div>`;
+    trend.innerHTML = msg; rate.innerHTML = ""; sum.textContent = c.best ? `Recorde ${fmtLap(c.best)}` : "";
+    return;
+  }
+  const xs = S.map((p) => new Date(p.started_at) / 1000), ax = pfAx(), w = Math.max(260, trend.clientWidth);
+  const first = S[0].best_ms, bestNow = Math.min(...S.map((p) => p.best_ms));
+  const last = S[S.length - 1];
+  sum.innerHTML = `Recorde <b>${fmtLap(c.best || bestNow)}</b> · ${first > bestNow ? `evoluiu <b style="color:var(--sodium)">${pfDiff(bestNow - first)}</b> desde a 1ª sessão` : "ainda sem evolução do recorde"} · rating atual <b>${last.rating ?? "—"}</b> · ${S.length} sessões`;
+  trend.innerHTML = ""; rate.innerHTML = "";
   new uPlot({
-    width: Math.max(280, box.clientWidth), height: 260, legend: { show: false }, cursor: { drag: { x: false, y: false } },
-    scales: { x: { time: true }, y: { range: (u, lo, hi) => [lo * 0.995, Math.min(hi, yMax) * 1.005] } },
-    axes: [{ stroke: fog, grid: { stroke: line, width: 1 }, ticks: { stroke: line } }, { stroke: fog, grid: { stroke: line, width: 1 }, ticks: { stroke: line }, size: 70, values: (u, v) => v.map(fmtLap) }],
-    series: [{}, { label: "Volta", stroke: "#3b9cff", width: 0, points: { show: true, size: 5, fill: "#3b9cff66", stroke: "#3b9cff" }, paths: () => null },
-      { label: "Melhor até aqui", stroke: "#2ee59d", width: 2, paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } }],
-  }, [xs, ys, pb], box);
+    width: w, height: 220, legend: { show: false }, cursor: { drag: { x: false, y: false } }, scales: { x: { time: true } },
+    axes: [ax, { ...ax, size: 72, values: (u, v) => v.map((n) => fmtLap(Math.round(n))) }],
+    series: [{}, { label: "Melhor", value: (u, v) => pfSec(v), stroke: "#2ee59d", width: 2, points: { size: 6, fill: "#2ee59d" } },
+      { label: "Média", value: (u, v) => pfSec(v), stroke: "#8a93a3", width: 1.5, dash: [5, 4], points: { size: 4 }, spanGaps: true }],
+  }, [xs, S.map((p) => p.best_ms), S.map((p) => p.avg_ms)], trend);
+  new uPlot({
+    width: Math.max(260, rate.clientWidth), height: 220, legend: { show: false }, cursor: { drag: { x: false, y: false } }, scales: { x: { time: true }, y: { range: [0, 100] } },
+    axes: [ax, { ...ax, size: 40 }],
+    series: [{}, { label: "Rating", stroke: "#2ee59d", width: 2.4, points: { size: 6, fill: "#2ee59d" } },
+      { label: "Ritmo", stroke: "#8a93a3", width: 1, dash: [4, 4], points: { show: false }, spanGaps: true },
+      { label: "Consistência", stroke: "#b98cff", width: 1, dash: [4, 4], points: { show: false }, spanGaps: true }],
+  }, [xs, S.map((p) => p.rating), S.map((p) => p.pace), S.map((p) => p.consistency)], rate);
+}
+
+function weeksChart(PR) {
+  const box = $("#pfWeeks"); if (!box || !PR.length) return;
+  const by = new Map();
+  for (const p of PR) {
+    const d = new Date(p.started_at), mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7)); mon.setHours(12, 0, 0, 0);
+    const k = mon.toISOString().slice(0, 10); by.set(k, (by.get(k) || 0) + (p.laps || 0));
+  }
+  const ws = [...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  if (!ws.length) return;
+  const ax = pfAx(); box.innerHTML = "";
+  new uPlot({
+    width: Math.max(260, box.clientWidth), height: 200, legend: { show: false }, cursor: { drag: { x: false, y: false } },
+    scales: { x: { time: false, range: [-0.6, ws.length - 0.4] } },
+    axes: [{ ...ax, values: (u, v) => v.map((i) => (Number.isInteger(i) && ws[i] ? new Date(ws[i][0] + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "")) }, { ...ax, size: 44 }],
+    series: [{}, { label: "Voltas", stroke: "#2ee59d", fill: "rgba(46,229,157,.55)", width: 1, paths: uPlot.paths.bars({ size: [0.6, 40] }), points: { show: false } }],
+  }, [ws.map((_, i) => i), ws.map((w) => w[1])], box);
 }
 
 // ---------------------------------------------------------------- LFM
@@ -160,6 +217,9 @@ function bindProfileEdit(r) {
           <label class="pf-l">E-mail</label><input class="field" value="${esc(session.user.email)}" disabled>
           <div class="pf-row"><button class="btn go small" id="pfSave" type="button">Salvar perfil</button></div></div>
       </div>
+      <h3 style="margin:20px 0 6px">Privacidade</h3>
+      <label class="pf-chk"><input type="checkbox" id="pfShow" ${r.show_progress === false ? "" : "checked"}> Mostrar o meu progresso (sessões, médias e rating) no meu perfil</label>
+      <p class="sub">Desligado, os outros pilotos veem só seus recordes e o resumo do LFM; o progresso fica visível só para você.</p>
       <h3 style="margin:20px 0 6px">Senha</h3>
       <p class="sub">Defina uma senha para entrar também com e-mail e senha (na tela inicial, “Entrar com senha”). Google e link por e-mail continuam funcionando.</p>
       <div class="adm-form"><input class="field" id="pfPw" type="password" autocomplete="new-password" placeholder="nova senha (mínimo 8)"><input class="field" id="pfPw2" type="password" autocomplete="new-password" placeholder="repita a senha"><button class="btn small" id="pfPwGo" type="button">Definir senha</button></div>`;
@@ -189,6 +249,11 @@ function bindProfileEdit(r) {
       const res = await rpc("set_my_profile", { p_name: $("#pfName").value, p_bio: $("#pfBio").value });
       if (!res || !res.ok) { toast((res && res.error) || "Não foi possível salvar.", "err"); return; }
       toast("Perfil salvo", "ok"); await loadProfile(); renderMe(); renderProfile(me);
+    };
+    $("#pfShow").onchange = async (e) => {
+      const res = await rpc("set_my_progress_visibility", { p_show: e.target.checked });
+      if (res && res.ok) { r.show_progress = e.target.checked; toast(e.target.checked ? "Progresso visível no perfil" : "Progresso privado", "ok"); }
+      else toast("Não foi possível salvar.", "err");
     };
     $("#pfPwGo").onclick = async () => {
       const a = $("#pfPw").value, b = $("#pfPw2").value;

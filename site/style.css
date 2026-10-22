@@ -728,3 +728,4 @@ textarea.field { font: inherit; }
 .u-over { overflow: visible; }
 .lfm-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 10px 0 14px; } .lfm-charts h3 { margin: 0 0 6px; font-size: 14px; color: var(--fog); }
 @media (max-width: 800px) { .lfm-charts { grid-template-columns: 1fr; } }
+.pf-chk { display: flex; gap: 8px; align-items: center; font-size: 14px; } .pf-chk input { width: 18px; height: 18px; accent-color: var(--sodium); }
