@@ -114,6 +114,7 @@ def main(argv=None):
     team = Team(db, settings, args.port)
     from .license import License
     lic = License(team)
+    settings.has = lic.has
     lic.start()
     if video:
         video.license = lic

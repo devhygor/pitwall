@@ -27,6 +27,11 @@ OVERLAY_DEFAULTS = {
 }
 
 
+# personalização do engenheiro: sem o recurso `voice_custom` (Pro) estas opções valem o padrão, mesmo que estejam gravadas diferentes
+VOICE_LOCK_KEYS = {"eng_rate", "eng_radio", "eng_radio_level", "eng_radio_noise", "eng_piper_voice", "eng_win_voice", "eng_wake", "eng_wake_word",
+                   "eng_verbosity", "eng_humor_level", "eng_events", "eng_ptt_mode", "eng_stt_model"}
+
+
 def merged_overlays(cur) -> dict:
     out = {}
     cur = cur if isinstance(cur, dict) else {}
@@ -117,7 +122,14 @@ class Settings:
             self._data["overlays"]["delta"]["mode"] = "game"
         self._data["overlay_edit"] = False
 
+    has = None                       # função (recurso -> bool) do módulo de licença; sem ela nada é travado
+
     def get(self, key):
+        if key in VOICE_LOCK_KEYS and self.has is not None and not self.has("voice_custom"):
+            v = self._data.get(key, DEFAULTS.get(key))
+            if key == "eng_stt_model" and v in ("tiny", "base"):            # o modelo leve também é livre (PCs fracos)
+                return v
+            return DEFAULTS.get(key)
         return self._data.get(key, DEFAULTS.get(key))
 
     def all(self) -> dict:

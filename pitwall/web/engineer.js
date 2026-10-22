@@ -8,9 +8,9 @@ const ENG_STATE = { off: "desligado", idle: "pronto", listening: "ouvindo…", t
 async function renderVoiceEngineer() {
   current = { name: "engineer" };
   view.innerHTML = `<div class="sub">Carregando…</div>`;
-  let S, dev, cat;
+  let S, dev, cat, lic;
   try {
-    [S, dev, cat] = await Promise.all([api("/api/settings").then((r) => r.settings), api("/api/engineer/devices"), api("/api/engineer/catalog")]);
+    [S, dev, cat, lic] = await Promise.all([api("/api/settings").then((r) => r.settings), api("/api/engineer/devices"), api("/api/engineer/catalog"), api("/api/license").catch(() => ({ features: [] }))]);
   } catch (e) {
     view.innerHTML = `<div class="panel"><span class="status bad">${esc(e.message)}</span></div>`;
     return;
@@ -118,6 +118,25 @@ async function renderVoiceEngineer() {
       </div>
     </section>
     <section class="set-sec" data-sec="downloads"><div id="eStore"><div class="sub">Carregando…</div></div></section>`;
+
+  // ---- personalização só para assinantes: no Grátis estas opções ficam travadas no padrão
+  const FE = new Set((lic.features || []).map((f) => f.id)), custom = FE.has("voice_custom");
+  if (!custom) {
+    const tag = ` <em class="tier">🔒 Pro</em>`, def = { "#eRate": 100, "#eRadioLv": 60, "#eRadioNz": 30, "#eVerb": "normal", "#eHumLv": "normal", "#ePiper": "pt_BR-faber-medium", "#eWin": "" };
+    const lockRow = (sel) => {
+      const el = $(sel); if (!el) return;
+      el.disabled = true;
+      const r = el.closest(".set-row"); if (r && !r.dataset.lk) { r.dataset.lk = 1; r.classList.add("locked"); r.querySelector("b").insertAdjacentHTML("beforeend", tag); r.title = "Personalização do engenheiro: plano Pro. Veja o menu Plano."; }
+    };
+    for (const [sel, v] of Object.entries(def)) { const el = $(sel); if (el) el.value = v; }
+    $("#eRadio").checked = true; $("#eWake").checked = false;
+    ["#eRate", "#eRadio", "#eRadioLv", "#eRadioNz", "#ePiper", "#eWin", "#eWake", "#eWakeWord", "#eVerb", "#eHumLv"].forEach(lockRow);
+    $("#eRateV").textContent = "100%"; $("#eRadioLvV").textContent = "60%"; $("#eRadioNzV").textContent = "30%";
+    $("#eCats").querySelectorAll("input").forEach((i) => { i.disabled = true; });
+    $("#eCats").insertAdjacentHTML("beforebegin", `<div class="sub" style="margin:4px 0 8px">Escolher quais avisos falar é do plano Pro.${tag}</div>`);
+    $("#ePttMode").value = "hold"; $("#ePttMode").querySelectorAll("option").forEach((o) => { if (o.value !== "hold") { o.disabled = true; o.textContent += " (Pro)"; } });
+    $("#eStt").querySelectorAll("option").forEach((o) => { if (o.value === "small") { o.disabled = true; o.textContent += " (Pro)"; } });
+  }
 
   // ---- abas
   const showEngTab = (k) => {
@@ -332,7 +351,7 @@ async function renderVoiceEngineer() {
     if (st.plan === "free") {
       if (S.eng_voice_mode === "online") warn.push("A voz online é do plano Pro: por enquanto ele usa a voz offline. Veja o menu Plano.");
       if (S.eng_personality !== "profissional") warn.push("A personalidade (humor, bronca) é do plano Pro. Veja o menu Plano.");
-      warn.push("Plano Grátis: avisos e perguntas básicas. Pneus, freios, rivais, observador e o resto liberam no Pro (há teste grátis no menu Plano).");
+      warn.push("Plano Grátis: avisos e perguntas básicas, com a voz e os ajustes padrão. Pneus, freios, rivais, observador, personalização da voz e o resto liberam no Pro (há teste grátis no menu Plano).");
     }
     if (st.tts.last_error) warn.push("Voz: " + st.tts.last_error);
     if (st.errors.length) warn.push(st.errors[st.errors.length - 1]);
