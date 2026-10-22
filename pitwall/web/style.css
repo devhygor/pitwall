@@ -1311,3 +1311,11 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 @media (max-width: 1000px) { .sc-main { grid-template-rows: auto auto; } .sc-svgwrap.is3d { height: 52vh; } }
 
 .sc3d-load { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 12px; background: rgba(14,19,28,.9); border: 1px solid var(--line); color: var(--text); z-index: 7; }
+
+/* pontos 3D: anel branco com contorno escuro, visíveis sobre qualquer cor do carro */
+.sc3d-pt { border: 2px solid #ffffff; background: rgba(8,12,18,.55); box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.6); }
+.sc3d-pt .d { background: #ffffff; box-shadow: 0 0 6px rgba(255,255,255,.9); }
+.sc3d-pt:hover, .sc3d-pt:focus-visible { background: rgba(60,140,255,.45); border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 0 7px rgba(255,255,255,.22), 0 2px 12px rgba(0,0,0,.6); }
+.sc3d-pt.rec { border-color: #ffc94d; background: rgba(40,28,0,.6); } .sc3d-pt.rec .d { background: #ffc94d; box-shadow: 0 0 6px rgba(255,201,77,.9); }
+.sc3d-pt.on { border-color: #4da3ff; background: rgba(40,110,255,.5); box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 0 6px rgba(77,163,255,.35); } .sc3d-pt.on .d { background: #bfe0ff; }
+.sc3d-pt.chg .d { background: #ffc94d; }

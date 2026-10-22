@@ -1,6 +1,6 @@
 """Reduz um modelo .glb de malha única (ex.: gerado por IA) para um tamanho leve, mantendo a forma.
 
-Uso:  .venv\\Scripts\\python.exe tools\\decimar_modelo.py entrada.glb saida.glb [triângulos alvo, padrão 700000]
+Uso:  .venv\\Scripts\\python.exe tools\\decimar_modelo.py entrada.glb saida.glb [triângulos alvo, padrão 700000] [passos de suavização, padrão 12; 0 desliga]
 
 Precisa de:  pip install fast-simplification numpy   (só para quem prepara o modelo; o app não depende disso).
 A saída tem só posição, normais e índices (sem texturas): o editor de setup pinta o carro com a pintura Pitwall.
@@ -46,6 +46,36 @@ def normais_do_original(p_novo, p_orig, n_orig):
     return (n / l).astype(np.float32)
 
 
+def suavizar(pos, idx, passos=12, lam=0.5, mu=-0.53, peso=None):
+    """Suavização de Taubin: tira o aspecto "amassado" das malhas de IA sem encolher o carro (alterna encolher e expandir)."""
+    from scipy import sparse
+    n = len(pos)
+    e = np.vstack([idx[:, [0, 1]], idx[:, [1, 2]], idx[:, [2, 0]]])
+    a = sparse.coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), shape=(n, n)).tocsr()
+    a = ((a + a.T) > 0).astype(np.float64)
+    grau = np.asarray(a.sum(axis=1)).ravel()
+    grau[grau == 0] = 1
+    m = sparse.diags(1.0 / grau) @ a
+    p = pos.astype(np.float64)
+    w = np.ones((n, 1)) if peso is None else peso.reshape(-1, 1)
+    for _ in range(passos):
+        p = p + w * lam * (m @ p - p)
+        p = p + w * mu * (m @ p - p)
+    return p.astype(np.float32)
+
+
+def peso_frente(pos):
+    """Peso 0..1 por vértice: 1 na ponta da frente (capô/nariz), 0 do meio para trás. A frente é a ponta mais baixa (a traseira tem a asa)."""
+    x = pos[:, 0]
+    xmin, xmax = x.min(), x.max()
+    L = xmax - xmin
+    alta_min = pos[x < xmin + 0.08 * L][:, 1].max()
+    alta_max = pos[x > xmax - 0.08 * L][:, 1].max()
+    t = (xmax - x) / L if alta_max > alta_min else (x - xmin) / L        # 0 = traseira (ponta com a asa), 1 = frente
+    w = np.clip((t - 0.55) / 0.2, 0, 1)
+    return (w * w * (3 - 2 * w)).astype(np.float64)
+
+
 def normais(pos, idx):
     n = np.zeros_like(pos)
     p0, p1, p2 = pos[idx[:, 0]], pos[idx[:, 1]], pos[idx[:, 2]]
@@ -88,10 +118,14 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     alvo = int(sys.argv[3]) if len(sys.argv) > 3 else 700_000
+    passos = int(sys.argv[4]) if len(sys.argv) > 4 else 12
     pos, idx, nor0 = ler_glb(sys.argv[1])
     print(f"entrada: {len(pos)} vértices, {len(idx)} triângulos")
     red = max(0.0, min(0.99, 1 - alvo / len(idx)))
     p2, f2 = fs.simplify(pos, idx, target_reduction=red)
     f2 = f2.reshape(-1, 3)
     print(f"saída:   {len(p2)} vértices, {len(f2)} triângulos")
+    if passos:
+        p2 = suavizar(p2, f2, passos)
+        print(f"suavização: {passos} passos")      # (peso_frente() existe para suavizar mais o nariz, mas deformava os raios da roda dianteira)
     escrever_glb(sys.argv[2], p2, normais(p2, f2), f2)     # normais calculadas na malha nova (as herdadas do original deixam buracos pretos)

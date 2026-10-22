@@ -524,8 +524,8 @@ function adoptRaw(gltf, brand) {
   const flip = hi[1] > hi[0];                                   // traseira em +x: gira 180° em torno de y
   if (flip) for (let i = 0; i < n; i++) { PA[3 * i] = -PA[3 * i]; PA[3 * i + 2] = -PA[3 * i + 2]; if (NA) { NA[3 * i] = -NA[3 * i]; NA[3 * i + 2] = -NA[3 * i + 2]; } }
   // contato com o chão -> rodas
-  const tol = 0.02 * (ymax - ymin), lowX = [], lowZ = [], lowI = [];
-  for (let i = 0; i < n; i++) if (PA[3 * i + 1] < ymin + tol) { lowX.push(PA[3 * i]); lowZ.push(PA[3 * i + 2]); lowI.push(i); }
+  const tol = 0.02 * (ymax - ymin), lowX = [], lowZ = [];
+  for (let i = 0; i < n; i++) if (PA[3 * i + 1] < ymin + tol) { lowX.push(PA[3 * i]); lowZ.push(PA[3 * i + 2]); }
   if (lowX.length < 50) throw new Error("não achei o contato das rodas com o chão");
   let c0 = Math.min(...lowX), c1 = Math.max(...lowX);
   for (let it = 0; it < 8; it++) {
@@ -533,61 +533,84 @@ function adoptRaw(gltf, brand) {
     for (const x of lowX) { if (Math.abs(x - c0) < Math.abs(x - c1)) { s0 += x; n0++; } else { s1 += x; n1++; } }
     c0 = s0 / Math.max(n0, 1); c1 = s1 / Math.max(n1, 1);
   }
-  const mid = (c0 + c1) / 2, wheels = [];            // [frente esq, frente dir, trás esq, trás dir] (esquerda = z negativo)
-  const box = (front, sign) => { let a = 1e9, b = -1e9, xa = 1e9, xb = -1e9; lowX.forEach((x, k) => { if ((x > mid) === front && Math.sign(lowZ[k]) === sign) { if (lowZ[k] < a) a = lowZ[k]; if (lowZ[k] > b) b = lowZ[k]; if (x < xa) xa = x; if (x > xb) xb = x; } }); return { zc: (a + b) / 2, hw: (b - a) / 2, xc: (xa + xb) / 2 }; };
+  const mid = (c0 + c1) / 2;
+  const box = (front, sign) => { let a = 1e9, b = -1e9, xa = 1e9, xb = -1e9; lowX.forEach((x, k) => { if ((x > mid) === front && Math.sign(lowZ[k]) === sign) { if (lowZ[k] < a) a = lowZ[k]; if (lowZ[k] > b) b = lowZ[k]; if (x < xa) xa = x; if (x > xb) xb = x; } }); return { zc: (a + b) / 2, xc: (xa + xb) / 2 }; };
   const wb = { front: [box(true, -1), box(true, 1)], rear: [box(false, -1), box(false, 1)] };
   const xf = (wb.front[0].xc + wb.front[1].xc) / 2, xr = (wb.rear[0].xc + wb.rear[1].xc) / 2, k = (WB.front - WB.rear) / (xf - xr);
-  const sc = (v) => v * k;
-  const zOf = (b) => sc(Math.abs(b.zc));
-  // transforma tudo para o sistema do editor (frente +x, chão y=0, eixos nas medidas padrão)
+  const zOf = (b) => Math.abs(b.zc) * k;
   for (let i = 0; i < n; i++) { PA[3 * i] = (PA[3 * i] - xf) * k + WB.front; PA[3 * i + 1] = (PA[3 * i + 1] - ymin) * k; PA[3 * i + 2] = PA[3 * i + 2] * k; }
   const centers = [[WB.front, -zOf(wb.front[0])], [WB.front, zOf(wb.front[1])], [WB.rear, -zOf(wb.rear[0])], [WB.rear, zOf(wb.rear[1])]];
   const halfW = [TW.front / 2, TW.front / 2, TW.rear / 2, TW.rear / 2];
-  g.deleteAttribute("uv");
-  // UV: projeta a pintura Pitwall (a mesma textura do carro por código) pelo lado, por cima e por trás
-  const UV = new Float32Array(n * 2), YM = 0.58;
-  for (let i = 0; i < n; i++) {
-    const x = PA[3 * i], y = PA[3 * i + 1], z = PA[3 * i + 2];
-    let a = Math.atan2(y - YM, z);                      // ângulo em volta do eixo do carro: lado direito 0, teto π/2, lado esquerdo π (igual à textura)
-    if (a < -Math.PI / 2) a += Math.PI * 2;               // a costura fica embaixo (invisível); a textura repete em v
-    UV[2 * i] = clamp((x + 2.32) / 4.64, 0, 1); UV[2 * i + 1] = a / (Math.PI * 2);
-  }
-  g.setAttribute("uv", new THREE.BufferAttribute(UV, 2));
-  // classificação por triângulo
-  const T = idx.length / 3, cls = new Uint8Array(T), cnt = new Uint32Array(10);   // 0 pintura 1 carbono 2 vidro 3 pneu 4 aro  5..8 rodas (tire/rim por roda)
-  let roof = 0; for (let i = 0; i < n; i++) { const y = PA[3 * i + 1]; if (y < 1.34 && y > roof && PA[3 * i] > -1 && PA[3 * i] < 0.8) roof = y; }
-  const wheelOf = new Int8Array(T).fill(-1);
+
+  // ---- rodas: triângulos dentro de cada cilindro de roda; o resto é a carroceria
+  const T = idx.length / 3, wheelOf = new Int8Array(T).fill(-1), tireTri = new Uint8Array(T), dropTri = new Uint8Array(T);
   for (let t = 0; t < T; t++) {
     const a = idx[3 * t] * 3, b = idx[3 * t + 1] * 3, c = idx[3 * t + 2] * 3;
     const cx = (PA[a] + PA[b] + PA[c]) / 3, cy = (PA[a + 1] + PA[b + 1] + PA[c + 1]) / 3, cz = (PA[a + 2] + PA[b + 2] + PA[c + 2]) / 3;
-    let w = -1;
-    for (let i = 0; i < 4; i++) { const dx = cx - centers[i][0], dy = cy - R, dz = cz - centers[i][1]; if (Math.abs(dz) < halfW[i] + 0.015 && dx * dx + dy * dy < (R * 1.04) ** 2) { w = i; break; } }
-    wheelOf[t] = w;
-    if (w >= 0) { const i = w, dx = cx - centers[i][0], dy = cy - R, r = Math.hypot(dx, dy); cls[t] = r > R * 0.8 ? 3 : 4; continue; }
-    if (cy < 0.2 || (cx < -1.95 && cy > 0.75) || cy > 1.34 || (cx > 2.25 && cy < 0.32)) cls[t] = 1;
-    else if (cy > 0.84 && cx > -1.05 && cx < 0.8 && Math.abs(cz) < 0.82 && cy < roof - 0.045) cls[t] = 2;
-    else cls[t] = 0;
+    for (let i = 0; i < 4; i++) { const dx = cx - centers[i][0], dy = cy - R, dz = cz - centers[i][1]; if (Math.abs(dz) < halfW[i] + 0.015 && dx * dx + dy * dy < (R * 1.04) ** 2) { wheelOf[t] = i; tireTri[t] = Math.hypot(dx, dy) > R * 0.8 ? 1 : 0; break; } }
   }
-  const mk = (cl, w) => { let m = 0; for (let t = 0; t < T; t++) if (cls[t] === cl && (w === undefined || wheelOf[t] === w)) m++; const out = new Uint32Array(m * 3); let p = 0; for (let t = 0; t < T; t++) if (cls[t] === cl && (w === undefined || wheelOf[t] === w)) { out[p++] = idx[3 * t]; out[p++] = idx[3 * t + 1]; out[p++] = idx[3 * t + 2]; } return out; };
-  const geo = (arr) => { const gg = new THREE.BufferGeometry(); gg.setAttribute("position", g.attributes.position); if (NA) gg.setAttribute("normal", g.attributes.normal); gg.setAttribute("uv", g.attributes.uv); gg.setIndex(new THREE.BufferAttribute(arr, 1)); return gg; };
-  const P = PROFILES[brand] || PROFILES.generic;
-  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: (() => { const t = makePitwallLivery(P, brand, true); t.wrapT = THREE.RepeatWrapping; return t; })(), metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.03 });
-  const carbon = new THREE.MeshStandardMaterial({ color: "#0b0e12", metalness: 0.4, roughness: 0.45 });
-  const glass = new THREE.MeshPhysicalMaterial({ color: "#0c1520", metalness: 0.6, roughness: 0.06, clearcoat: 1, opacity: 0.88, transparent: true });
+  // ---- pintura por vértice (bordas suaves, sem triângulos recortados): verde neon em cima, carbono embaixo, vidros escuros, faixas e fios de neon
+  let roof = 0; for (let i = 0; i < n; i++) { const y = PA[3 * i + 1]; if (y < 1.34 && y > roof && PA[3 * i] > -1 && PA[3 * i] < 0.8) roof = y; }
+  const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const buildColors = (upper, neon) => {
+    const col = new Float32Array(n * 3), cU = new THREE.Color(upper), cN = new THREE.Color(neon), cC = new THREE.Color("#07090c"), cG = new THREE.Color("#0a131c"), tmp = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      const x = PA[3 * i], y = PA[3 * i + 1], z = PA[3 * i + 2], ny = NA ? NA[3 * i + 1] : 0, az = Math.abs(z);
+      tmp.copy(cU).multiplyScalar(0.86 + 0.14 * clamp((y - 0.3) / 0.9, 0, 1));                       // degradê suave: mais claro em cima
+      const wing = Math.max(sm(-1.9, -2.0, x) * sm(0.7, 0.8, y), 0), spl = sm(2.2, 2.3, x) * (1 - sm(0.3, 0.38, y)), ant = sm(1.3, 1.36, y);
+      const low = 1 - sm(0.3, 0.42, y);                                                                // saia / assoalho em carbono
+      const stripe = sm(0.17, 0.12, az) * sm(0.25, 0.5, ny) * sm(-2.1, -1.9, x) * (1 - sm(2.2, 2.3, x));   // faixa central
+      const roofM = sm(roof - 0.1, roof - 0.02, y) * sm(0.2, 0.6, ny) * sm(-1.1, -1.0, x) * (1 - sm(0.8, 0.9, x));
+      const glass = sm(0.82, 0.88, y) * (1 - sm(roof - 0.1, roof - 0.04, y)) * sm(-1.12, -1.02, x) * (1 - sm(0.78, 0.86, x)) * (1 - sm(0.82, 0.9, az)) * (1 - sm(0.45, 0.6, ny));
+      const carbon = Math.max(low, wing, spl, ant, stripe, roofM);
+      tmp.lerp(cC, carbon);
+      tmp.lerp(cG, glass);
+      // fios de neon: linha de caráter na lateral e bordas da faixa central
+      const line = Math.exp(-(((y - 0.47) / 0.011) ** 2)) * sm(0.45, 0.6, az) * (1 - low * 0.0);
+      const edge = (Math.exp(-(((az - 0.185) / 0.009) ** 2))) * sm(0.25, 0.5, ny) * sm(-2.0, -1.9, x) * (1 - sm(2.15, 2.25, x));
+      tmp.lerp(cN, clamp(Math.max(line, edge) * 0.95, 0, 1));
+      col[3 * i] = tmp.r; col[3 * i + 1] = tmp.g; col[3 * i + 2] = tmp.b;
+    }
+    return col;
+  };
+  const colorsPW = buildColors("#049a4c", "#5dffb0");
+  const P = PROFILES[brand] || PROFILES.generic, colorsBrand = buildColors(P.paint, "#ffffff");
+  g.setAttribute("color", new THREE.BufferAttribute(colorsPW.slice(), 3));
+  const mk = (pred) => { let m = 0; for (let t = 0; t < T; t++) if (pred(t)) m++; const out = new Uint32Array(m * 3); let p = 0; for (let t = 0; t < T; t++) if (pred(t)) { out[p++] = idx[3 * t]; out[p++] = idx[3 * t + 1]; out[p++] = idx[3 * t + 2]; } return out; };
+  const geo = (arr) => { const gg = new THREE.BufferGeometry(); gg.setAttribute("position", g.attributes.position); if (NA) gg.setAttribute("normal", g.attributes.normal); gg.setAttribute("color", g.attributes.color); gg.setIndex(new THREE.BufferAttribute(arr, 1)); return gg; };
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, metalness: 0.35, roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.35 });      // acabamento acetinado: esconde as ondulações da malha de IA
   const rubber = new THREE.MeshStandardMaterial({ color: "#121316", roughness: 0.92 });
   const rimM = new THREE.MeshStandardMaterial({ color: "#222831", metalness: 0.85, roughness: 0.3 });
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  for (const [cl, m] of [[0, paint], [1, carbon], [2, glass]]) { const me = new THREE.Mesh(geo(mk(cl)), m); me.castShadow = true; me.receiveShadow = true; body.add(me); }
+  const bm = new THREE.Mesh(geo(mk((t) => wheelOf[t] < 0 && !dropTri[t])), paint); bm.castShadow = true; bm.receiveShadow = true; body.add(bm);
+  // decalques planos (número em círculo e nome), colados na altura da porta
+  const decal = (w, h, draw, x, y, side) => {
+    let zs = 0; for (let i = 0; i < n; i++) { if (Math.abs(PA[3 * i] - x) < 0.14 && Math.abs(PA[3 * i + 1] - y) < 0.07 && PA[3 * i + 2] * side > 0.5) zs = Math.max(zs, Math.abs(PA[3 * i + 2])); }
+    if (!zs) return;
+    const c = document.createElement("canvas"); c.width = 512; c.height = Math.round(512 * h / w); const cx = c.getContext("2d"); draw(cx, c.width, c.height);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide }));
+    m.position.set(x, y, side * (zs + 0.006)); if (side < 0) m.rotation.y = Math.PI; body.add(m);
+  };
+  const num = { porsche: "91", ferrari: "71", lamborghini: "63", mclaren: "59", audi: "29", honda: "30", bmw: "46", mercedes: "88", aston: "7", ford: "64", corvette: "3", nissan: "23", lexus: "14", bentley: "8" }[brand] || "9";
+  for (const sd of [-1, 1]) {
+    decal(0.36, 0.36, (cx, w, h) => { cx.fillStyle = "#f4f7fa"; cx.beginPath(); cx.arc(w / 2, h / 2, w * 0.47, 0, 7); cx.fill(); cx.lineWidth = 16; cx.strokeStyle = "#19c37d"; cx.stroke(); cx.fillStyle = "#070a0e"; cx.font = "italic 800 260px system-ui, sans-serif"; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.fillText(num, w / 2, h / 2 + 14); }, 0.35, 0.62, sd);
+    decal(0.9, 0.16, (cx, w, h) => { cx.fillStyle = "#ffffff"; cx.font = "italic 800 120px system-ui, sans-serif"; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.fillText("PITWALL", w / 2, h / 2); }, -0.2, 0.34, sd);
+  }
+  const carbonM = new THREE.MeshStandardMaterial({ color: "#0b0e12" });
+  const splitter = new THREE.Group();                      // o splitter da malha não tem peça própria: o ajuste só aparece nos valores
   const corners = [];
   for (let i = 0; i < 4; i++) {
     const [cx, cz] = centers[i], piv = new THREE.Group(); piv.position.set(cx, R, cz); root.add(piv);
-    const tire = new THREE.Mesh(geo(mk(3, i)), rubber), rim = new THREE.Mesh(geo(mk(4, i)), rimM);
+    const tire = new THREE.Mesh(geo(mk((t) => wheelOf[t] === i && tireTri[t])), rubber), rim = new THREE.Mesh(geo(mk((t) => wheelOf[t] === i && !tireTri[t])), rimM);
     for (const me of [tire, rim]) { me.position.set(-cx, -R, -cz); me.castShadow = true; piv.add(me); }
     const dummy = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial());
     corners.push({ piv, ax: cx, z: cz, side: Math.sign(cz) || 1, front: i < 2, g: piv, tire, ring: dummy, disc: dummy, cal: dummy, barrel: dummy });
   }
-  const keep = new Map(); [paint, carbon, glass, rubber, rimM].forEach((m) => keep.set(m, { t: m.transparent, o: m.opacity, d: m.depthWrite }));
-  return { isModel: true, isRaw: true, restyle: (mode) => { const pw = mode === "pitwall"; const lv = paint.userData.lv || (paint.userData.lv = paint.map); paint.map = pw ? lv : null; paint.color.set(pw ? 0xffffff : P.paint); paint.needsUpdate = true; }, root, body, P, corners, wing: new THREE.Group(), wingGroup: new THREE.Group(), splitter: new THREE.Group(), ducts: [], dashLed: { material: { emissiveIntensity: 1 } },
+  const keep = new Map(); [paint, rubber, rimM, carbonM].forEach((m) => keep.set(m, { t: m.transparent, o: m.opacity, d: m.depthWrite }));
+  body.traverse((o) => { if (o.isMesh && o.material.map) keep.set(o.material, { t: true, o: 1, d: false }); });
+  const restyle = (mode) => { const c = mode === "pitwall" ? colorsPW : colorsBrand; g.attributes.color.array.set(c); g.attributes.color.needsUpdate = true; };
+  return { isModel: true, isRaw: true, restyle, root, body, P, corners, wing: new THREE.Group(), wingGroup: new THREE.Group(), splitter, ducts: [], dashLed: { material: { emissiveIntensity: 1 } },
     modelMats: keep, paint: null, paintPlain: null, carbon: null, dark: null, bodyMats: [], cabinMeshes: [], glass: null };
 }
 
