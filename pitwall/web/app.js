@@ -1471,7 +1471,7 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
 }
 
 // ---------------------------------------------------------------- biblioteca de setups
-const setupsState = { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name", dir: 1 };
+const setupsState = { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name", dir: 1, cmp: null, moreOpen: false };
 const SETUP_PAGE = 40;
 // nomes de exibição das origens (o valor gravado no banco não muda)
 const SRC_LABEL = { "GO Setups": "Coleção Pitwall", "Meu": "Meus", "Pitwall": "Gerados pelo Pitwall", "Equipe": "Da equipe" };
@@ -1491,8 +1491,7 @@ async function renderSetups() {
     && (!st.kind || f.kind === st.kind) && (!st.source || f.source === st.source) && (!q || f.name.toLowerCase().includes(q))
     && (st.time !== "with" || f.best_ms) && (st.time !== "without" || !f.best_ms) && (st.inacc !== "yes" || f.in_acc) && (st.inacc !== "no" || !f.in_acc));
   // ordenação pelos cabeçalhos da tabela (clique de novo para inverter); quem não tem o dado vai sempre para o fim
-  const SORTS = { name: (f) => f.name.toLowerCase(), combo: (f) => `${pretty(f.car)} ${pretty(f.track)}`.toLowerCase(), best: (f) => f.best_ms || null, laps: (f) => f.laps_n || null,
-    source: (f) => srcLabel(f.source).toLowerCase(), kind: (f) => f.kind || null, temp: (f) => (f.temp_c != null ? f.temp_c : null), acc: (f) => (f.in_acc ? 1 : 0), used: (f) => f.last_used || null };
+  const SORTS = { name: (f) => f.name.toLowerCase(), best: (f) => f.best_ms || null, source: (f) => srcLabel(f.source).toLowerCase(), acc: (f) => (f.in_acc ? 1 : 0) };
   const key = SORTS[st.sort] || SORTS.name;
   list.sort((a, b) => {
     const x = key(a), y = key(b);
@@ -1504,59 +1503,65 @@ async function renderSetups() {
   const pages = Math.max(1, Math.ceil(list.length / SETUP_PAGE));
   if (st.page >= pages) st.page = pages - 1;
   const pageList = list.slice(st.page * SETUP_PAGE, (st.page + 1) * SETUP_PAGE);
-  const sel = (id, opts, val, all_) => `<select id="${id}"><option value="">${all_}</option>${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === val ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  const sel = (id, opts, val, all_) => `<select id="${id}" class="${val ? "act" : ""}"><option value="">${all_}</option>${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === val ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  const extra = [st.kind, st.source, st.time, st.inacc].filter(Boolean).length;
+  const anyFilter = st.car || st.track || extra || st.q;
+  const nm = (id) => { const f = all.find((x) => x.id === id); return f ? f.name : "?"; };
   view.innerHTML = `
     <div class="head"><div><h1>Setups</h1>
-      <div class="sub">${all.length} setups no seu banco · pasta do ACC: <code>${esc(lib.root)}</code>${lib.exists ? "" : " (não encontrada)"}</div></div>
-      <span class="spacer"></span><button class="btn" id="sImport">Importar da pasta do ACC</button></div>
-    <div id="sImportOut"></div>
-    <div id="tSetups"></div>
-    <div class="filters">
+      <div class="sub">${all.length} setups · pasta do ACC: <code>${esc(lib.root)}</code>${lib.exists ? "" : " (não encontrada)"}</div></div>
+      <span class="spacer"></span><button class="btn sm" id="sImport" title="Lê a pasta de setups do ACC e traz os novos para o Pitwall">Importar da pasta do ACC</button></div>
+    <div class="sbar">
+      <input id="fQ" class="sq" type="search" placeholder="Buscar setup pelo nome…" value="${esc(st.q)}">
       ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
       ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
+      <button class="btn sm ${extra ? "on" : "quiet"}" id="fMoreBtn">Mais filtros${extra ? ` <b class="cnt">${extra}</b>` : ""}</button>
+      ${anyFilter ? `<button class="btn sm quiet" id="fClear">Limpar</button>` : ""}
+    </div>
+    <div class="sbar more" id="fMore" ${st.moreOpen || extra ? "" : "hidden"}>
       ${sel("fKind", [["Q", "Classificação (Q)"], ["R", "Corrida (R)"]], st.kind, "Q e R")}
       ${sel("fSrc", [["GO Setups", srcLabel("GO Setups")], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"], ["Equipe", "Da equipe"]], st.source, "Todas as origens")}
       ${sel("fTime", [["with", "Só com tempo de volta"], ["without", "Sem tempo de volta"]], st.time, "Com ou sem tempo")}
       ${sel("fInAcc", [["yes", "Já instalados no ACC"], ["no", "Ainda não instalados"]], st.inacc, "Instalados ou não")}
-      <input id="fQ" placeholder="Buscar pelo nome…" value="${esc(st.q)}">
-      ${st.car || st.track || st.kind || st.source || st.time || st.inacc || st.q ? `<button class="btn sm quiet" id="fClear">Limpar filtros</button>` : ""}
-      <span class="spacer"></span>
-      <button class="btn primary" id="sCmp" ${st.sel.length === 2 ? "" : "disabled"}>Comparar 2 selecionados</button>
+    </div>
+    <div class="cmp-bar" id="cmpBar" ${st.sel.length || st.cmp ? "" : "hidden"}>
+      ${st.cmp ? `<span>Comparando <b class="va">A</b> ${esc(nm(st.cmp[0]))} <span class="sub">com</span> <b class="vb">B</b> ${esc(nm(st.cmp[1]))}</span><span class="spacer"></span>
+          <button class="btn sm quiet" id="cmpSwap">Trocar A e B</button><button class="btn sm" id="cmpClose">✕ Fechar comparação</button>`
+        : `<span>${st.sel.length === 1 ? "1 setup marcado. Marque mais um para comparar." : "2 setups marcados para comparar"}</span><span class="spacer"></span>
+          <button class="btn primary sm" id="sCmp" ${st.sel.length === 2 ? "" : "disabled"}>Comparar</button><button class="btn sm quiet" id="cmpClear">Limpar seleção</button>`}
     </div>
     <div class="slib">
       <div class="panel pad0 slist">
-        ${list.length ? `<table><thead><tr><th></th>${[["name", "Nome"], ["combo", "Carro / pista"], ["best", "Meu melhor"], ["source", "Origem"], ["kind", "Tipo"], ["temp", "Temp."], ["acc", "No ACC"]]
+        ${list.length ? `<table><thead><tr><th></th>${[["name", "Setup"], ["best", "Meu melhor"], ["source", "Detalhes"], ["acc", "No ACC"]]
           .map(([k, t]) => `<th class="sortable ${st.sort === k ? "on" : ""}" data-sort="${k}" title="Ordenar por ${t.toLowerCase()}">${t}<i>${st.sort === k ? (st.dir > 0 ? "▲" : "▼") : ""}</i></th>`).join("")}</tr></thead><tbody>
           ${pageList.map((f) => `<tr class="srow ${st.open === f.id ? "sel" : ""}" data-id="${f.id}">
-            <td><input type="checkbox" data-pick="${f.id}" ${st.sel.includes(f.id) ? "checked" : ""}></td>
-            <td>${esc(f.name)}</td>
-            <td class="sub">${esc(pretty(f.car))} · ${esc(pretty(f.track))}</td>
+            <td><input type="checkbox" data-pick="${f.id}" ${st.sel.includes(f.id) ? "checked" : ""} title="Marcar para comparar"></td>
+            <td><b class="sname">${esc(f.name)}</b><div class="sub sline">${esc(pretty(f.car))} · ${esc(pretty(f.track))}</div></td>
             <td class="num">${f.best_ms ? `<b>${fmtLap(f.best_ms)}</b><br><small class="sub">${f.laps_n} volta${f.laps_n === 1 ? "" : "s"}${f.estimated ? " · estimado" : ""}</small>` : `<span class="sub">—</span>`}</td>
-            <td><span class="tag ${f.source === "GO Setups" ? "go" : f.source === "Pitwall" ? "pw" : ""}">${esc(srcLabel(f.source))}</span></td>
-            <td>${f.kind || "—"}${f.variant ? ` <span class="sub">${esc(f.variant)}</span>` : ""}</td>
-            <td class="num">${f.temp_c != null ? f.temp_c + "°C" : "—"}</td>
-            <td>${f.in_acc ? `<span class="status ok">sim</span>` : `<button class="btn sm" data-install="${f.id}">Instalar</button>`}</td>
+            <td class="stags"><span class="tag ${f.source === "GO Setups" ? "go" : f.source === "Pitwall" ? "pw" : ""}">${esc(srcLabel(f.source))}</span>${f.kind ? `<span class="tag2">${f.kind}</span>` : ""}${f.temp_c != null ? `<span class="tag2">${f.temp_c}°C</span>` : ""}${f.variant ? `<span class="tag2">${esc(f.variant)}</span>` : ""}</td>
+            <td>${f.in_acc ? `<span class="status ok">✓</span>` : `<button class="btn sm" data-install="${f.id}">Instalar</button>`}</td>
           </tr>`).join("")}</tbody></table>
           <div class="pager"><button class="btn sm" id="pgPrev" ${st.page ? "" : "disabled"}>‹ Anterior</button>
             <span class="sub">${list.length} setups · página ${st.page + 1} de ${pages}</span>
             <button class="btn sm" id="pgNext" ${st.page + 1 < pages ? "" : "disabled"}>Próxima ›</button></div>`
-        : `<div class="empty"><b>Nenhum setup encontrado</b>${all.length ? "Mude os filtros." : "Clique em “Importar da pasta do ACC”."}</div>`}
+        : `<div class="empty"><b>Nenhum setup encontrado</b>${all.length ? "Mude ou limpe os filtros." : "Clique em “Importar da pasta do ACC”."}</div>`}
       </div>
-      <div class="panel sdetail" id="sDetail"><div class="sub">Clique num setup para ver os detalhes, ou marque dois para comparar.</div></div>
-    </div>`;
+      <div class="panel sdetail" id="sDetail"></div>
+    </div>
+    <div id="tSetups" style="margin-top:18px"></div>`;
   const reRender = () => renderSetups();
-  $("#fCar").onchange = (e) => { st.car = e.target.value; st.track = ""; st.page = 0; reRender(); };
-  $("#fTrack").onchange = (e) => { st.track = e.target.value; st.page = 0; reRender(); };
-  $("#fKind").onchange = (e) => { st.kind = e.target.value; st.page = 0; reRender(); };
-  $("#fSrc").onchange = (e) => { st.source = e.target.value; st.page = 0; reRender(); };
-  $("#fTime").onchange = (e) => { st.time = e.target.value; st.page = 0; reRender(); };
-  $("#fInAcc").onchange = (e) => { st.inacc = e.target.value; st.page = 0; reRender(); };
+  const empty = () => { $("#sDetail").innerHTML = `<div class="sd-empty"><b>Escolha um setup</b><span>Clique em um da lista para ver os ajustes e os seus tempos. Marque a caixinha de dois setups para ver se os ajustes fizeram diferença.</span></div>`; };
+  const onSel = (id, fn) => { const e = $(id); if (e) e.onchange = (ev) => { fn(ev.target.value); st.page = 0; reRender(); }; };
+  onSel("#fCar", (v) => { st.car = v; st.track = ""; }); onSel("#fTrack", (v) => { st.track = v; });
+  onSel("#fKind", (v) => { st.kind = v; }); onSel("#fSrc", (v) => { st.source = v; });
+  onSel("#fTime", (v) => { st.time = v; }); onSel("#fInAcc", (v) => { st.inacc = v; });
+  $("#fMoreBtn").onclick = () => { st.moreOpen = $("#fMore").hidden; $("#fMore").hidden = !st.moreOpen; };
   view.querySelectorAll("th[data-sort]").forEach((th) => th.onclick = () => {
     const k = th.dataset.sort;
     if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = 1; }
     st.page = 0; reRender();
   });
-  const clr = $("#fClear"); if (clr) clr.onclick = () => { Object.assign(st, { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", page: 0 }); reRender(); };
+  const clr = $("#fClear"); if (clr) clr.onclick = () => { Object.assign(st, { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", page: 0, moreOpen: false }); reRender(); };
   const pgp = $("#pgPrev"), pgn = $("#pgNext");
   if (pgp) pgp.onclick = () => { st.page--; reRender(); };
   if (pgn) pgn.onclick = () => { st.page++; reRender(); };
@@ -1566,7 +1571,7 @@ async function renderSetups() {
     $("#sImport").disabled = true;
     const r = await api("/api/setups/import", { method: "POST" });
     await reRender();
-    $("#sImportOut").innerHTML = `<div class="note okk">${r.exists ? `${r.found} arquivos lidos, ${r.new} novos no banco.` : "Pasta do ACC não encontrada."}</div>`;
+    toast(r.exists ? `${r.found} arquivos lidos, ${r.new} novos no banco.` : "Pasta do ACC não encontrada.", r.exists ? "ok" : "err");
   };
   paintTeamSetups();
   view.querySelectorAll("[data-pick]").forEach((cb) => cb.onclick = (e) => {
@@ -1575,19 +1580,27 @@ async function renderSetups() {
     st.sel = st.sel.filter((x) => x !== id);
     if (cb.checked) st.sel.push(id);
     st.sel = st.sel.slice(-2);
-    view.querySelectorAll("[data-pick]").forEach((o) => (o.checked = st.sel.includes(+o.dataset.pick)));
-    $("#sCmp").disabled = st.sel.length !== 2;
+    st.cmp = null;
+    reRender();
   });
   view.querySelectorAll("[data-install]").forEach((b) => b.onclick = async (e) => {
     e.stopPropagation();
     await api(`/api/setups/${b.dataset.install}/install`, { method: "POST" });
     reRender();
   });
-  view.querySelectorAll(".srow").forEach((tr) => tr.onclick = () => { st.open = +tr.dataset.id; showSetup(st.open); });
-  $("#sCmp").onclick = () => showDiff(st.sel[0], st.sel[1]);
-  if (st.open) showSetup(st.open);
+  view.querySelectorAll(".srow").forEach((tr) => tr.onclick = () => {
+    const was = st.cmp; st.open = +tr.dataset.id; st.cmp = null;
+    if (was) return reRender();                       // estava comparando: volta para o detalhe e atualiza a faixa
+    view.querySelectorAll(".srow").forEach((r) => r.classList.toggle("sel", r === tr)); showSetup(st.open);
+  });
+  const go = $("#sCmp"); if (go) go.onclick = () => { st.cmp = [st.sel[0], st.sel[1]]; reRender(); };
+  const cc = $("#cmpClear"); if (cc) cc.onclick = () => { st.sel = []; st.cmp = null; reRender(); };
+  const cx = $("#cmpClose"); if (cx) cx.onclick = () => { st.cmp = null; st.sel = []; reRender(); };    // fecha a comparação e solta a seleção
+  const sw = $("#cmpSwap"); if (sw) sw.onclick = () => { st.cmp = [st.cmp[1], st.cmp[0]]; st.sel = [st.cmp[0], st.cmp[1]]; reRender(); };
+  if (st.cmp) showDiff(st.cmp[0], st.cmp[1]);
+  else if (st.open) showSetup(st.open);
+  else empty();
 }
-
 // ---------------------------------------------------------------- setups da equipe (plano Equipe)
 const tsState = { team: "", q: "" };
 async function paintTeamSetups() {
@@ -1698,8 +1711,9 @@ async function showSetup(id) {
     <div id="sShare" style="margin-top:14px"></div>
     <div id="sDel" style="margin-top:14px"><button class="btn sm quiet danger" id="sDelBtn">Apagar este setup</button></div>`;
   shareBox(id);
-  const vp = $("#sVsParent"); if (vp) vp.onclick = () => showDiff(s.parent_id, id);
-  const cw = $("#sCmpWith"); if (cw) cw.onchange = (e) => { if (e.target.value) showDiff(id, +e.target.value); };
+  const startCmp = (x, y) => { setupsState.cmp = [x, y]; setupsState.sel = [x, y]; renderSetups(); };
+  const vp = $("#sVsParent"); if (vp) vp.onclick = () => startCmp(s.parent_id, id);
+  const cw = $("#sCmpWith"); if (cw) cw.onchange = (e) => { if (e.target.value) startCmp(id, +e.target.value); };
   $("#sDelBtn").onclick = () => {
     $("#sDel").innerHTML = `<div class="note warn"><b>Apagar “${esc(s.name)}”?</b>
       <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="sDelFile" checked> Apagar também o arquivo da pasta do ACC (guardo uma cópia de segurança em <code>setups_apagados</code>)</label>
@@ -1743,7 +1757,8 @@ async function showDiff(a, b) {
   const draw = () => {
     const rows = d.rows.filter((r) => !st.diffOnly || !r.same);
     $("#sDetail").innerHTML = `
-      <div class="sd-head"><h2>Comparação</h2><div class="sd-sub">Os ajustes fizeram diferença?</div></div>
+      <div class="sd-head row" style="align-items:flex-start"><div><h2>Comparação</h2><div class="sd-sub">Os ajustes fizeram diferença?</div></div><span class="spacer"></span>
+        <button class="btn sm" id="dClose" title="Fecha a comparação e solta os dois setups">✕ Limpar</button></div>
       <div class="cmp-names"><div><b class="va">A</b> ${esc(d.a)}</div><div><b class="vb">B</b> ${esc(d.b)}</div></div>
       ${has ? `<div class="verdict v-${V.kind}"><b>${esc(V.text)}</b>
           <div class="conf">Confiança: <b>${esc(p.confidence)}</b> · ${A.pace_laps} voltas de ritmo (A) x ${B.pace_laps} (B)</div>
@@ -1751,21 +1766,25 @@ async function showDiff(a, b) {
         <table class="stab cmp-tab"><thead><tr><th></th><th><b class="va">A</b></th><th><b class="vb">B</b></th><th>B − A</th></tr></thead><tbody>
           ${row("Melhor volta", fmtLap(A.best_ms), fmtLap(B.best_ms), B.best_ms - A.best_ms)}
           ${row("Ritmo (mediana)", fmtLap(A.pace_ms), fmtLap(B.pace_ms), B.pace_ms - A.pace_ms)}
-          ${row("Média das voltas de ritmo", fmtLap(A.avg_ms), fmtLap(B.avg_ms), B.avg_ms - A.avg_ms)}
           ${row("Oscilação entre voltas (±)", A.std_ms != null ? "±" + (A.std_ms / 1000).toFixed(2).replace(".", ",") + " s" : "—", B.std_ms != null ? "±" + (B.std_ms / 1000).toFixed(2).replace(".", ",") + " s" : "—", A.std_ms != null && B.std_ms != null ? B.std_ms - A.std_ms : null)}
-          ${sec(0)}${sec(1)}${sec(2)}
           ${row("Voltas · sessões", `${A.laps} · ${A.sessions}`, `${B.laps} · ${B.sessions}`, null)}
-          ${row("Pista / ar", A.road_temp != null ? `${A.road_temp}° / ${A.air_temp ?? "—"}°` : "—", B.road_temp != null ? `${B.road_temp}° / ${B.air_temp ?? "—"}°` : "—", null)}
         </tbody></table>
         <h3>Tempo de cada volta</h3><div id="cmpChart" class="cmp-chart"></div>
-        <div class="note" style="margin-top:6px">Só voltas limpas. “Ritmo” ignora voltas mais de 4% lentas que a melhor (erros e trânsito).</div>`
+        <details class="sd-more"><summary>Mais detalhes</summary>
+          <table class="stab cmp-tab"><tbody>
+            ${row("Média das voltas de ritmo", fmtLap(A.avg_ms), fmtLap(B.avg_ms), B.avg_ms - A.avg_ms)}
+            ${sec(0)}${sec(1)}${sec(2)}
+            ${row("Pista / ar", A.road_temp != null ? `${A.road_temp}° / ${A.air_temp ?? "—"}°` : "—", B.road_temp != null ? `${B.road_temp}° / ${B.air_temp ?? "—"}°` : "—", null)}
+          </tbody></table>
+          <div class="note" style="margin-top:6px">Só voltas limpas. “Ritmo” ignora voltas mais de 4% lentas que a melhor (erros e trânsito).</div></details>`
         : `<div class="verdict v-sem_dados"><b>${esc(V.text)}</b></div>`}
-      <div class="row" style="margin-top:16px"><h3 style="margin:0">O que mudou no setup <span class="sub">(${changed.length} ajuste${changed.length === 1 ? "" : "s"})</span></h3><span class="spacer"></span>
-        <label class="sub"><input type="checkbox" id="dOnly" ${st.diffOnly ? "checked" : ""}> só diferenças</label></div>
-      ${rows.length ? `<table class="stab diff"><thead><tr><th></th><th>A</th><th>B</th></tr></thead><tbody>
-        ${rows.map((r) => `<tr class="${r.same ? "" : "chg"}"><td>${esc(r.label)}</td><td class="num">${fmt(r.a, r)}</td><td class="num">${fmt(r.b, r)}</td></tr>`).join("")}
-      </tbody></table>` : `<div class="sub">Os dois setups têm os mesmos ajustes.</div>`}`;
+      <details class="sd-det" open><summary>O que mudou no setup <span class="sub">(${changed.length} ajuste${changed.length === 1 ? "" : "s"})</span></summary>
+        <label class="sub" style="display:block;margin:6px 0"><input type="checkbox" id="dOnly" ${st.diffOnly ? "checked" : ""}> mostrar só o que mudou</label>
+        ${rows.length ? `<table class="stab diff"><thead><tr><th></th><th>A</th><th>B</th></tr></thead><tbody>
+          ${rows.map((r) => `<tr class="${r.same ? "" : "chg"}"><td>${esc(r.label)}</td><td class="num">${fmt(r.a, r)}</td><td class="num">${fmt(r.b, r)}</td></tr>`).join("")}
+        </tbody></table>` : `<div class="sub">Os dois setups têm os mesmos ajustes.</div>`}</details>`;
     $("#dOnly").onchange = (e) => { st.diffOnly = e.target.checked; draw(); };
+    $("#dClose").onclick = () => { st.cmp = null; st.sel = []; renderSetups(); };
     const box = $("#cmpChart");
     if (box && has) {
       const n = Math.max(A.series.length, B.series.length), idx = Array.from({ length: n }, (_, i) => i + 1);
