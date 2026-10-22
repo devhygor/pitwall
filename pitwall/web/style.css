@@ -1215,3 +1215,5 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .ctip[hidden] { display: none; } .ctip-x { color: #8b93a1; margin-bottom: 3px; }
 .ctip-r { display: flex; align-items: center; gap: 7px; } .ctip-r i { width: 8px; height: 8px; border-radius: 50%; flex: none; } .ctip-r span { color: #aab3c2; } .ctip-r b { margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums; }
 .u-over { overflow: visible; }
+
+.slist th.sortable { cursor: pointer; user-select: none; white-space: nowrap; } .slist th.sortable:hover { color: var(--text); } .slist th.sortable i { font-style: normal; font-size: 9px; margin-left: 5px; color: var(--accent); } .slist th.sortable.on { color: var(--text); }

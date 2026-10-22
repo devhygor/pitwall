@@ -1471,7 +1471,7 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
 }
 
 // ---------------------------------------------------------------- biblioteca de setups
-const setupsState = { car: "", track: "", kind: "", source: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name" };
+const setupsState = { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name", dir: 1 };
 const SETUP_PAGE = 40;
 // nomes de exibição das origens (o valor gravado no banco não muda)
 const SRC_LABEL = { "GO Setups": "Coleção Pitwall", "Meu": "Meus", "Pitwall": "Gerados pelo Pitwall", "Equipe": "Da equipe" };
@@ -1487,9 +1487,19 @@ async function renderSetups() {
   if (st.track && !tracks.includes(st.track)) st.track = "";
   const q = st.q.toLowerCase();
   const list = all.filter((f) => (!st.car || f.car === st.car) && (!st.track || f.track === st.track)
-    && (!st.kind || f.kind === st.kind) && (!st.source || f.source === st.source) && (!q || f.name.toLowerCase().includes(q)));
-  if (st.sort === "best") list.sort((a, b) => (a.best_ms || 1e12) - (b.best_ms || 1e12));
-  else if (st.sort === "used") list.sort((a, b) => String(b.last_used || "").localeCompare(String(a.last_used || "")));
+    && (!st.kind || f.kind === st.kind) && (!st.source || f.source === st.source) && (!q || f.name.toLowerCase().includes(q))
+    && (st.time !== "with" || f.best_ms) && (st.time !== "without" || !f.best_ms) && (st.inacc !== "yes" || f.in_acc) && (st.inacc !== "no" || !f.in_acc));
+  // ordenação pelos cabeçalhos da tabela (clique de novo para inverter); quem não tem o dado vai sempre para o fim
+  const SORTS = { name: (f) => f.name.toLowerCase(), combo: (f) => `${pretty(f.car)} ${pretty(f.track)}`.toLowerCase(), best: (f) => f.best_ms || null, laps: (f) => f.laps_n || null,
+    source: (f) => srcLabel(f.source).toLowerCase(), kind: (f) => f.kind || null, temp: (f) => (f.temp_c != null ? f.temp_c : null), acc: (f) => (f.in_acc ? 1 : 0), used: (f) => f.last_used || null };
+  const key = SORTS[st.sort] || SORTS.name;
+  list.sort((a, b) => {
+    const x = key(a), y = key(b);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * st.dir || a.name.localeCompare(b.name);
+  });
   const pages = Math.max(1, Math.ceil(list.length / SETUP_PAGE));
   if (st.page >= pages) st.page = pages - 1;
   const pageList = list.slice(st.page * SETUP_PAGE, (st.page + 1) * SETUP_PAGE);
@@ -1505,14 +1515,17 @@ async function renderSetups() {
       ${sel("fTrack", tracks.map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
       ${sel("fKind", [["Q", "Classificação (Q)"], ["R", "Corrida (R)"]], st.kind, "Q e R")}
       ${sel("fSrc", [["GO Setups", srcLabel("GO Setups")], ["Meu", "Meus"], ["Pitwall", "Gerados pelo Pitwall"], ["Equipe", "Da equipe"]], st.source, "Todas as origens")}
-      <select id="fSort"><option value="name" ${st.sort === "name" ? "selected" : ""}>Ordenar: nome</option><option value="best" ${st.sort === "best" ? "selected" : ""}>Ordenar: meu melhor tempo</option><option value="used" ${st.sort === "used" ? "selected" : ""}>Ordenar: usado por último</option></select>
+      ${sel("fTime", [["with", "Só com tempo de volta"], ["without", "Sem tempo de volta"]], st.time, "Com ou sem tempo")}
+      ${sel("fInAcc", [["yes", "Já instalados no ACC"], ["no", "Ainda não instalados"]], st.inacc, "Instalados ou não")}
       <input id="fQ" placeholder="Buscar pelo nome…" value="${esc(st.q)}">
+      ${st.car || st.track || st.kind || st.source || st.time || st.inacc || st.q ? `<button class="btn sm quiet" id="fClear">Limpar filtros</button>` : ""}
       <span class="spacer"></span>
       <button class="btn primary" id="sCmp" ${st.sel.length === 2 ? "" : "disabled"}>Comparar 2 selecionados</button>
     </div>
     <div class="slib">
       <div class="panel pad0 slist">
-        ${list.length ? `<table><thead><tr><th></th><th>Nome</th><th>Carro / pista</th><th>Meu melhor</th><th>Origem</th><th>Tipo</th><th>Temp.</th><th>No ACC</th></tr></thead><tbody>
+        ${list.length ? `<table><thead><tr><th></th>${[["name", "Nome"], ["combo", "Carro / pista"], ["best", "Meu melhor"], ["source", "Origem"], ["kind", "Tipo"], ["temp", "Temp."], ["acc", "No ACC"]]
+          .map(([k, t]) => `<th class="sortable ${st.sort === k ? "on" : ""}" data-sort="${k}" title="Ordenar por ${t.toLowerCase()}">${t}<i>${st.sort === k ? (st.dir > 0 ? "▲" : "▼") : ""}</i></th>`).join("")}</tr></thead><tbody>
           ${pageList.map((f) => `<tr class="srow ${st.open === f.id ? "sel" : ""}" data-id="${f.id}">
             <td><input type="checkbox" data-pick="${f.id}" ${st.sel.includes(f.id) ? "checked" : ""}></td>
             <td>${esc(f.name)}</td>
@@ -1535,7 +1548,14 @@ async function renderSetups() {
   $("#fTrack").onchange = (e) => { st.track = e.target.value; st.page = 0; reRender(); };
   $("#fKind").onchange = (e) => { st.kind = e.target.value; st.page = 0; reRender(); };
   $("#fSrc").onchange = (e) => { st.source = e.target.value; st.page = 0; reRender(); };
-  $("#fSort").onchange = (e) => { st.sort = e.target.value; st.page = 0; reRender(); };
+  $("#fTime").onchange = (e) => { st.time = e.target.value; st.page = 0; reRender(); };
+  $("#fInAcc").onchange = (e) => { st.inacc = e.target.value; st.page = 0; reRender(); };
+  view.querySelectorAll("th[data-sort]").forEach((th) => th.onclick = () => {
+    const k = th.dataset.sort;
+    if (st.sort === k) st.dir = -st.dir; else { st.sort = k; st.dir = 1; }
+    st.page = 0; reRender();
+  });
+  const clr = $("#fClear"); if (clr) clr.onclick = () => { Object.assign(st, { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", page: 0 }); reRender(); };
   const pgp = $("#pgPrev"), pgn = $("#pgNext");
   if (pgp) pgp.onclick = () => { st.page--; reRender(); };
   if (pgn) pgn.onclick = () => { st.page++; reRender(); };
