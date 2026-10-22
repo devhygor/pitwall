@@ -1085,6 +1085,9 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             video.probe_async()
         return {"ok": True}
 
+    import mimetypes
+    mimetypes.add_type("text/javascript", ".js")        # o registro do Windows às vezes diz text/plain, e o navegador recusa módulos assim
+    mimetypes.add_type("text/javascript", ".mjs")
     app.mount("/static", StaticFiles(directory=WEB), name="static")
 
     @app.middleware("http")

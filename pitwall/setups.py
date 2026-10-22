@@ -206,7 +206,8 @@ def info(db, setup_id: int) -> dict:
     if m:
         parent = next((x["id"] for x in db.setups_list() if x["car"] == s["car"] and x["track"] == s["track"] and x["name"] == m.group(1) and x["id"] != s["id"]), None)
     return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s), "parent_id": parent,
-            "editable": editable(content), "spots": SPOT_NAMES}
+            "editable": editable(content), "spots": SPOT_NAMES,
+            "extras": {"static_camber": (content.get("basicSetup", {}).get("alignment", {}) or {}).get("staticCamber")}}
 
 
 TRACK_ABBR = {

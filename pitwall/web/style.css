@@ -1293,3 +1293,19 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .sc-step .rst { width: 26px; height: 26px; font-size: 14px; color: #ffd98a; }
 .sc-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 22px; border-top: 1px solid var(--line); background: rgba(8,12,18,.85); } .sc-bar #scName { min-width: 280px; flex: 0 1 380px; }
 @media (max-width: 1000px) { .sc-main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow: auto; } .sc-panel { border-left: 0; border-top: 1px solid var(--line); } }
+
+/* palco 3D do editor de setup */
+.sc-svgwrap.is3d { min-height: 380px; } .sc3d-host { position: absolute; inset: 0; } .sc3d-host[hidden] { display: none; }
+.sc3d-pts { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.sc3d-pt { position: absolute; left: 0; top: 0; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 2px solid #2ee59d; background: rgba(46,229,157,.14); cursor: pointer; pointer-events: auto; will-change: transform; transition: background .15s, border-color .15s, box-shadow .15s; animation: scPulse 2.4s ease-in-out infinite; }
+.sc3d-pt .d { display: block; width: 9px; height: 9px; margin: 10px auto; border-radius: 50%; background: #2ee59d; } .sc3d-pt .r { display: none; }
+.sc3d-pt:hover, .sc3d-pt:focus-visible { background: rgba(46,229,157,.3); box-shadow: 0 0 0 6px rgba(46,229,157,.18); animation: none; outline: none; }
+.sc3d-pt .lb { position: absolute; top: 38px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; color: #d6fbea; text-shadow: 0 1px 3px #000, 0 0 6px #000; opacity: 0; pointer-events: none; transition: opacity .15s; } .sc3d-pt:hover .lb, .sc3d-pt.on .lb { opacity: 1; }
+.sc3d-pt .bd { position: absolute; top: -9px; right: -9px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: #ffc94d; color: #1b1300; font: 700 11px/18px system-ui; text-align: center; box-sizing: border-box; display: none; }
+.sc3d-pt.rec { border-color: #ffc94d; background: rgba(255,201,77,.15); } .sc3d-pt.rec .d { background: #ffc94d; } .sc3d-pt.on { border-width: 3px; background: rgba(46,229,157,.32); animation: none; } .sc3d-pt.chg .d { background: #fff; }
+.sc3d-tools { position: absolute; left: 14px; bottom: 12px; z-index: 6; display: flex; gap: 6px; flex-wrap: wrap; } .sc3d-tools[hidden] { display: none; }
+.sc3d-tools button { height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(14,19,28,.85); color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; backdrop-filter: blur(6px); }
+.sc3d-tools button:hover { border-color: var(--accent); } .sc3d-tools button.on { border-color: var(--accent); background: rgba(46,229,157,.18); }
+.sc3d-canvas { display: block; touch-action: none; }
+.sc-main { grid-template-rows: minmax(0, 1fr); } .sc-stage { min-height: 0; } .sc-svgwrap.is3d { min-height: 360px; }
+@media (max-width: 1000px) { .sc-main { grid-template-rows: auto auto; } .sc-svgwrap.is3d { height: 52vh; } }

@@ -147,16 +147,17 @@
         <span class="spacer"></span><button class="btn sm quiet" id="scClose">✕ Fechar</button></div>
       <div class="sc-main">
         <div class="sc-stage"><div id="scFind" class="sc-find"></div>
-          <div class="sc-svgwrap"><svg id="scSvg" viewBox="0 0 900 420" role="img" aria-label="Carro">${carSvg(prof)}
+          <div class="sc-svgwrap"><div id="sc3dHost" class="sc3d-host" hidden></div>
+            <div class="sc3d-tools" id="sc3dTools" hidden></div><svg id="scSvg" viewBox="0 0 900 420" role="img" aria-label="Carro">${carSvg(prof)}
             ${Object.entries(pos).map(([k, [x, y]]) => `<g class="sc-spot" data-spot="${k}" tabindex="0" role="button" aria-label="${esc(spots[k] || k)}" transform="translate(${x},${y})">
               <circle class="ring" r="20"/><circle class="dot" r="7"/><g class="bd" style="display:none"><circle r="10" cx="17" cy="-17"/><text x="17" y="-13" text-anchor="middle"></text></g></g>`).join("")}</svg>
             <div id="scTip" class="sc-tip" hidden></div></div>
-          <div class="sc-legend">Passe o mouse nos pontos para ver os valores e a recomendação. Clique para ajustar. <span class="sub">${esc(prof.name)} · desenho ilustrativo</span></div></div>
+          <div class="sc-legend">Passe o mouse nos pontos para ver os valores e a recomendação; clique para ajustar. Arraste para girar o carro e use a roda do mouse para o zoom. <span class="sub">${esc(prof.name)} · modelo ilustrativo</span></div></div>
         <aside class="sc-panel" id="scPanel"></aside></div>
       <div class="sc-bar" id="scBar"></div>`;
     document.body.appendChild(root);
     const $q = (s) => root.querySelector(s);
-    const close = () => { document.removeEventListener("keydown", onKey, true); root.remove(); };
+    const close = () => { document.removeEventListener("keydown", onKey, true); try { stage && stage.destroy(); } catch (e) { /* ok */ } root.remove(); };
     const onKey = (e) => { if (e.key === "Escape" && !document.querySelector(".cb-pop")) { e.preventDefault(); close(); } };
     document.addEventListener("keydown", onKey, true);
     $q("#scClose").onclick = () => { if (!total() || confirm("Fechar o editor e descartar as alterações?")) close(); };
@@ -175,24 +176,28 @@
             : `<div class="tr none">${advice.error ? "Sem voltas suas para analisar ainda." : "Sem recomendação para esta parte."}</div>`}
         <div class="th">Clique para ajustar</div>`;
     };
+    const showTip = (k, el) => {
+      tip.innerHTML = tipHtml(k); tip.hidden = false;
+      const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+      let x = r.left - w.left + r.width + 10, y = r.top - w.top - 8;
+      if (x + 270 > w.width) x = r.left - w.left - 270 - 6;
+      tip.style.left = Math.max(4, x) + "px"; tip.style.top = Math.max(4, Math.min(y, w.height - tip.offsetHeight - 4)) + "px";
+    };
+    const hideTip = () => { tip.hidden = true; };
     root.querySelectorAll(".sc-spot").forEach((el) => {
-      const show = () => {
-        tip.innerHTML = tipHtml(el.dataset.spot); tip.hidden = false;
-        const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect();
-        let x = r.left - w.left + r.width + 10, y = r.top - w.top - 8;
-        if (x + 270 > w.width) x = r.left - w.left - 270 - 6;
-        tip.style.left = Math.max(4, x) + "px"; tip.style.top = Math.max(4, Math.min(y, w.height - tip.offsetHeight - 4)) + "px";
-      };
-      el.onmouseenter = show; el.onfocus = show; el.onmouseleave = () => { tip.hidden = true; }; el.onblur = () => { tip.hidden = true; };
-      el.onclick = () => select(el.dataset.spot);
-      el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(el.dataset.spot); } };
+      const k = el.dataset.spot;
+      el.onmouseenter = () => showTip(k, el); el.onfocus = el.onmouseenter; el.onmouseleave = hideTip; el.onblur = hideTip;
+      el.onclick = () => select(k);
+      el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(k); } };
     });
 
     // ---- painel de ajustes da parte escolhida
     function paintBadges() {
-      root.querySelectorAll(".sc-spot").forEach((el) => {
+      const all = [...root.querySelectorAll(".sc-spot")];
+      if (stage) all.length = 0, all.push(...Object.values(stage.els));
+      all.forEach((el) => {
         const k = el.dataset.spot, n = cnt(k), bd = el.querySelector(".bd");
-        bd.style.display = n ? "" : "none"; if (n) bd.querySelector("text").textContent = n;
+        bd.style.display = n ? "" : "none"; if (n) (bd.querySelector("text") || bd).textContent = n;
         el.classList.toggle("on", sel === k); el.classList.toggle("chg", !!n);
         el.classList.toggle("rec", !ctx.genLock && !!(adviceBySpot()[k] || []).length);
       });
@@ -261,10 +266,38 @@
     function paintAll(keepScroll) {
       const sc = $q("#scPanel").scrollTop;
       paintPanel(); paintBadges(); paintBar();
+      if (stage) stage.setEdits(edits);
       if (keepScroll) $q("#scPanel").scrollTop = sc;
     }
-    function select(k) { sel = k; paintAll(); }
+    function select(k) {
+      sel = k; paintAll();
+      if (stage) { stage.view(k); stage.setXray(["w0", "w1", "w2", "w3", "axle_f", "axle_r", "fuel"].includes(k)); paintTools(); }
+    }
+    let stage = null;
     paintAll();
+
+    // ---- modelo 3D (Three.js); sem WebGL, fica o desenho 2D
+    const paintTools = () => {
+      const t = $q("#sc3dTools"); if (!stage) return;
+      t.innerHTML = `${[["car", "Carro"], ["front", "Frente"], ["side", "Lateral"], ["rear", "Traseira"], ["top", "Topo"]].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}
+        <button type="button" class="${stage.xray ? "on" : ""}" id="sc3dX" title="Mostra molas, amortecedores, braços e barras estabilizadoras (o carro fica transparente)">🔧 Suspensão</button>`;
+      t.querySelectorAll("[data-v]").forEach((b) => b.onclick = () => stage.view(b.dataset.v));
+      $q("#sc3dX").onclick = () => { stage.setXray(!stage.xray); paintTools(); };
+    };
+    try {
+      if (!window.WebGL2RenderingContext && !window.WebGLRenderingContext) throw new Error("sem WebGL");
+      const mod = await import("/static/setupcar3d.js");
+      const host = $q("#sc3dHost"); host.hidden = false; $q(".sc-svgwrap").classList.add("is3d");
+      stage = await mod.createStage(host, {
+        brand: brandKey, items, spots, extras: info.extras || {},
+        onHover: (k, el) => (k ? showTip(k, el) : hideTip()), onSelect: (k) => select(k),
+      });
+      $q("#scSvg").style.display = "none"; root.querySelectorAll(".sc-spot").forEach((e) => (e.style.display = "none"));
+      $q("#sc3dTools").hidden = false; paintTools(); paintAll();
+    } catch (err) {
+      console.warn("Modelo 3D indisponível, usando o desenho 2D:", err);
+      $q("#sc3dHost").remove(); stage = null; $q(".sc-svgwrap").classList.remove("is3d");
+    }
 
     // recomendações (Pro): carregam depois de abrir, sem travar a tela
     if (!ctx.genLock) {
