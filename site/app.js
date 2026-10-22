@@ -30,9 +30,28 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let session = null, profile = null, stopCircuit = null;
 $("#dlTop").href = PITWALL.download;
 
+// funções que gravam algo: ao terminar, o site mostra "salvo" (ou o erro) num aviso que some sozinho
+const RPC_OK = {
+  set_my_affiliate_pix: "Chave Pix salva", set_member_role: "Papel atualizado", remove_member: "Piloto removido", new_invite_code: "Novo link de convite gerado",
+  cancel_invite: "Convite cancelado", answer_request: "Pedido respondido", answer_invite: "Convite respondido", invite_by_email: "Convite criado", create_team: "Equipe criada",
+  join_team: "Você entrou na equipe", join_with_code: "Você entrou na equipe", join_listed: "Pedido enviado", leave_team: "Você saiu da equipe", revoke_my_device: "Computador removido",
+  create_seat_key: "Chave criada", revoke_seat_key: "Chave revogada",
+  admin_set_subscription: "Assinatura atualizada", admin_update_affiliate: "Afiliado atualizado", admin_set_price: "Preço salvo", admin_set_coupon_active: "Cupom atualizado",
+  admin_set_commission: "Comissão atualizada", admin_revoke_license: "Licença revogada", admin_revoke_grant: "Cortesia revogada", admin_revoke_device: "Computador revogado",
+  admin_grant: "Cortesia concedida", admin_generate_codes: "Códigos gerados", admin_extend_trial: "Teste prorrogado", admin_create_coupon: "Cupom criado", admin_create_affiliate: "Afiliado criado",
+};
+const RPC_QUIET = new Set(["admin_set_trial_days"]);          // já mostram a própria mensagem
+function friendlyError(m) {
+  m = String(m || "");
+  if (/row-level|policy|permission|not allowed|unauthor/i.test(m)) return "Sem permissão para fazer isso.";
+  if (/Failed to fetch|NetworkError|network/i.test(m)) return "Sem conexão. Confira a internet e tente de novo.";
+  return m;
+}
 async function rpc(name, args) {
   const { data, error } = await sb.rpc(name, args);
-  if (error) throw new Error(error.message);
+  const write = name in RPC_OK || RPC_QUIET.has(name);
+  if (error) { if (write) toast(friendlyError(error.message), "err"); throw new Error(error.message); }
+  if (name in RPC_OK && !(data && typeof data === "object" && data.ok === false)) toast(RPC_OK[name], "ok");
   return data;
 }
 
@@ -572,7 +591,7 @@ async function renderTeam(id) {
     </div></div>`;
   $("#allTeams").onclick = () => store.set("pitwall.stayHome", "1");
   if ($("#teamRank")) R.bind($("#teamRank"));
-  const run = async (b, fn) => { b.disabled = true; try { await fn(); renderTeam(id); } catch (e) { b.disabled = false; b.textContent = e.message; } };
+  const run = async (b, fn) => { b.disabled = true; try { await fn(); renderTeam(id); } catch (e) { b.disabled = false; toast(friendlyError(e.message), "err"); } };
   const lf = $("#logoFile");
   if (lf) lf.onchange = async () => {
     const f = lf.files[0]; if (!f) return;
@@ -590,10 +609,11 @@ async function renderTeam(id) {
     }
     const url = sb.storage.from("team-logos").getPublicUrl(path).data.publicUrl + "?v=" + Date.now();
     const { error } = await sb.from("teams").update({ logo_url: url }).eq("id", id);
-    if (error) { $("#logoOut").textContent = error.message; return; }
+    if (error) { $("#logoOut").textContent = error.message; toast(friendlyError(error.message), "err"); return; }
+    toast("Logo da equipe atualizada", "ok");
     renderTeam(id);
   };
-  $("#copy").onclick = () => { navigator.clipboard.writeText($("#inv").textContent).catch(() => {}); $("#copy").textContent = "Link copiado"; };
+  $("#copy").onclick = () => { navigator.clipboard.writeText($("#inv").textContent).catch(() => {}); $("#copy").textContent = "Link copiado"; toast("Link copiado", "ok"); };
   if ($("#share")) $("#share").onclick = () => navigator.share({ title: `${team.name} no Pitwall`, text: `Entra na equipe ${team.name} no Pitwall:`, url: $("#inv").textContent }).catch(() => {});
   if ($("#newInv")) $("#newInv").onclick = async (ev) => {
     const b = ev.currentTarget;
@@ -625,7 +645,8 @@ async function renderTeam(id) {
   if ($("#optSave")) $("#optSave").onclick = async () => {
     const mode = (view.querySelector("input[name=mode]:checked") || {}).value;
     const { error } = await sb.from("teams").update({ join_mode: mode, description: $("#descIn").value.trim() || null }).eq("id", id);
-    if (error) { $("#optOut").className = "msg err"; $("#optOut").textContent = /join_mode|description/.test(error.message) ? "Falta aplicar o supabase/equipe_v4.sql no banco (uma vez)." : error.message; return; }
+    if (error) { toast(/join_mode|description/.test(error.message) ? "Falta aplicar o supabase/equipe_v4.sql no banco (uma vez)." : friendlyError(error.message), "err"); $("#optOut").className = "msg err"; $("#optOut").textContent = /join_mode|description/.test(error.message) ? "Falta aplicar o supabase/equipe_v4.sql no banco (uma vez)." : error.message; return; }
+    toast("Ajustes da equipe salvos", "ok");
     renderTeam(id);
   };
   $("#leave").onclick = async (ev) => {
@@ -637,7 +658,8 @@ async function renderTeam(id) {
       ({ error } = await sb.rpc("leave_team", { t: id }));
       if (error && /leave_team/.test(error.message)) ({ error } = await sb.from("team_members").delete().eq("team_id", id).eq("user_id", me));
     }
-    if (error) { b.textContent = error.message; return; }
+    if (error) { b.textContent = owner ? "Apagar para todos?" : "Sair mesmo?"; b.dataset.confirm = ""; toast(friendlyError(error.message), "err"); return; }
+    toast(owner ? "Equipe apagada" : "Você saiu da equipe", "ok");
     store.set("pitwall.stayHome", "1");
     location.hash = "#/";
   };

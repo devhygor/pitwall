@@ -6,9 +6,23 @@ const view = $("#view");
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
 // ---------------------------------------------------------------- utilidades
+// salvar (PUT/POST/DELETE) mostra um aviso: "salvo" quando dá certo e o erro quando falha. Chamadas de rotina ficam de fora.
+const API_QUIET = /\/(mic\/probe|overlay-size|overlay-scale|ui\/|listen|mood\/demo|stop|test|ask|bind|status|piper\/sample|license\/refresh)(\/|$|\?)/;
+let apiSaveAt = 0;
 async function api(path, opts) {
-  const r = await fetch(path, opts);
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  const method = ((opts && opts.method) || "GET").toUpperCase(), loud = method !== "GET" && !API_QUIET.test(path);
+  let r;
+  try { r = await fetch(path, opts); } catch (e) { if (loud) toast("Sem conexão com o Pitwall. Tente de novo.", "err"); throw e; }
+  if (!r.ok) {
+    const msg = (await r.json().catch(() => ({}))).detail || r.statusText;
+    if (loud) toast(msg, "err");
+    throw new Error(msg);
+  }
+  if (loud && r.status < 300) {
+    if (method === "PUT" && /^\/api\/settings/.test(path)) { if (Date.now() - apiSaveAt > 2500) { apiSaveAt = Date.now(); toast("Configuração salva", "ok", 2200); } }
+    else if (method === "PUT" && /\/api\/sessions\/\d+\/setup/.test(path)) toast("Setup da sessão salvo", "ok");
+    else if (method === "DELETE") toast("Excluído", "ok");
+  }
   return r.json();
 }
 function fmtLap(ms) {
@@ -3989,12 +4003,6 @@ async function lfmExtras(D) {
 // ---------------------------------------------------------------- alerta global (qualquer tela)
 function playAlert(kind, vol) {
   try { const a = new Audio(`/api/lfm/sound.wav?kind=${encodeURIComponent(kind || "ambos")}&vol=${vol ?? 80}`); a.play(); } catch (e) { /* ok */ }
-}
-function toast(msg) {
-  let t = $("#toast");
-  if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
-  t.textContent = msg; t.classList.add("on");
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 3200);
 }
 const seenAlerts = new Set();
 let alertsPrimed = false;

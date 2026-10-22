@@ -284,14 +284,14 @@ async function renderAccount() {
     } catch (e) { m.textContent = e.message; }
   };
   const sn = $("#seatNew"); if (sn) sn.onclick = async () => { const r = await rpc("create_seat_key"); if (!r.ok) alert(CP_ERR[r.error] || "Não foi possível criar a chave."); renderAccount(); };
-  view.querySelectorAll("[data-seatcopy]").forEach((b) => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.seatcopy); b.textContent = "Copiada!"; });
+  view.querySelectorAll("[data-seatcopy]").forEach((b) => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.seatcopy); b.textContent = "Copiada!"; toast("Chave copiada", "ok"); });
   view.querySelectorAll("[data-seatrev]").forEach((b) => b.onclick = async () => {
     if (!confirm("Revogar esta chave? Quem a usa perde o Pro agora, e você pode passar uma chave nova para outra pessoa.")) return;
     await rpc("revoke_seat_key", { p_id: b.dataset.seatrev }); renderAccount();
   });
   const t = $("#aTrial"); if (t) t.onclick = () => startTrialSite("pro");
   const t2 = $("#aTrialTeam"); if (t2) t2.onclick = () => startTrialSite("team");
-  const c = $("#copyKey"); if (c) c.onclick = async () => { await navigator.clipboard.writeText(a.license_key); c.textContent = "Copiado!"; };
+  const c = $("#copyKey"); if (c) c.onclick = async () => { await navigator.clipboard.writeText(a.license_key); c.textContent = "Copiado!"; toast("Chave copiada", "ok"); };
   view.querySelectorAll("[data-rmdev]").forEach((b) => b.onclick = async () => { await rpc("revoke_my_device", { p_id: b.dataset.rmdev }); renderAccount(); });
 }
 
@@ -342,7 +342,7 @@ async function renderReferral() {
           </ul>
         </div>
       </div></div></section>`;
-  $("#refCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#refCopy").textContent = "Copiado!"; };
+  $("#refCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#refCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); };
 }
 
 // ---------------------------------------------------------------- painel do afiliado (comissão em dinheiro)
@@ -384,7 +384,7 @@ async function renderAffiliate() {
           ${(a.clients || []).length ? `<table class="tbl"><tbody>${a.clients.map((c) => `<tr><td>${esc(c.who)}</td><td>${esc(PLAN_NAME[c.plan] || c.plan)} ${c.period === "year" ? "anual" : "mensal"}</td><td>${esc(SUB[c.status] || c.status)}</td><td class="sub">${dt(c.at)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Ninguém assinou pelo seu link ainda.</p>`}
         </div>
       </div></div></section>`;
-  $("#afCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#afCopy").textContent = "Copiado!"; };
+  $("#afCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#afCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); };
   $("#afPixSave").onclick = async () => {
     const m = $("#afMsg");
     try { await rpc("set_my_affiliate_pix", { p_pix: $("#afPix").value }); m.style.color = "var(--good, #3ee08f)"; m.textContent = "Chave salva."; } catch (e) { m.style.color = ""; m.textContent = e.message; }
@@ -543,7 +543,7 @@ async function renderAdmin() {
     const gc = $("#gcGo"); if (gc) gc.onclick = async () => { try {
       const list = await rpc("admin_generate_codes", { p_count: +$("#gcQtd").value, p_plan: $("#gcPlan").value, p_grant_days: +$("#gcDias").value, p_valid_days: +$("#gcVal").value, p_note: $("#gcNote").value || null });
       NEWCODES = (list || []).join("\n"); await reload(); } catch (e) { alert(e.message); } };
-    const gcc = $("#gcCopy"); if (gcc) gcc.onclick = async () => { await navigator.clipboard.writeText(NEWCODES); gcc.textContent = "Copiado!"; };
+    const gcc = $("#gcCopy"); if (gcc) gcc.onclick = async () => { await navigator.clipboard.writeText(NEWCODES); gcc.textContent = "Copiado!"; toast("Chave copiada", "ok"); };
     const cc = $("#ccGo"); if (cc) cc.onclick = () => act(() => rpc("admin_create_coupon", { p_code: $("#ccCode").value, p_kind: $("#ccKind").value, p_percent_off: +$("#ccPct").value, p_duration: $("#ccDur").value,
       p_plan: $("#ccPlan").value, p_grant_days: +$("#ccDias").value, p_max_uses: $("#ccUsos").value ? +$("#ccUsos").value : null, p_valid_days: $("#ccVal").value ? +$("#ccVal").value : null, p_note: null }));
     view.querySelectorAll("[data-ca]").forEach((b) => b.onclick = () => act(() => rpc("admin_set_coupon_active", { p_code: b.dataset.ca, p_active: b.dataset.act === "1" })));
