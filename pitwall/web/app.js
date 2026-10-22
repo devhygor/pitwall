@@ -3255,6 +3255,13 @@ function ovPanel(n, S) {
     g += ovGroup("Modelo", ovSeg(n, "bstyle", [["dot", "Luz redonda"], ["bar", "Barra"], ["icon", "Carro com ondas", OV_P]], c.bstyle || "dot"),
       "amarelo: tem carro no seu ponto cego; vermelho e piscando: carro colado ao lado");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "always", "Aparecer apagada quando livre", c.always !== false, "Desligado, a luz só aparece quando há carro")}</div>`);
+    const spLock = ovLocked("radar", "special"), spCur = spLock ? null : (c.special || null);
+    g += ovGroup("Carros especiais", `<div class="carmap ${spLock ? "locked" : ""}"><div class="cm-opts cm-special">
+        <button type="button" class="cm-opt ${spCur ? "" : "on"}" data-special="" ${spLock ? 'data-need="overlay_custom"' : ""}><span class="cm-a">✕</span><span>Nenhum</span></button>
+        ${CAR_SPECIALS.map(([k, t]) => `<button type="button" class="cm-opt ${spCur === k ? "on" : ""}" data-special="${k}" title="${t}" ${spLock ? 'data-need="overlay_custom"' : ""}><canvas data-sthumb="${k}" width="64" height="104"></canvas><span>${t}</span></button>`).join("")}</div>
+      ${ovSeg(n, "specialfor", [["me", "Só no meu carro"], ["others", "Nos outros carros"], ["all", "Em todos"]], c.specialfor || "me")}
+      <div class="sub">${spLock ? ovTag("overlay_custom", true) + " " : ""}Só por diversão: troque o desenho por um carro especial. As cores e o alerta de perigo continuam valendo.</div></div>`,
+      "ex.: um Uno com escada no teto");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
       "se a luz acender do lado errado, ligue isto");
     g += `<p class="sub" style="margin:8px 0 0">Use um overlay para cada lado: ligue o esquerdo e o direito, clique em “Editar na tela do jogo” e arraste cada luz para a borda da tela (ou ao lado do retrovisor). Dá para ligar só um dos lados.</p>`;
@@ -3502,9 +3509,11 @@ function bindOverlayPanel(box, n, put, putModes) {
     }
   });
   const radarCfg = () => { const cc = box.querySelector('button[data-k="carcolor"].on'), sw = box.querySelector(".sw.on"); return { stat: !!cc && cc.dataset.val === "static", col: sw ? sw.dataset.sw : "#f4f7ff" }; };
-  box._paintThumbs = () => box.querySelectorAll("canvas[data-thumb]").forEach((cv) => {                  // miniaturas dos carrinhos (na cor escolhida)
-    const x = cv.getContext("2d"), rc = radarCfg(), [k, v] = cv.dataset.thumb.split(":");
-    x.clearRect(0, 0, cv.width, cv.height); drawCar(x, 32, 52, 88, rc.stat ? rc.col : "#3ee08f", { kind: k, variant: +v, hi: "#ffffff" });
+  box._paintThumbs = () => box.querySelectorAll("canvas[data-thumb], canvas[data-sthumb]").forEach((cv) => {                  // miniaturas dos carrinhos (na cor escolhida)
+    const x = cv.getContext("2d"), rc = radarCfg();
+    x.clearRect(0, 0, cv.width, cv.height);
+    if (cv.dataset.sthumb) { drawCar(x, 32, 52, 88, rc.stat ? rc.col : "#f4f7ff", { special: cv.dataset.sthumb, hi: "#ffffff" }); return; }
+    const [k, v] = cv.dataset.thumb.split(":"); drawCar(x, 32, 52, 88, rc.stat ? rc.col : "#3ee08f", { kind: k, variant: +v, hi: "#ffffff" });
   });
   box._paintThumbs();
   box.querySelectorAll("button[data-pick]").forEach((b) => b.onclick = () => {
@@ -3520,6 +3529,15 @@ function bindOverlayPanel(box, n, put, putModes) {
     put({ overlays: { radar: { carmap: null } } });
     box.querySelectorAll(".cm-row").forEach((r) => { r.querySelectorAll(".cm-opt").forEach((x) => x.classList.toggle("on", x.dataset.pick.endsWith(":auto"))); r.querySelector("small").textContent = "automático"; });
   };
+  box.querySelectorAll("canvas[data-sthumb]").forEach((cv) => {
+    const x = cv.getContext("2d"), rc = radarCfg(); x.clearRect(0, 0, cv.width, cv.height);
+    drawCar(x, 32, 52, 88, rc.stat ? rc.col : "#f4f7ff", { special: cv.dataset.sthumb, hi: "#ffffff" });
+  });
+  box.querySelectorAll("button[data-special]").forEach((b) => b.onclick = () => {
+    if (b.dataset.need && !OV_FEATS.has(b.dataset.need)) { toast(`Os carros especiais são do plano ${OV_TIER[b.dataset.need]}. Veja o menu Plano.`); return; }
+    box.querySelectorAll("button[data-special]").forEach((x) => x.classList.toggle("on", x === b));
+    put({ overlays: { radar: { special: b.dataset.special || null } } });
+  });
   box.querySelectorAll(".sw").forEach((b) => b.onclick = () => {                                           // cor fixa dos carros
     if (b.dataset.need && !OV_FEATS.has(b.dataset.need)) { toast(`Escolher a cor é do plano ${OV_TIER[b.dataset.need]}. Veja o menu Plano.`); return; }
     box.querySelectorAll(".sw").forEach((x) => x.classList.toggle("on", x === b));

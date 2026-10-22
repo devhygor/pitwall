@@ -1179,3 +1179,5 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .sw { width: 30px; height: 30px; border-radius: 50%; background: var(--c); border: 3px solid transparent; box-shadow: 0 0 0 1px rgba(255,255,255,.25); cursor: pointer; padding: 0; }
 .sw.on { border-color: var(--bg, #0b0f17); box-shadow: 0 0 0 3px var(--accent); }
 .swatches.locked { opacity: .55; }
+
+.cm-special { grid-template-columns: repeat(6, 1fr); margin-bottom: 8px; }

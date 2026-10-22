@@ -64,7 +64,92 @@ function carAutoVariant(info) {
   return h % 4;
 }
 
+// ---- carrinhos especiais (diversão): Uno com escada, Fusca, Kombi, Táxi e Viatura
+const CAR_SPECIALS = [["uno", "Uno com escada"], ["fusca", "Fusca"], ["kombi", "Kombi"], ["taxi", "Táxi"], ["viatura", "Viatura"]];
+const SPECIAL_RATIO = { uno: 0.5, fusca: 0.5, kombi: 0.46, taxi: 0.47, viatura: 0.47 };
+
+function drawSpecial(ctx, cx, cy, h, col, o) {
+  const sp = o.special;
+  if (sp === "taxi" || sp === "viatura") {                                  // sedã com pintura e acessórios próprios
+    const taxi = sp === "taxi";
+    drawCar(ctx, cx, cy, h, taxi ? "#ffcf24" : "#1d222c", { ...o, special: null, kind: "touring", variant: 0, hi: taxi ? "#fff3b0" : "#3a4254", label: null });
+    const w = h * 0.47, X = (u) => cx + u * w / 2, Y = (v) => cy - h / 2 + v * h, rr = (a, b, c, d, r) => { ctx.beginPath(); ctx.roundRect(a, b, c, d, r); };
+    ctx.save();
+    if (taxi) {
+      ctx.fillStyle = "#101318";                                                                     // faixa quadriculada nas laterais
+      const n = 9, sq = h * 0.54 / n;
+      for (const s of [-1, 1]) for (let i = 0; i < n; i++) { ctx.fillStyle = i % 2 ? "#111" : "#fff"; ctx.fillRect(X(s * 0.9) - w * 0.03, Y(0.3) + i * sq, w * 0.06, sq); }
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = Math.max(1, h * 0.02); rr(X(-0.3), Y(0.5), w * 0.3, h * 0.07, h * 0.015); ctx.fill(); ctx.stroke();   // luminoso do teto
+      ctx.fillStyle = "#101318"; ctx.font = `800 ${Math.max(6, h * 0.05)}px Segoe UI`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; if (h > 60) ctx.fillText("TÁXI", cx, Y(0.535));
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,.95)";                                                       // portas e capô brancos
+      for (const s of [-1, 1]) rr(X(s * 0.9) - w * 0.065, Y(0.36), w * 0.13, h * 0.32, w * 0.03), ctx.fill();
+      rr(X(-0.12), Y(0.04), w * 0.12, h * 0.2, w * 0.03); ctx.fill();
+      const ph = Math.floor(performance.now() / 160) % 2;                                            // giroflex piscando
+      const bar = (u0, c1, on) => { ctx.fillStyle = on ? c1 : "rgba(60,60,70,.9)"; if (on) { ctx.shadowColor = c1; ctx.shadowBlur = h * 0.22; } rr(X(u0), Y(0.48), w * 0.26, h * 0.06, h * 0.015); ctx.fill(); ctx.shadowBlur = 0; };
+      bar(-0.3, "#ff2f45", ph === 0); bar(0.0, "#3d8bff", ph === 1);
+    }
+    ctx.restore();
+    return;
+  }
+  const w = h * SPECIAL_RATIO[sp], rgb = _rgb(ctx, col);
+  const X = (u) => cx + u * w / 2, Y = (v) => cy - h / 2 + v * h, lw = Math.max(0.8, h * 0.022), WHITE = [255, 255, 255], BLACK = [8, 10, 14], edge = "rgba(0,0,0,.8)", dark = "#0a0c10";
+  const rr = (a, b, c, d, r) => { ctx.beginPath(); ctx.roundRect(a, b, c, d, r); };
+  const paint = (pathFn, c) => {                                                                       // sombra, volume e contorno
+    const r = _rgb(ctx, c);
+    pathFn(); ctx.save(); ctx.shadowColor = o.glow || "rgba(0,0,0,.55)"; ctx.shadowBlur = o.glow ? h * 0.16 : h * 0.07; ctx.shadowOffsetY = o.glow ? 0 : h * 0.02; ctx.fillStyle = c; ctx.fill(); ctx.restore();
+    const g = ctx.createLinearGradient(X(-1), 0, X(1), 0); g.addColorStop(0, _mix(r, BLACK, 0.42)); g.addColorStop(0.5, _mix(r, WHITE, 0.3)); g.addColorStop(1, _mix(r, BLACK, 0.42));
+    ctx.fillStyle = g; pathFn(); ctx.fill(); ctx.strokeStyle = edge; ctx.lineWidth = lw; pathFn(); ctx.stroke();
+  };
+  const wheel = (u, v, ww, hh) => { ctx.fillStyle = dark; rr(X(u) - ww / 2, Y(v) - hh / 2, ww, hh, ww * 0.3); ctx.fill(); ctx.fillStyle = "rgba(150,160,175,.5)"; rr(X(u) - ww * 0.2, Y(v) - hh * 0.3, ww * 0.4, hh * 0.6, ww * 0.15); ctx.fill(); };
+  const poly = (pts) => () => { ctx.beginPath(); pts.forEach(([u, v], i) => (i ? ctx.lineTo(X(u), Y(v)) : ctx.moveTo(X(u), Y(v)))); ctx.closePath(); };
+  const glassFill = (pathFn) => { pathFn(); const g = ctx.createLinearGradient(0, Y(0.25), 0, Y(0.8)); g.addColorStop(0, "rgba(40,70,110,.95)"); g.addColorStop(1, "rgba(6,12,24,.97)"); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw * 0.7; ctx.stroke(); };
+  ctx.save(); ctx.lineJoin = "round"; ctx.lineCap = "round";
+
+  if (sp === "uno") {
+    for (const s of [-1, 1]) { wheel(s * 0.97, 0.2, w * 0.15, h * 0.17); wheel(s * 0.97, 0.78, w * 0.15, h * 0.17); }
+    paint(() => rr(X(-0.9), Y(0), w * 0.9, h, [w * 0.3, w * 0.3, w * 0.16, w * 0.16]), col);
+    ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = lw * 0.7; ctx.beginPath(); ctx.moveTo(X(-0.6), Y(0.28)); ctx.lineTo(X(-0.6), Y(0.05)); ctx.moveTo(X(0.6), Y(0.28)); ctx.lineTo(X(0.6), Y(0.05)); ctx.stroke();      // vincos do capô
+    glassFill(poly([[-0.68, 0.3], [0.68, 0.3], [0.76, 0.46], [-0.76, 0.46]]));
+    ctx.fillStyle = _mix(rgb, WHITE, 0.2); rr(X(-0.74), Y(0.46), w * 0.74, h * 0.27, w * 0.05); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.3)"; ctx.lineWidth = lw * 0.6; ctx.stroke();                          // teto
+    glassFill(poly([[-0.7, 0.73], [0.7, 0.73], [0.62, 0.84], [-0.62, 0.84]]));
+    ctx.fillStyle = "#fff6c8"; rr(X(-0.82), Y(0.025), w * 0.3, h * 0.03, h * 0.012); ctx.fill(); rr(X(0.52), Y(0.025), w * 0.3, h * 0.03, h * 0.012); ctx.fill();
+    ctx.fillStyle = "#ff3b4e"; rr(X(-0.86), Y(0.93), w * 0.16, h * 0.05, h * 0.012); ctx.fill(); rr(X(0.7), Y(0.93), w * 0.16, h * 0.05, h * 0.012); ctx.fill();
+    // a escada no teto, saindo pela traseira
+    ctx.fillStyle = "#2a2f38"; for (const v of [0.5, 0.7]) { rr(X(-0.86), Y(v), w * 0.86, h * 0.02, h * 0.008); ctx.fill(); }          // bagageiro
+    const L = (u) => X(u) - w * 0.018, top = Y(0.2), bot = Y(1.1);
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,.5)"; ctx.shadowBlur = h * 0.03; ctx.shadowOffsetY = h * 0.012;
+    ctx.fillStyle = "#cfd6e2"; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = lw * 0.7;
+    for (const u of [-0.42, 0.42]) { rr(L(u), top, w * 0.036, bot - top, w * 0.012); ctx.fill(); ctx.stroke(); }
+    const rungs = 9; for (let i = 0; i <= rungs; i++) { const y = top + (bot - top) * (i / rungs); rr(X(-0.42), y - h * 0.008, w * 0.42, h * 0.016, h * 0.005); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle = "#e04b4b"; rr(X(-0.5) - w * 0.01, Y(1.02), w * 0.5 + w * 0.02, h * 0.03, h * 0.008); ctx.fill();                            // bandeirinha vermelha na ponta
+  } else if (sp === "fusca") {
+    for (const s of [-1, 1]) { wheel(s * 0.98, 0.2, w * 0.15, h * 0.17); wheel(s * 0.98, 0.76, w * 0.15, h * 0.17); }
+    paint(() => { const half = [[0, 0], [.42, .02], [.74, .1], [.9, .24], [.94, .42], [.92, .62], [.84, .82], [.6, .96], [0, 1]]; _spline(ctx, [...half, ...half.slice(1, -1).reverse().map(([u, v]) => [-u, v])].map(([u, v]) => [X(u), Y(v)])); }, col);
+    ctx.fillStyle = "rgba(255,255,255,.16)"; for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(X(s * 0.8), Y(0.2), w * 0.12, h * 0.1, 0, 0, 7); ctx.fill(); ctx.beginPath(); ctx.ellipse(X(s * 0.8), Y(0.74), w * 0.12, h * 0.1, 0, 0, 7); ctx.fill(); }       // paralamas
+    glassFill(() => _spline(ctx, [[X(0), Y(0.3)], [X(0.52), Y(0.36)], [X(0.58), Y(0.55)], [X(0.46), Y(0.74)], [X(-0.46), Y(0.74)], [X(-0.58), Y(0.55)], [X(-0.52), Y(0.36)]]));
+    ctx.fillStyle = _mix(rgb, WHITE, 0.22); ctx.beginPath(); ctx.ellipse(X(0), Y(0.55), w * 0.26, h * 0.12, 0, 0, 7); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.3)"; ctx.lineWidth = lw * 0.6; ctx.stroke();
+    ctx.fillStyle = "#fffbe0"; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(X(s * 0.6), Y(0.085), w * 0.07, 0, 7); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw * 0.6; ctx.stroke(); }
+    ctx.fillStyle = "#ff3b4e"; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(X(s * 0.52), Y(0.94), w * 0.045, 0, 7); ctx.fill(); }
+    ctx.strokeStyle = "rgba(220,226,236,.9)"; ctx.lineWidth = lw * 0.9; ctx.beginPath(); ctx.arc(X(0), Y(0.04), w * 0.5, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();                          // para-choque
+  } else {                                                                                               // kombi
+    for (const s of [-1, 1]) { wheel(s * 0.97, 0.2, w * 0.15, h * 0.17); wheel(s * 0.97, 0.78, w * 0.15, h * 0.17); }
+    paint(() => rr(X(-0.9), Y(0), w * 0.9, h, [w * 0.2, w * 0.2, w * 0.12, w * 0.12]), col);
+    ctx.fillStyle = "#f4f1e6"; rr(X(-0.8), Y(0.1), w * 0.8, h * 0.82, w * 0.08); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = lw * 0.7; ctx.stroke();                              // teto branco
+    ctx.strokeStyle = "rgba(0,0,0,.18)"; ctx.lineWidth = lw * 0.6; for (const v of [0.32, 0.5, 0.68]) { ctx.beginPath(); ctx.moveTo(X(-0.76), Y(v)); ctx.lineTo(X(0.76), Y(v)); ctx.stroke(); }      // nervuras do teto
+    glassFill(poly([[-0.78, 0.12], [0.78, 0.12], [0.7, 0.25], [-0.7, 0.25]]));                                // para-brisa
+    glassFill(poly([[-0.62, 0.86], [0.62, 0.86], [0.66, 0.92], [-0.66, 0.92]]));
+    ctx.fillStyle = "#fffbe0"; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(X(s * 0.55), Y(0.05), w * 0.075, 0, 7); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = lw * 0.6; ctx.stroke(); }
+    ctx.strokeStyle = "rgba(235,240,248,.95)"; ctx.lineWidth = lw * 1.1; ctx.beginPath(); ctx.moveTo(X(-0.3), Y(0.02)); ctx.lineTo(X(0), Y(0.12)); ctx.lineTo(X(0.3), Y(0.02)); ctx.stroke();           // "V" cromado da nariz
+    ctx.fillStyle = "#ff3b4e"; for (const s of [-1, 1]) rr(X(s * 0.84) - w * 0.03, Y(0.9), w * 0.06, h * 0.07, h * 0.012), ctx.fill();
+  }
+  if (o.label != null) { ctx.fillStyle = o.labelCol || "#fff"; ctx.strokeStyle = o.labelCol === "#0b0d10" ? "rgba(255,255,255,.6)" : "rgba(0,0,0,.7)"; ctx.lineWidth = 2; ctx.font = `800 ${Math.max(8, h * 0.19)}px Segoe UI`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.strokeText(String(o.label), cx, Y(sp === "uno" ? 0.6 : 0.5)); ctx.fillText(String(o.label), cx, Y(sp === "uno" ? 0.6 : 0.5)); }
+  ctx.restore();
+}
+
 function drawCar(ctx, cx, cy, h, col, o = {}) {
+  if (o.special && SPECIAL_RATIO[o.special]) return drawSpecial(ctx, cx, cy, h, col, o);
   const kind = CAR_RATIO[o.kind] ? o.kind : "gt3", w = h * CAR_RATIO[kind], rgb = _rgb(ctx, col);
   const V = (CAR_VARIANTS[kind] || [])[(o.variant | 0) % 4] || {}, ws = V.ws || 1;
   const X = (u) => cx + u * ws * w / 2, XW = (u) => cx + u * w / 2, Y = (v) => cy - h / 2 + v * h, P = (half) => _both(half).map(([u, v]) => [X(u), Y(v)]);
@@ -188,7 +273,7 @@ const OPT_LOCK = {
   delta: { predicted: false, fuel: false },
   corner: { lead: 250, speed: false, next: false, name: false, brakepoint: false },
   tyres: { brake: false, pads: false, wear: false, compound: false, weather: false, tmin: 70, tmax: 100, pmin: 26, pmax: 27, bmin: 350, bmax: 800, punit: "psi" },
-  radar: { range: 40, gap: false, numbers: false, carcolor: "heat", carstatic: "#f4f7ff", showmode: "always", nearm: 30 },
+  radar: { range: 40, gap: false, numbers: false, carcolor: "heat", carstatic: "#f4f7ff", showmode: "always", nearm: 30, special: null, specialfor: "me" },
   blindl: { always: true }, blindr: { always: true },
 };
 const OPT_LOCK_TEAM = { radar: { carmap: null } };                    // escolher o carrinho de cada classe: Pro
