@@ -41,6 +41,7 @@ jobs:
           --icon packaging/pitwall.ico
           --add-data "pitwall/web;pitwall/web"
           --collect-all imageio_ffmpeg
+          --collect-all certifi
           --collect-all webview
           --collect-submodules pitwall
           --hidden-import pystray._win32

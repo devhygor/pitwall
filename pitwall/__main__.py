@@ -12,9 +12,12 @@ import threading
 import time
 import webbrowser
 
+from . import netfix
 from .db import DB
 from .recorder import Recorder
 from .sources import ACCSource, DemoSource
+
+netfix.install()
 
 
 def seed_demo(db: DB):

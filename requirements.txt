@@ -6,3 +6,4 @@ imageio-ffmpeg>=0.5
 pystray>=0.19
 Pillow>=10
 cryptography>=42
+certifi
