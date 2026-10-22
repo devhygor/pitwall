@@ -1,0 +1,18 @@
+Modelo 3D do carro do editor de setup, feito por script no Blender (5.2).
+
+Ordem de execução (cada arquivo é carregado com exec dentro do Blender; os caminhos nos arquivos são absolutos desta máquina,
+ajuste se mudar a pasta do projeto):
+  pwlib.py          funções de apoio e materiais (carpaint, glass_tint, hull_black, carbon, tyre, rim_dark, brake_disc, livery_*, headlight, taillight)
+  carro_corpo.py    carroceria baixa + cabine (seções suavizadas) + cascos internos escuros (só aparecem por dentro, para os vidros e a boca dos paralamas)
+  carro_rodas.py    rodas (pneu, aro de 10 raios), discos, pinças/braços e recorte dos paralamas
+  carro_aero.py     splitter, saias, difusor, aerofólio com hastes "pescoço de cisne", retrovisores, escapamento
+  carro_adesivos.py faróis, grade dupla, saídas de ar, lanternas, faixas, número e nome (adesivos projetados na superfície)
+  cena.py           piso, luzes e câmera só para conferir (cena(...) posiciona a câmera)
+  exportar.py       exporta a coleção PitwallGT em .glb (defina SAIDA antes); copie para pitwall/web/models/pitwall_gt.glb
+
+Regras do editor (pitwall/web/setupcar3d.js): rodas se chamam WHEEL_LF, WHEEL_RF, WHEEL_LR, WHEEL_RR (grupo com o pneu GEO_TIRE_* dentro);
+DISC_* e SUSP_* acompanham a roda; o resto é carroceria. O material "carpaint" vira a pintura Pitwall verde e "tyre" o pneu.
+No glTF, material com "use_backface_culling" ligado vira doubleSided=false (necessário para o casco interno funcionar no three.js).
+
+Medidas: X = frente, Y = esquerda, Z = cima, em metros; entre-eixos 2,78 m (eixo dianteiro em +1,40 e o traseiro em -1,38), raio da roda 0,345.
+O editor reescala tudo pelo entre-eixos, então só as proporções importam.

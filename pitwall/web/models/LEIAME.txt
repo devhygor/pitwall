@@ -1,16 +1,15 @@
 pitwall_gt.glb — carro padrão do editor visual de setup.
 
-Origem: gerado com o Meshy (IA) pelo dono do projeto (Hygor), em 2026-10-22, no plano PAGO do Meshy, que dá licença para uso comercial.
-Arquivo de partida (2026-10-22):
-"FErrariBrazilian_GT_Racer_1022155043_generate.glb" (só geometria, sem textura nem logos). Reduzido e suavizado com
-tools/decimar_modelo.py (700 mil triângulos, ~17 MB, 24 passos de suavização). A pintura, os vidros, pneus, aros e os
-decalques (número e PITWALL) são aplicados por código.
+Origem: modelado do zero no Blender 5.2, por scripts em Python (tools/blender/), pelo dono do projeto (Hygor) com o Claude, em 2026-10-22.
+Nenhum modelo, textura, logo ou arquivo de terceiros foi usado: a carroceria é gerada por seções suavizadas, e as rodas, o aerofólio,
+o splitter, os faróis, as grades e a pintura Pitwall (faixas de carbono, fio neon, número 71 e o nome PITWALL) são feitos pelos scripts.
+Os carros de GT3 reais (uma Ferrari e uma BMW) serviram só de inspiração para as proporções e o clima; o desenho é próprio e
+não copia a forma nem os logos de nenhum deles. Por isso não há restrição de licença a cuidar neste arquivo.
 
-Termos de uso: valem os termos do Meshy para o plano pago usado na geração (uso comercial permitido).
-Guarde como prova: o comprovante/fatura do plano da data, um print dos termos de licença do Meshy e o histórico da geração na conta.
-PENDENTE (opcional): anotar aqui o nome do plano e a data exata da geração.
+Substituiu o modelo anterior (gerado no Meshy), que não está mais no repositório nem no instalador.
 
-Cuidado de marca: o prompt citava "Ferrari". O modelo não tem logos, mas não anuncie o carro como Ferrari nem use o nome
-na interface ou no marketing.
+Como regenerar: veja tools/blender/LEIAME.txt. Convenção de nomes que o editor entende (setupcar3d.js, adoptModel):
+WHEEL_LF/RF/LR/RR (grupo da roda, com GEO_TIRE_* dentro), DISC_*, SUSP_*, material "carpaint" (vira a pintura Pitwall) e "tyre".
 
+Cuidado de marca: não anuncie o carro como Ferrari, BMW ou de qualquer marca; ele é o "carro Pitwall".
 Modelos de terceiros com licença não comercial NÃO devem ficar nesta pasta nem no repositório.
