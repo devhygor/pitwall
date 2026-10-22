@@ -340,7 +340,7 @@ IMAGENS = {
     "setups-acc": [
         ("app-biblioteca-de-setups", "Biblioteca de setups do Pitwall para o ACC, com busca, filtros por carro e pista e botão para instalar", "Biblioteca de setups: busque, filtre por carro e pista e instale no ACC com um clique."),
         None,
-        [("app-editor-3d-carro", "Editor visual 3D de setup do Pitwall: carro em 3D com pontos clicáveis nas rodas, eixos, asa e splitter", "O editor visual 3D: clique nas partes do carro para ajustar o setup."),
+        [("app-editor-3d-carro", "Editor visual 3D de setup do Pitwall: carro em 3D com pontos clicáveis nas rodas, eixos, asa e splitter", "O editor visual 3D: clique nas partes do carro (aqui, a aerodinâmica dianteira) para ajustar o setup."),
          ("app-editor-3d-suspensao", "Editor visual 3D do Pitwall com a suspensão em raio-x e os ajustes da roda (pressão, cambagem, convergência, mola e amortecedores)", "A suspensão em raio-x e os ajustes da roda ao lado."),
          ("app-editor-3d-freios", "Editor visual 3D do Pitwall mostrando os ajustes de cockpit e freios: balanço de freio, pressão, ABS, TC e mapa do motor", "Cockpit e freios: balanço de freio, ABS, TC e mapa do motor.")],
     ],
