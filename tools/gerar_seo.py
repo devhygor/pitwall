@@ -388,11 +388,19 @@ details p{margin:10px 0 2px;color:#c9d3e6}
 .rel{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0 0}
 .rel a{display:block;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);text-decoration:none;color:var(--text)}
 .rel a:hover{border-color:var(--sodium)}.rel small{display:block;color:var(--fog);margin-top:4px}
+.adwrap{margin:26px 0;text-align:center}.adwrap small{display:block;color:var(--fog);font-size:12px;margin-bottom:6px}.adwrap small a{color:var(--fog)}
+.consent{position:fixed;left:16px;right:16px;bottom:16px;z-index:50;max-width:760px;margin:0 auto;background:#121a29;border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;box-shadow:0 10px 40px #0008}
+.consent p{margin:0;flex:1 1 300px;font-size:14px;color:var(--text)}.consent div{display:flex;gap:8px}.consent .btn{padding:8px 14px;font-size:14px}.consent .quiet{background:transparent;border:1px solid var(--line);color:var(--text)}
 footer{margin-top:60px;border-top:1px solid var(--line);padding:28px 0 40px;color:var(--fog);font-size:15px}
 footer .cols{display:flex;gap:22px;flex-wrap:wrap}footer a{color:var(--fog);text-decoration:none}footer a:hover{color:var(--text)}
 @media(max-width:1180px){header nav{display:none}header .wrap{justify-content:space-between}}
 @media(max-width:760px){nav{display:none}header .wrap{justify-content:space-between}}
 """
+
+
+# Espaço de anúncio das páginas estáticas: vazio e invisível até config.js ter adsense.client e slots.artigo (ads.js faz o resto).
+ANUNCIO = '<div class="adpos"></div><script>(function(){var e=document.currentScript.previousElementSibling;if(window.adSlot)e.innerHTML=adSlot("artigo")})()</script>'
+ADS_SCRIPTS = '<script src="/config.js"></script><script src="/ads.js?v=1"></script>'
 
 
 def esc(s):
@@ -406,7 +414,7 @@ def cab(extra_head="", on=""):
 
 def rodape():
     cols = "".join(f'<a href="/{p["slug"]}/">{esc(p["nav"])}</a>' for p in PAGINAS)
-    return f'''<footer><div class="wrap"><div class="cols"><a href="/">Início</a>{cols}<a href="/#entrar">Entrar</a></div>
+    return f'''<footer><div class="wrap"><div class="cols"><a href="/">Início</a>{cols}<a href="/privacidade/">Privacidade</a><a href="/#entrar">Entrar</a></div>
 <p style="margin-top:16px">Pitwall, feito por quem corre. Funciona com o Assetto Corsa Competizione e o iRacing. Os nomes dos jogos pertencem aos seus donos; o Pitwall não é afiliado a eles.</p></div></footer>'''
 
 
@@ -438,7 +446,7 @@ def pagina(p):
         {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
             {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in p["faq"]]},
     ]
-    corpo = "".join(f"<h2>{esc(t)}</h2>" + "".join(f"<p>{esc(par)}</p>" for par in pars) + figura(p["slug"], i) for i, (t, pars) in enumerate(p["secoes"]))
+    corpo = "".join(f"<h2>{esc(t)}</h2>" + "".join(f"<p>{esc(par)}</p>" for par in pars) + figura(p["slug"], i) + (ANUNCIO if i == 1 else "") for i, (t, pars) in enumerate(p["secoes"]))
     cta_txt, cta_href = p.get("cta", ("Baixar o Pitwall grátis", "/baixar/"))
     rel = "".join(f'<a href="/{q["slug"]}/">{esc(q["nav"])}<small>{esc(q["desc"][:95])}…</small></a>' for q in PAGINAS if q["slug"] in p["rel"])
     faq = "".join(f"<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>" for q, a in p["faq"])
@@ -452,7 +460,35 @@ def pagina(p):
 <div class="cta"><p><b>{esc(cta_txt)}.</b> {"Grátis para Windows, sem Python e sem administrador." if cta_href == "/baixar/" else ""}</p><a class="btn" href="{cta_href}">{esc(cta_txt)}</a><a class="btn q" href="/#entrar">Entrar na minha conta</a></div>
 <h2>Perguntas frequentes</h2>{faq}
 <h2>Continue lendo</h2><div class="rel">{rel}</div>
-</main>{rodape()}</body></html>'''
+</main>{rodape()}{ADS_SCRIPTS}</body></html>'''
+
+
+PRIVACIDADE = [
+    ("Quem somos", ["O Pitwall é um aplicativo para Windows de telemetria e engenheiro de corrida para o Assetto Corsa Competizione e o iRacing, e este site (pitwall.hygor.com.br) é a parte online dele. Esta página explica quais dados usamos e por quê."]),
+    ("Dados que guardamos", [
+        "Conta: e-mail e nome de exibição, usados para entrar e para identificar você no ranking e nas equipes. A senha é tratada pelo serviço de autenticação e nunca fica visível para nós.",
+        "Dados de corrida enviados pelo app quando você está logado: voltas, tempos, pista, carro, setups e as equipes das quais participa. Eles alimentam o ranking, a comunidade e as equipes. A telemetria bruta e as gravações de voz do engenheiro ficam no seu computador.",
+        "Pagamentos são feitos por um processador externo (Asaas). Não guardamos número de cartão."]),
+    ("Anúncios e cookies", [
+        "O site pode exibir anúncios do Google AdSense para ajudar a manter o projeto. O Google e parceiros podem usar cookies para mostrar anúncios, inclusive personalizados. Só carregamos os anúncios depois que você aceita o aviso de cookies; se escolher \"Só o essencial\", nenhum anúncio e nenhum cookie de publicidade é carregado.",
+        "Você pode mudar de ideia apagando os dados do site no navegador. Para saber como o Google usa dados de sites parceiros e gerenciar anúncios personalizados, veja as configurações de anúncios da sua conta Google. Assinantes do plano Pro não veem anúncios.",
+        "Fora isso usamos apenas armazenamento local do navegador para manter você conectado e lembrar a sua escolha de cookies."]),
+    ("Com quem compartilhamos", ["Seus dados ficam em um banco de dados hospedado pelo Supabase. Aparecem para outras pessoas só o nome de exibição, os tempos e as informações do ranking, da comunidade e da equipe que você escolheu participar. Não vendemos dados pessoais."]),
+    ("Seus direitos (LGPD)", ["Você pode pedir acesso, correção ou exclusão da sua conta e dos seus dados a qualquer momento. Entre pelo site, use o botão de relatar problema e escreva \"excluir minha conta\" ou \"meus dados\", e responderemos pelo e-mail da conta."]),
+    ("Mudanças", ["Se esta política mudar de forma relevante, a data abaixo será atualizada. Última atualização: " + HOJE + "."]),
+]
+
+
+def pagina_privacidade():
+    url = f"{BASE}/privacidade/"
+    corpo = "".join(f"<h2>{esc(t)}</h2>" + "".join(f"<p>{esc(par)}</p>" for par in pars) for t, pars in PRIVACIDADE)
+    return f'''<!doctype html><html lang="pt-BR"><head>{head("Política de privacidade | Pitwall", "Quais dados o Pitwall guarda, como usamos cookies e anúncios e como pedir a exclusão da sua conta.", url, "website")}
+<style>{CSS}</style></head>
+<body>{cab()}<main class="wrap">
+<div class="crumbs"><a href="/">Pitwall</a> › Privacidade</div>
+<h1>Política de privacidade</h1><p class="lede">Resumo claro do que acontece com os seus dados no app e no site.</p>
+{corpo}
+</main>{rodape()}{ADS_SCRIPTS}</body></html>'''
 
 
 def todas_imagens(slug):
@@ -463,7 +499,7 @@ def todas_imagens(slug):
 
 
 def sitemap():
-    urls = [("/", "1.0", "weekly")] + [(f"/{p['slug']}/", "0.8", "monthly") for p in PAGINAS]
+    urls = [("/", "1.0", "weekly")] + [(f"/{p['slug']}/", "0.8", "monthly") for p in PAGINAS] + [("/privacidade/", "0.3", "yearly")]
 
     def imgs(u):
         return "".join(f"<image:image><image:loc>{BASE}/img/{f}.webp</image:loc><image:caption>{esc(cap)}</image:caption></image:image>"
@@ -502,6 +538,8 @@ def main():
         pasta = RAIZ / p["slug"]
         pasta.mkdir(parents=True, exist_ok=True)
         (pasta / "index.html").write_text(pagina(p), encoding="utf-8")
+    (RAIZ / "privacidade").mkdir(exist_ok=True)
+    (RAIZ / "privacidade" / "index.html").write_text(pagina_privacidade(), encoding="utf-8")
     (RAIZ / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
     (RAIZ / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {BASE}/sitemap.xml\n", encoding="utf-8")
     (RAIZ / "favicon.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#0e1420"/><path d="M9 25V7h8a6 6 0 0 1 0 12h-4" fill="none" stroke="#2ee59d" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>\n', encoding="utf-8")

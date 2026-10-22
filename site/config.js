@@ -6,5 +6,5 @@ window.PITWALL = {
   download: "https://github.com/devhygor/pitwall-releases/releases/latest/download/Pitwall-Setup.exe",
   repo: "https://github.com/devhygor/pitwall-releases",
   // Google AdSense (deixe vazio até a conta ser aprovada): client = "ca-pub-XXXXXXXXXXXXXXXX", slots = ids dos blocos de anúncio.
-  adsense: { client: "", slots: { landing: "", ranking: "" } },
+  adsense: { client: "", slots: { landing: "", ranking: "", artigo: "" } },
 };
