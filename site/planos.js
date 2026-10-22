@@ -462,7 +462,7 @@ function priceCompare(prices) {
 
 // ---------------------------------------------------------------- painel do administrador
 const ADM_TABS = [["geral", "Visão geral"], ["usuarios", "Usuários e versões"], ["assinaturas", "Assinaturas"], ["pagamentos", "Pagamentos"], ["afiliados", "Afiliados"], ["codigos", "Códigos e cupons"], ["comissoes", "Comissões"], ["cortesias", "Cortesias"],
-  ["testes", "Testes"], ["licencas", "Licenças e computadores"], ["precos", "Preços"], ["log", "Histórico"]];
+  ["testes", "Testes"], ["licencas", "Licenças e computadores"], ["precos", "Preços"], ["bugs", "Bugs"], ["log", "Histórico"]];
 
 // última versão publicada do app (para marcar quem está desatualizado)
 let _latest = null;
@@ -486,12 +486,12 @@ function verOlder(a, b) {
 async function renderAdmin() {
   if (!isAdmin) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">Área restrita.</div></div></section>`; return; }
   view.innerHTML = `<div class="loading">Carregando…</div>`;
-  let D, U = [], LATEST = null, AF = { affiliates: [], coupons: [], commissions: [], redemptions: [] }, NEWCODES = "";
-  try { D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; AF = (await rpc("admin_affiliates")) || AF; LATEST = await latestVersion(); } catch (e) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">${esc(e.message)}</div></div></section>`; return; }
+  let D, U = [], BUGS = [], LATEST = null, AF = { affiliates: [], coupons: [], commissions: [], redemptions: [] }, NEWCODES = "";
+  try { D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; AF = (await rpc("admin_affiliates")) || AF; LATEST = await latestVersion(); BUGS = (await sb.from("bug_reports").select("*").order("created_at", { ascending: false }).limit(100)).data || []; } catch (e) { view.innerHTML = `<section class="sect"><div class="wrap"><div class="panel">${esc(e.message)}</div></div></section>`; return; }
   let tab = store.get("pw.admTab") || "geral", q = "";
   const match = (o) => !q || JSON.stringify(o).toLowerCase().includes(q);
   const badge = (s) => `<span class="st st-${s}">${esc(STATUS_NAME[s] || s)}</span>`;
-  const GROUPS = [["Resumo", ["geral"]], ["Pessoas", ["usuarios", "cortesias", "testes", "licencas"]], ["Dinheiro", ["assinaturas", "pagamentos", "precos", "comissoes"]], ["Divulgação", ["afiliados", "codigos"]], ["Sistema", ["log"]]];
+  const GROUPS = [["Resumo", ["geral"]], ["Pessoas", ["usuarios", "cortesias", "testes", "licencas"]], ["Dinheiro", ["assinaturas", "pagamentos", "precos", "comissoes"]], ["Divulgação", ["afiliados", "codigos"]], ["Sistema", ["bugs", "log"]]];
   const grpOf = (t) => (GROUPS.find((g) => g[1].includes(t)) || GROUPS[0]);
   const TABNAME = Object.fromEntries(ADM_TABS);
   const draw = () => {
@@ -595,6 +595,17 @@ async function renderAdmin() {
           <p class="sub">Quantos dias vale o teste grátis (Pro ou Equipe, um por e-mail). Vale para os próximos testes; quem já está testando mantém a data atual.</p>
           <div class="adm-form"><label class="sub">Dias do teste <input class="adm-num" id="trialDays" type="number" min="1" max="365" step="1" value="${TRIAL_DAYS}"></label><button class="btn small go" id="trialSave">Salvar</button></div>
         </div>`,
+      bugs: () => `<div class="panel"><h2>Bugs reportados</h2>
+        <p class="sub">Chegam também por e-mail. Aqui ficam guardados com as imagens e os logs.</p>
+        ${BUGS.filter(match).length ? BUGS.filter(match).map((b) => `<div class="bug-item ${b.status}">
+          <div class="bug-h"><b>${esc(b.title)}</b> ${b.status === "resolvido" ? `<span class="st st-active">Resolvido</span>` : b.status === "em_andamento" ? `<span class="st st-past_due">Em andamento</span>` : `<span class="st st-canceled">Novo</span>`}
+            <span class="sub">${b.source === "app" ? "app" : "site"}${b.app_version ? " " + esc(b.app_version) : ""} · ${dtt(b.created_at)} · ${pii(b.email || "anônimo", "email")}${b.email_error ? ` · <span title="${esc(b.email_error)}">e-mail não enviado</span>` : ""}</span></div>
+          <div class="bug-d">${esc(b.description)}</div>
+          ${(b.attachments || []).length ? `<div class="bug-att">${b.attachments.map((a) => `<button class="btn small quiet" data-bimg="${esc(a.path)}">🖼 ${esc(a.name)}</button>`).join("")}</div>` : ""}
+          ${b.logs ? `<details><summary>Logs (${Math.round(b.logs.length / 1024)} KB)</summary><pre class="bug-pre">${esc(b.logs)}</pre></details>` : ""}
+          ${b.context && Object.keys(b.context).length ? `<details><summary>Detalhes técnicos</summary><pre class="bug-pre">${esc(JSON.stringify(b.context, null, 2))}</pre></details>` : ""}
+          <div class="bug-act">${["novo", "em_andamento", "resolvido"].filter((s) => s !== b.status).map((s) => `<button class="btn small quiet" data-bst="${b.id}:${s}">${{ novo: "Reabrir", em_andamento: "Em andamento", resolvido: "Marcar resolvido" }[s]}</button>`).join("")}</div>
+        </div>`).join("") : `<p class="sub">Nenhum relato ainda.</p>`}</div>`,
       log: () => `<div class="panel">${table(["Quando", "Ação", "Alvo", "Detalhes"], D.log.map((l) => [dtt(l.created_at), esc(l.action), esc(l.target || ""), `<small class="sub">${esc(JSON.stringify(l.data || {}))}</small>`]), true)}</div>`,
     }[tab]();
     view.innerHTML = `<section class="sect"><div class="wrap adm">
@@ -607,7 +618,7 @@ async function renderAdmin() {
   };
   const table = (head, rows, raw) => rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
       <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<p class="sub">Nada por aqui.</p>`;
-  const reload = async () => { D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; AF = (await rpc("admin_affiliates")) || AF; draw(); };
+  const reload = async () => { BUGS = (await sb.from("bug_reports").select("*").order("created_at", { ascending: false }).limit(100)).data || []; D = await rpc("admin_overview"); U = (await rpc("admin_users")) || []; AF = (await rpc("admin_affiliates")) || AF; draw(); };
   const act = async (fn) => { try { await fn(); await reload(); } catch (e) { alert(e.message); } };
   const callAdminPay = async (id, action) => {
     const r = await fetch(`${PITWALL.url}/functions/v1/admin-payments`, { method: "POST",
@@ -648,6 +659,11 @@ async function renderAdmin() {
     q("[data-umd]").forEach((b) => b.onclick = go(() => rpc("admin_revoke_device", { p_id: b.dataset.umd })));
   };
   function bind() {
+    view.querySelectorAll("[data-bst]").forEach((b) => b.onclick = () => { const [id, st] = b.dataset.bst.split(":"); act(() => rpc("admin_set_bug_status", { p_id: id, p_status: st })); });
+    view.querySelectorAll("[data-bimg]").forEach((b) => b.onclick = async () => {
+      const { data, error } = await sb.storage.from("bug-reports").createSignedUrl(b.dataset.bimg, 600);
+      if (error) { toast(error.message, "err"); return; } window.open(data.signedUrl, "_blank", "noopener");
+    });
     view.querySelectorAll("[data-um]").forEach((b) => b.onclick = () => userModal(b.dataset.um));
     view.querySelectorAll("[data-pd]").forEach((b) => b.onclick = () => confirm("Apagar este pagamento? A cobrança será cancelada no Asaas e sairá do painel.") && act(() => callAdminPay(b.dataset.pd, "delete")));
     view.querySelectorAll("[data-pr]").forEach((b) => b.onclick = () => confirm("Estornar este pagamento? O dinheiro volta ao cliente pelo Asaas. Isso não dá para desfazer.") && act(() => callAdminPay(b.dataset.pr, "refund")));

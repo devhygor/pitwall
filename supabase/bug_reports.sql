@@ -1,0 +1,4 @@
+-- Pitwall · relatos de bug (já aplicado). Tabela bug_reports (só admin lê), bucket privado 'bug-reports' (anexos), RPC admin_set_bug_status.
+-- Função de borda report-bug (verify_jwt false): valida, limita 5 relatos/hora por IP, guarda e manda e-mail pelo Resend.
+-- Segredos da função (Supabase > Edge Functions > Secrets): RESEND_API_KEY (obrigatório para o e-mail), BUG_REPORT_TO (padrão: e-mail do dono),
+-- BUG_REPORT_FROM (padrão: Pitwall <onboarding@resend.dev>, que só entrega no e-mail da conta do Resend). Sem a chave, o relato fica em Admin > Bugs.

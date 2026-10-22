@@ -439,6 +439,50 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         except Exception as e:
             raise HTTPException(400, str(e))
 
+    @app.post("/api/bug-report")
+    def bug_report(body: dict = Body(...)):
+        """Manda um relato de bug (com o log do programa, se a pessoa deixar) para o e-mail do desenvolvedor."""
+        import json as _json, platform, urllib.request, urllib.error
+        from . import team as _tm
+        from .db import data_dir
+        try:
+            from ._version import __version__ as ver
+        except Exception:
+            ver = "dev"
+        logs = ""
+        if body.get("include_logs", True):
+            try:
+                with open(data_dir() / "pitwall.log", "rb") as f:
+                    f.seek(0, 2)
+                    f.seek(max(0, f.tell() - 200_000))
+                    logs = f.read().decode("utf-8", "replace")
+            except OSError:
+                logs = ""
+        t = _team()
+        headers = {"Content-Type": "application/json", "apikey": t.key}
+        if getattr(t, "configured", False):
+            try:
+                headers["Authorization"] = "Bearer " + t._token()
+            except Exception:
+                pass
+        s = settings.all() if hasattr(settings, "all") else {}
+        payload = {"title": body.get("title"), "description": body.get("description"), "email": body.get("email"),
+                   "source": "app", "app_version": ver, "logs": logs, "images": body.get("images") or [],
+                   "context": {"sistema": platform.platform(), "python": platform.python_version(),
+                               "jogo": str(s.get("game") or ""), "conta_pitwall": bool(getattr(t, "configured", False))}}
+        req = urllib.request.Request(t.url + "/functions/v1/report-bug", data=_json.dumps(payload).encode(), headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=40) as r:
+                return _json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            try:
+                msg = _json.loads(e.read().decode()).get("message")
+            except Exception:
+                msg = None
+            raise HTTPException(400, msg or f"Não foi possível enviar ({e.code}).")
+        except Exception:
+            raise HTTPException(400, "Sem conexão. Confira a internet e tente de novo.")
+
     @app.post("/api/team/login")
     def team_login():
         url = _team().login_url()

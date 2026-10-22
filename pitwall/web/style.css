@@ -1204,3 +1204,5 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 
 .plink { color: inherit; text-decoration: none; cursor: pointer; } .plink:hover { text-decoration: underline; }
 .ava.xl { width: 72px; height: 72px; font-size: 30px; }
+
+.bg-l { display: block; margin: 12px 0 4px; font-size: 13px; color: var(--muted, #8b93a1); }

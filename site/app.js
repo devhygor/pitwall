@@ -36,7 +36,7 @@ const RPC_OK = {
   cancel_invite: "Convite cancelado", answer_request: "Pedido respondido", answer_invite: "Convite respondido", invite_by_email: "Convite criado", create_team: "Equipe criada",
   join_team: "Você entrou na equipe", join_with_code: "Você entrou na equipe", join_listed: "Pedido enviado", leave_team: "Você saiu da equipe", revoke_my_device: "Computador removido",
   create_seat_key: "Chave criada", revoke_seat_key: "Chave revogada",
-  admin_set_subscription: "Assinatura atualizada", admin_update_affiliate: "Afiliado atualizado", admin_set_price: "Preço salvo", admin_set_coupon_active: "Cupom atualizado",
+  admin_set_bug_status: "Bug atualizado", admin_set_subscription: "Assinatura atualizada", admin_update_affiliate: "Afiliado atualizado", admin_set_price: "Preço salvo", admin_set_coupon_active: "Cupom atualizado",
   admin_set_commission: "Comissão atualizada", admin_revoke_license: "Licença revogada", admin_revoke_grant: "Cortesia revogada", admin_revoke_device: "Computador revogado",
   admin_grant: "Cortesia concedida", admin_generate_codes: "Códigos gerados", admin_extend_trial: "Teste prorrogado", admin_create_coupon: "Cupom criado", admin_create_affiliate: "Afiliado criado",
 };
@@ -64,6 +64,7 @@ function route() {
   let m;
   if ((m = h.match(/^#\/join\/([A-Za-z0-9]{8})/))) return joinRoute(m[1].toUpperCase());
   if (h.startsWith("#/planos")) { markTop(); return renderPlans(); }
+  if (h.startsWith("#/bug")) { markTop(); return renderBug(); }
   if (!session) return renderLanding();
   if ((m = h.match(/^#\/perfil(?:\/([0-9a-f-]{36}))?/))) { markTop(); return renderProfile(m[1] || session.user.id); }
   if (h.startsWith("#/conta")) { markTop(); return renderAccount(); }

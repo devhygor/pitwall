@@ -73,6 +73,7 @@ const routes = [
   [/^#\/team$/, () => renderTeam()],
   [/^#\/lfm$/, () => renderLfm()],
   [/^#\/perfil$/, () => renderPerfil()],
+  [/^#\/bug$/, () => renderBug()],
   [/^#\/community$/, () => renderCommunity()],
   [/^#\/overlay$/, () => renderOverlay()],
   [/^#\/overlays$/, () => renderOverlays()],
@@ -3656,6 +3657,7 @@ function aboutCard(ver) {
         <a class="btn" href="https://github.com/devhygor" target="_blank" rel="noopener">GitHub · devhygor</a>
         <a class="btn" href="https://pitwall.hygor.com.br/" target="_blank" rel="noopener">Site da equipe</a>
         <a class="btn" href="https://pitwall.hygor.com.br/#/planos" target="_blank" rel="noopener">Planos e conta</a>
+        <a class="btn" href="#/bug">Reportar um problema</a>
       </div>
     </div>
     <div class="set-card"><h2>Seus dados</h2>
@@ -3770,6 +3772,47 @@ async function openExt(url) {
   }
   try { const r = await postJ("/api/open", { url }); if (r.opened) return; } catch (e) { /* abre no app */ }
   window.open(url, "_blank");
+}
+
+// reportar um problema: vai por e-mail para o desenvolvedor, com o log do programa e imagens
+function renderBug() {
+  current = { name: "bug" };
+  const imgs = [];
+  view.innerHTML = `<div class="head"><div><h1>Reportar um problema</h1></div></div>
+    <div class="panel" style="max-width:760px">
+      <p class="sub">Conte o que aconteceu e como repetir. O relato chega direto no e-mail do desenvolvedor, junto com o log do programa e as imagens que você anexar.</p>
+      <label class="bg-l">Resumo do problema</label><input id="bgTitle" maxlength="120" placeholder="ex.: o overlay some quando troco de sessão" style="width:100%">
+      <label class="bg-l">O que aconteceu? Como repetir?</label><textarea id="bgDesc" rows="6" maxlength="5000" style="width:100%" placeholder="1. Abri o ACC&#10;2. Entrei na pista&#10;3. O overlay ficou preto"></textarea>
+      <label class="bg-l">Seu e-mail (opcional, para a gente responder)</label><input id="bgMail" type="email" maxlength="200" style="width:100%">
+      <label class="bg-l">Imagens (até 5) · escolha ou cole um print com Ctrl+V</label>
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><input type="file" id="bgFile" accept="image/*" multiple hidden><button class="btn" id="bgPick" type="button">Escolher imagens</button><div id="bgThumbs" class="row" style="gap:8px"></div></div>
+      <label class="bg-l" style="display:flex;gap:8px;align-items:center;margin-top:14px"><input type="checkbox" id="bgLogs" checked> Anexar o log do programa (ajuda muito a achar o erro)</label>
+      <div class="row" style="margin-top:14px;gap:12px;align-items:center"><button class="btn primary" id="bgGo">Enviar relato</button><span class="sub" id="bgMsg"></span></div>
+    </div>`;
+  const asData = (blob) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = no; r.readAsDataURL(blob); });
+  const prep = async (f) => {
+    if (f.type === "image/gif" || f.size < 600 * 1024) return { name: f.name, type: f.type, data: await asData(f), url: URL.createObjectURL(f) };
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(f); });
+    const k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85));
+    return { name: f.name.replace(/\.\w+$/, "") + ".jpg", type: "image/jpeg", data: await asData(blob), url: URL.createObjectURL(blob) };
+  };
+  const thumbs = () => { $("#bgThumbs").innerHTML = imgs.map((m, i) => `<span style="position:relative"><img src="${m.url}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"><button class="btn xs" data-rm="${i}" style="position:absolute;top:-6px;right:-6px">×</button></span>`).join("");
+    document.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => { imgs.splice(+b.dataset.rm, 1); thumbs(); }); };
+  const add = async (files) => { for (const f of files) { if (!/^image\/(png|jpe?g|webp|gif)$/.test(f.type) || imgs.length >= 5) continue; try { imgs.push(await prep(f)); } catch (e) { /* ignora */ } } thumbs(); };
+  $("#bgPick").onclick = () => $("#bgFile").click();
+  $("#bgFile").onchange = (e) => { add([...e.target.files]); e.target.value = ""; };
+  view.onpaste = (e) => { const f = [...(e.clipboardData?.files || [])].filter((x) => x.type.startsWith("image/")); if (f.length) { e.preventDefault(); add(f); } };
+  $("#bgGo").onclick = async () => {
+    const b = $("#bgGo"); b.disabled = true; $("#bgMsg").textContent = "Enviando…";
+    try {
+      await api("/api/bug-report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        title: $("#bgTitle").value, description: $("#bgDesc").value, email: $("#bgMail").value, include_logs: $("#bgLogs").checked,
+        images: imgs.map((m) => ({ name: m.name, type: m.type, data: m.data })) }) });
+      view.innerHTML = `<div class="head"><div><h1>Recebemos o seu relato</h1></div></div><div class="panel"><p>Obrigado! Vamos olhar com carinho.</p><a class="btn" href="#/">Voltar</a></div>`;
+    } catch (e) { b.disabled = false; $("#bgMsg").textContent = e.message || "Não foi possível enviar."; }
+  };
 }
 
 // perfil: resumo da sua conta do Pitwall; a página completa (editar foto, nome, senha, ver o progresso) fica no site
