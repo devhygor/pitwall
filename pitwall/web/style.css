@@ -1160,3 +1160,10 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .cm-opt.on { border-color: var(--accent); background: rgba(62,224,143,.12); }
 .cm-opt canvas { width: 32px; height: 52px; } .cm-opt span { font-size: 11px; color: var(--muted); } .cm-opt.on span { color: var(--text); }
 .cm-opt:disabled { opacity: .6; cursor: default; }
+
+/* campos de texto legíveis em qualquer tela (sem estilo próprio ficavam brancos com letra clara) */
+:where(input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="password"], input[type="url"], input[type="tel"], input:not([type]), textarea) {
+  background: var(--panel-2, #1a2230); color: var(--text, #e8eef9); border: 1px solid var(--line, #26303f); border-radius: 8px; padding: 7px 10px; color-scheme: dark;
+}
+:where(input, textarea)::placeholder { color: var(--muted, #8392a8); opacity: .85; }
+:where(input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="password"], input:not([type]), textarea):focus { outline: none; border-color: var(--accent, #3ee08f); }

@@ -635,3 +635,9 @@ html { scroll-padding-top: 76px; }
 .buy-price { margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.05); }
 .bp-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; } .bp-row.sub { font-size: 13px; opacity: .85; }
 .bp-row .was { text-decoration: line-through; color: var(--fog); } .bp-row.tot b { font-size: 20px; color: #3ee08f; } .bp-row.tot { border-top: 1px solid rgba(255,255,255,.1); margin-top: 4px; padding-top: 6px; }
+
+/* campos de texto legíveis em qualquer tela do site */
+:where(input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="password"], input[type="url"], input:not([type]), textarea) {
+  background: var(--night); color: var(--chalk); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color-scheme: dark;
+}
+:where(input, textarea)::placeholder { color: var(--fog); opacity: .85; }
