@@ -1167,3 +1167,6 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 }
 :where(input, textarea)::placeholder { color: var(--muted, #8392a8); opacity: .85; }
 :where(input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="password"], input:not([type]), textarea):focus { outline: none; border-color: var(--accent, #3ee08f); }
+
+/* os botões liga/desliga dentro de .fuel (equipe > Ajustes) eram espremidos pela regra do checkbox comum */
+.fuel input.tgl[type=checkbox] { width: 44px; height: 26px; flex: none; }
