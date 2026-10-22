@@ -223,6 +223,32 @@ PAGINAS = [
         "rel": ["comparar-voltas", "lfm-low-fuel-motorsport", "planos-e-precos"],
     },
     {
+        "slug": "estrategia-de-corrida-acc",
+        "nav": "Estratégia",
+        "titulo": "Estratégia de corrida no ACC: combustível e paradas | Pitwall",
+        "desc": "Planeje combustível e paradas do ACC antes de largar: voltas previstas, litros por stint e o valor para colocar no menu de pit. Sem precisar de sessão gravada.",
+        "h1": "Estratégia de corrida no ACC: combustível e paradas",
+        "lede": "Informe a duração, o tempo de volta e o consumo, e o Pitwall monta o plano por stint com o valor para o menu de pit do ACC.",
+        "secoes": [
+            ("Do que ele precisa", [
+                "Tipo de corrida (por tempo ou por voltas), duração, tempo médio de volta, consumo por volta, capacidade do tanque, paradas obrigatórias, voltas de margem e se a volta de formação conta.",
+                "Se você já correu com aquele carro naquela pista, escolha o seu histórico e o Pitwall preenche o tempo de volta e o consumo com o que você gravou. Não precisa de sessão gravada para usar.",
+            ]),
+            ("O que ele entrega", [
+                "Voltas previstas, combustível total, número de paradas e com quantos litros largar, mais uma tabela por stint com as voltas, o consumo e o que colocar no box.",
+                "O valor do box já considera a margem de voltas que você escolheu e é arredondado para cima, para você digitar direto no menu de pit do ACC.",
+            ]),
+            ("Combine com o resto", [
+                "O consumo por volta vem das suas voltas gravadas. Durante a corrida, o engenheiro de voz responde quanto combustível você tem e quantas voltas ainda dá para fazer.",
+            ]),
+        ],
+        "faq": [
+            ("Preciso ter gravado voltas para usar?", "Não. Dá para preencher os valores à mão. Se você tem histórico com o carro e a pista, o Pitwall preenche o tempo de volta e o consumo por você."),
+            ("O valor do box já tem margem?", "Sim: ele conta a margem de voltas que você definir e arredonda para cima."),
+        ],
+        "rel": ["telemetria-acc", "engenheiro-de-corrida-em-portugues", "baixar"],
+    },
+    {
         "slug": "planos-e-precos",
         "nav": "Planos",
         "titulo": "Planos do Pitwall: Grátis, Pro e Equipe | Pitwall",
@@ -292,13 +318,25 @@ IMAGENS = {
         ("app-overlays", "Tela de overlays do Pitwall: mapa, pedais, participantes, pneus, curva, radar, pontos cegos e delta, com ajustes de tamanho, fundo e estilo", "Escolha os overlays e ajuste tamanho, fundo transparente e estilo de cada um."),
     ],
     "engenheiro-de-corrida-em-portugues": [
+        ("app-engenheiro-conversa", "Teste do engenheiro de corrida do Pitwall: pergunte por texto ou voz e veja exemplos de perguntas sobre combustível, pneus, posição e tempo", "Converse com o engenheiro: por texto ou voz, com exemplos de perguntas."),
         ("app-engenheiro-de-voz", "Tela do engenheiro de corrida em português do Pitwall, com escolha de voz offline, microfone, tecla de falar e avisos", "O engenheiro de voz: escolha da voz, microfone, tecla de falar e avisos."),
+    ],
+    "lfm-low-fuel-motorsport": [
+        ("app-perfil-lfm", "Perfil do Low Fuel Motorsport dentro do Pitwall: ELO, licença, Safety Rating, próxima corrida com contagem regressiva, gráficos de progressão e estatísticas", "O perfil do LFM no Pitwall: ELO, Safety Rating, próxima corrida e a sua evolução."),
+    ],
+    "equipes-e-ranking": [
+        ("app-ranking-da-equipe", "Ranking da equipe no Pitwall: melhor volta de cada piloto por pista e carro, com setores e acesso ao vídeo", "Ranking da equipe: o melhor de cada piloto em cada pista e carro."),
+        ("app-ranking-da-comunidade", "Ranking da comunidade Pitwall: recorde de cada piloto por pista, com diferença para o primeiro e botões de análise e replay", "Comunidade: o recorde de cada piloto que usa o Pitwall, com análise e replay."),
+    ],
+    "estrategia-de-corrida-acc": [
+        ("app-estrategia-de-corrida", "Planejador de estratégia de corrida do Pitwall: voltas previstas, combustível total, paradas e plano por stint para o menu de pit do ACC", "O plano por stint, com o valor para colocar no menu de pit do ACC."),
     ],
     "setups-acc": [
         ("app-biblioteca-de-setups", "Biblioteca de setups do Pitwall para o ACC, com busca, filtros por carro e pista e botão para instalar", "Biblioteca de setups: busque, filtre por carro e pista e instale no ACC com um clique."),
     ],
 }
-ALTURA = {"app-analise-de-volta": 1000}
+LARG = {k: 1400 for k in ("app-ranking-da-equipe", "app-ranking-da-comunidade", "app-perfil-lfm", "app-engenheiro-conversa", "app-estrategia-de-corrida")}
+ALTURA = {"app-analise-de-volta": 1000, "app-ranking-da-equipe": 735, "app-ranking-da-comunidade": 735, "app-perfil-lfm": 733, "app-engenheiro-conversa": 735, "app-estrategia-de-corrida": 736}
 
 
 def figura(slug, i):
@@ -307,7 +345,7 @@ def figura(slug, i):
     if i >= len(it):
         return ""
     f, alt, cap = it[i]
-    return (f'<figure><img src="/img/{f}.webp" alt="{esc(alt)}" width="1360" height="{ALTURA.get(f, 900)}" loading="lazy" decoding="async">'
+    return (f'<figure><img src="/img/{f}.webp" alt="{esc(alt)}" width="{LARG.get(f, 1360)}" height="{ALTURA.get(f, 900)}" loading="lazy" decoding="async">'
             f'<figcaption>{esc(cap)}</figcaption></figure>')
 
 
@@ -339,7 +377,7 @@ details p{margin:10px 0 2px;color:#c9d3e6}
 .rel a:hover{border-color:var(--sodium)}.rel small{display:block;color:var(--fog);margin-top:4px}
 footer{margin-top:60px;border-top:1px solid var(--line);padding:28px 0 40px;color:var(--fog);font-size:15px}
 footer .cols{display:flex;gap:22px;flex-wrap:wrap}footer a{color:var(--fog);text-decoration:none}footer a:hover{color:var(--text)}
-@media(max-width:1060px){header nav{display:none}header .wrap{justify-content:space-between}}
+@media(max-width:1180px){header nav{display:none}header .wrap{justify-content:space-between}}
 @media(max-width:760px){nav{display:none}header .wrap{justify-content:space-between}}
 """
 
