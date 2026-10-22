@@ -99,7 +99,7 @@ async function renderVoiceEngineer() {
       <div class="set-card"><h2>Avisos automáticos</h2>
         ${setRow("Quanto ele fala", "Controla a frequência dos avisos.", sel("eVerb", [["pouco", "Pouco (só o importante)"], ["normal", "Normal"], ["muito", "Muito"]], S.eng_verbosity))}
         <div class="eng-cats" id="eCats">${cat.categories.map((c) => `<label class="eng-cat"><input class="tgl" type="checkbox" data-cat="${c.id}" ${ev[c.id] === false ? "" : "checked"}><span>${esc(c.name)}</span></label>`).join("")}</div>
-        ${setRow("Inverter esquerda/direita do observador", "Se ele avisar “carro à esquerda” quando o carro está à direita, ligue isto. Veja abaixo o que ele está enxergando.", tgl("eSwap", S.eng_spotter_swap))}
+        ${setRow("Inverter esquerda/direita do observador", "Se ele avisar “carro à esquerda” quando o carro está à direita, ligue isto (vale também para o overlay Radar). Veja abaixo o que ele está enxergando.", tgl("eSwap", S.eng_spotter_swap))}
         <div class="kv"><span>Observador agora</span><span id="eSpot" class="sub">—</span></div>
       </div>
 

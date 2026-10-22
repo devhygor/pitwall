@@ -3,7 +3,7 @@
 // Os dados vêm de /api/overlay/data; as opções, de /api/settings (overlays.<nome>), relidas a cada 1,5 s.
 
 const NAME = (location.pathname.split("/").pop() || "map").replace(/[^a-z]/g, "");
-const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta", tyres: "Pneus", corner: "Curva" };
+const TITLES = { map: "Mapa", pedals: "Pedais", standings: "Participantes", delta: "Delta", tyres: "Pneus", corner: "Curva", radar: "Radar" };
 const PREVIEW = /[?&]preview/.test(location.search);       // dentro do palco da página Overlays: só mostra, com dados de exemplo
 const root = document.getElementById("root");
 root.dataset.title = TITLES[NAME] || NAME;
@@ -17,7 +17,8 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   seconds: 8, steer: false, wheel: true, gear: true, coast: true, bars: true, speed: true, rows: 10, view: "around", name: "short",
   cols: ["pos", "number", "name", "vs_me", "last", "best"], group: true, classpos: true, header: true, others: 3, carstyle: "both", logomode: "color", trendcolor: true, fuel: true, predicted: true,
   temp: true, press: true, brake: true, wear: true, compound: true, punit: "psi", tmin: 70, tmax: 100, pmin: 26, pmax: 27, pads: true, bmin: 350, bmax: 800, tystyle: "acc", weather: true, tynum: true,
-  mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full" };
+  mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full",
+  rstyle: "top", range: 40, gap: true };
 
 let cfg = { ...DEFAULT_CFG };
 // modelos extras de overlay: Pro (overlay_styles) e Equipe (overlay_styles_team); sem o recurso, volta para o modelo clássico
@@ -27,8 +28,8 @@ const F_PRO = "overlay_styles", F_TEAM = "overlay_styles_team";
 const STYLE_NEED = {
   map: { asphalt: F_PRO, neon: F_PRO }, mapmode: { follow: F_PRO, follow_rot: F_PRO },
   pedals: { classic: F_PRO, horizontal: F_PRO, driver: F_TEAM }, delta: { classic: F_PRO, bar: F_TEAM },
-  standings: { classic: F_PRO, tower: F_TEAM }, tyres: { acc: F_PRO, cards: F_PRO, row: F_TEAM }, corner: { full: F_PRO, compact: F_PRO } };
-const STYLE_FALLBACK = { map: "classic", mapmode: "full", pedals: "minimal", delta: "minimal", standings: "compact", tyres: "minimal", corner: "line" };
+  standings: { classic: F_PRO, tower: F_TEAM }, radar: { top: F_PRO, circle: F_PRO, halo: F_TEAM }, tyres: { acc: F_PRO, cards: F_PRO, row: F_TEAM }, corner: { full: F_PRO, compact: F_PRO } };
+const STYLE_FALLBACK = { map: "classic", mapmode: "full", pedals: "minimal", delta: "minimal", standings: "compact", radar: "sides", tyres: "minimal", corner: "line" };
 function pickStyle(group, key, def) {
   const v = cfg[key] || def, need = (STYLE_NEED[group] || {})[v];
   return !need || FEATS.has(need) ? v : STYLE_FALLBACK[group];
@@ -586,6 +587,94 @@ function pedalsOverlay() {
   return { onData() {}, onCfg };
 }
 
+// ------------------------------------------------------------------ RADAR (carros ao lado, atrás e à frente)
+function radarOverlay() {
+  root.innerHTML = `<div class="card radar shadow"><canvas id="cv"></canvas>
+    <div class="rd-sides" id="sd"><i class="L"></i><div class="mycar"></div><i class="R"></i></div><div class="rd-gap" id="gp"></div><div class="rd-note" id="nt"></div></div>`;
+  const card = root.firstChild, cv = root.querySelector("#cv"), ctx = cv.getContext("2d"), sd = root.querySelector("#sd"), gp = root.querySelector("#gp"), nt = root.querySelector("#nt");
+  const SIZE = { top: [170, 250], circle: [230, 230], halo: [250, 250], sides: [0, 0] };
+  const hsl = (h, a = 1) => `hsl(${Math.round(h)} 85% 55% / ${a})`;
+  const heat = (d, R) => { const k = clamp(1 - d / R, 0, 1); return 130 - 130 * k; };          // longe = verde, colado = vermelho
+  const alongside = (c) => Math.abs(c.fwd) < 6 && Math.abs(c.side) > 0.8 && Math.abs(c.side) < 6;
+  function preview() {                                                                           // sem o jogo: carros de exemplo se movendo
+    const t = performance.now() / 1000, cars = [
+      { id: 1, n: 12, fwd: 22 * Math.sin(t * 0.5), side: 3.4 }, { id: 2, n: 44, fwd: -4 + 3 * Math.sin(t * 0.8), side: -3.4 },
+      { id: 3, n: 7, fwd: -28 + 8 * Math.sin(t * 0.3), side: 0.4 }, { id: 4, n: 31, fwd: 30 + 6 * Math.sin(t * 0.4), side: -0.3 }];
+    return { cars, left: alongside(cars[1]) ? 1 : 0, right: alongside(cars[0]) ? 1 : 0, source: "preview", calibrated: true };
+  }
+  function draw() {
+    const style = pickStyle("radar", "rstyle", "top"), R = clamp(+cfg.range || 40, 15, 90), D = live() ? (data.radar || null) : previewing ? preview() : null;
+    card.className = "card radar shadow r-" + style;
+    const [W, H] = SIZE[style];
+    const cars = D && D.cars ? D.cars.filter((c) => Math.abs(c.fwd) <= R) : [];
+    const L = D ? D.left || cars.filter((c) => alongside(c) && c.side < 0).length : 0, Rr = D ? D.right || cars.filter((c) => alongside(c) && c.side > 0).length : 0;
+    nt.textContent = !D ? (live() ? "" : "Aguardando o jogo…") : D.source === "acc" && !D.calibrated ? "Calibrando… dirija reto por alguns segundos" : !D.source && live() ? "Sem dados de posição dos carros" : "";
+    // nearest ahead/behind in the same lane
+    const lane = cars.filter((c) => Math.abs(c.side) < 2.6), ahead = lane.filter((c) => c.fwd > 0).sort((a, b) => a.fwd - b.fwd)[0], behind = lane.filter((c) => c.fwd < 0).sort((a, b) => b.fwd - a.fwd)[0];
+    gp.style.display = cfg.gap && style !== "sides" && D ? "" : "none";
+    gp.innerHTML = `<span>▲ ${ahead ? Math.round(ahead.fwd) + " m" : "—"}</span><span>▼ ${behind ? Math.round(-behind.fwd) + " m" : "—"}</span>`;
+    sd.style.display = style === "sides" ? "" : "none";
+    if (style === "sides") {
+      sd.querySelector(".L").className = "L" + (L ? " on" : ""); sd.querySelector(".R").className = "R" + (Rr ? " on" : "");
+      sd.classList.toggle("wide", L > 0 && Rr > 0);
+      sd.querySelector(".L").dataset.n = L > 1 ? L : ""; sd.querySelector(".R").dataset.n = Rr > 1 ? Rr : "";
+      return;
+    }
+    const dpr = (window.devicePixelRatio || 1) * clamp(cfg.scale, 40, 300) / 100;
+    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + "px"; cv.style.height = H + "px"; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const label = (c, x, y) => { if (!cfg.numbers || c.n == null) return; ctx.fillStyle = "#fff"; ctx.font = "700 10px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(c.n), x, y); };
+    if (style === "top") {
+      const cx = W / 2, cy = H / 2, ky = (H / 2 - 14) / R, kx = (W / 2 - 14) / 9;
+      ctx.fillStyle = "rgba(255,255,255,.05)"; ctx.fillRect(10, 8, W - 20, H - 16);
+      ctx.strokeStyle = "rgba(255,255,255,.16)"; ctx.setLineDash([6, 8]); ctx.lineWidth = 1.5;
+      for (const s of [-1.8, 1.8]) { ctx.beginPath(); ctx.moveTo(cx + s * 2 * kx, 10); ctx.lineTo(cx + s * 2 * kx, H - 10); ctx.stroke(); }
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "rgba(255,255,255,.1)"; ctx.beginPath(); ctx.moveTo(10, cy - R / 2 * ky); ctx.lineTo(W - 10, cy - R / 2 * ky); ctx.moveTo(10, cy + R / 2 * ky); ctx.lineTo(W - 10, cy + R / 2 * ky); ctx.stroke();
+      for (const c of cars) {
+        const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, w = 2.0 * kx * 0.9, h = 4.6 * ky;
+        const d = Math.hypot(c.fwd, c.side * 1.5);
+        ctx.fillStyle = hsl(heat(d, R * 0.8), .95); ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(x - w / 2, y - Math.max(h, 12) / 2, w, Math.max(h, 12), 4); ctx.fill(); ctx.stroke(); label(c, x, y);
+      }
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.beginPath(); ctx.roundRect(cx - 9, cy - 14, 18, 28, 5); ctx.fill(); ctx.stroke();   // seu carro
+      ctx.fillStyle = "#3ee08f"; ctx.fillRect(cx - 9, cy - 14, 18, 5);
+    } else if (style === "circle") {
+      const cx = W / 2, cy = H / 2, k = (W / 2 - 12) / R;
+      ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 1.5;
+      for (const f of [1 / 3, 2 / 3, 1]) { ctx.beginPath(); ctx.arc(cx, cy, (W / 2 - 12) * f, 0, 7); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(cx, 8); ctx.lineTo(cx, H - 8); ctx.moveTo(8, cy); ctx.lineTo(W - 8, cy); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,.04)"; ctx.beginPath(); ctx.arc(cx, cy, W / 2 - 12, 0, 7); ctx.fill();
+      for (const c of cars) {
+        const x = cx + clamp(c.side * 2.2, -R, R) * k * 0.62, y = cy - c.fwd * k, d = Math.hypot(c.fwd, c.side * 1.5);
+        if (Math.hypot(x - cx, y - cy) > W / 2 - 8) continue;
+        ctx.fillStyle = hsl(heat(d, R * 0.8)); ctx.shadowColor = hsl(heat(d, R * 0.8)); ctx.shadowBlur = alongside(c) ? 12 : 4;
+        ctx.beginPath(); ctx.arc(x, y, cfg.numbers ? 9 : 7, 0, 7); ctx.fill(); ctx.shadowBlur = 0; label(c, x, y);
+      }
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(cx, cy - 11); ctx.lineTo(cx + 8, cy + 9); ctx.lineTo(cx - 8, cy + 9); ctx.closePath(); ctx.fill();
+    } else {                                                                                         // halo: oito setores ao redor do carro acendem conforme a proximidade
+      const cx = W / 2, cy = H / 2, r0 = W / 2 - 38, sec = new Array(8).fill(0), near = new Array(8).fill(1e9);
+      for (const c of cars) {
+        const ang = (Math.atan2(c.side * 1.6, c.fwd) + 2 * Math.PI) % (2 * Math.PI), k = Math.round(ang / (Math.PI / 4)) % 8, d = Math.hypot(c.fwd, c.side * 1.6);
+        sec[k] = Math.max(sec[k], clamp(1 - d / R, 0, 1)); near[k] = Math.min(near[k], d);
+      }
+      for (let k = 0; k < 8; k++) {
+        const a = -Math.PI / 2 + (k * Math.PI) / 4, v = sec[k];
+        ctx.lineCap = "round"; ctx.lineWidth = 14 + 8 * v;
+        ctx.strokeStyle = v > 0.02 ? hsl(130 - 130 * clamp(v * 1.3, 0, 1), 0.35 + 0.65 * v) : "rgba(255,255,255,.08)";
+        if (v > 0.5) { ctx.shadowColor = hsl(0); ctx.shadowBlur = 16; }
+        ctx.beginPath(); ctx.arc(cx, cy, r0, a - Math.PI / 8 + 0.07, a + Math.PI / 8 - 0.07); ctx.stroke(); ctx.shadowBlur = 0;
+      }
+      ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(cx - 17, cy - 30, 34, 60, 9); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#3d8bff"; ctx.beginPath(); ctx.roundRect(cx - 12, cy - 22, 24, 14, 4); ctx.fill();
+    }
+  }
+  const loop = () => { draw(); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  return { onData() {}, onCfg() {} };
+}
+
 // ------------------------------------------------------------------ PARTICIPANTES
 // símbolos das marcas (pasta web/brands, ícones do projeto Simple Icons); sem arquivo, cai para a sigla em texto
 const BRAND_FILE = { POR: "porsche", MER: "mercedes", FER: "ferrari", AUD: "audi", LAM: "lamborghini", MCL: "mclaren", NIS: "nissan", BMW: "bmw",
@@ -919,13 +1008,13 @@ function tyresCards() {
 
 // ------------------------------------------------------------------ início
 let current = null;
-const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay, corner: cornerOverlay };
+const KIND = { map: mapOverlay, pedals: pedalsOverlay, standings: standingsOverlay, delta: deltaOverlay, tyres: tyresOverlay, corner: cornerOverlay, radar: radarOverlay };
 (async function init() {
   await loadFeatures(); featAt = performance.now();
   try { applyCfg((await getJSON("/api/settings")).settings || {}); } catch (e) { /* ok */ }
   current = (KIND[NAME] || mapOverlay)();
-  const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres", corner: "pos" }[NAME] || "all";
-  const every = { map: 100, pedals: 50, standings: 250, delta: 100, tyres: 200, corner: 100 }[NAME] || 200;
+  const parts = { map: "flags,cars", pedals: "pedals", standings: "cars", delta: "delta", tyres: "tyres", corner: "pos", radar: "radar" }[NAME] || "all";
+  const every = { map: 100, pedals: 50, standings: 250, delta: 100, tyres: 200, corner: 100, radar: 60 }[NAME] || 200;
   dataLoop(parts, every);
   settingsLoop();
   new ResizeObserver(reportSize).observe(root);

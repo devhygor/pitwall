@@ -259,3 +259,18 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .cnr.line .cn-info { flex: none; } .cnr.line .cn-info b { font-size: 17px; } .cnr.line .cn-info small, .cnr.line .cn-dir, .cnr.line .cn-sub, .cnr.line .cn-next { display: none; }
 .cnr.line .cn-dist { font-size: 26px; min-width: 70px; }
 .cnr.line .cn-brk { margin: 0; padding: 4px 10px; } .cnr.line .cn-brk .bar { display: none; } .cnr.line .cn-brk .lab b { font-size: 16px; }
+
+/* ---- radar ---- */
+.radar { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px; }
+.radar canvas { display: block; }
+.r-sides canvas { display: none; }
+.rd-sides { display: flex; align-items: center; gap: 12px; padding: 4px 6px; }
+.rd-sides i { position: relative; width: 22px; height: 112px; border-radius: 12px; background: rgba(255,255,255,.1); transition: background .08s, box-shadow .08s; }
+.rd-sides i.on { background: linear-gradient(180deg, #ff6a3d, #ff2f45); box-shadow: 0 0 18px rgba(255,59,78,.75); }
+.rd-sides i[data-n]:not([data-n=""])::after { content: attr(data-n); position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; }
+.rd-sides.wide i.on { animation: pulse .45s ease-in-out infinite; }
+.rd-sides .mycar { width: 38px; height: 68px; border-radius: 10px; background: rgba(255,255,255,.9); box-shadow: 0 2px 8px rgba(0,0,0,.5); position: relative; }
+.rd-sides .mycar::before { content: ""; position: absolute; left: 6px; right: 6px; top: 8px; height: 16px; border-radius: 5px; background: #3d8bff; }
+.rd-gap { display: flex; justify-content: space-between; width: 100%; font-size: 12px; font-weight: 700; color: var(--muted); padding: 0 6px; }
+.rd-note { font-size: 11px; color: var(--muted); text-align: center; max-width: 220px; } .rd-note:empty { display: none; }
+.r-sides .rd-gap { display: none; }

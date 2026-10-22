@@ -8,9 +8,9 @@ const PLAN_FEATURES = [
   ["Voz online (mais natural) e personalidade (humor, bronca, elogio)", "pro"],
   ["Observador: carros ao lado, três de lado, livre", "pro"],
   ["Vídeos das voltas sem limite (grátis guarda as últimas 5 sessões)", "pro"],
-  ["Overlays básicos: mapa simples, pedais minimalistas, delta só número, participantes compacto, pneus em 4 quadrados, curva em linha", "free"],
-  ["Overlays completos: gráfico de pedais com volante, delta com previsão e combustível, participantes com colunas e classes, pneus como no ACC, próxima curva completa, mapa com asfalto e modo seguir", "pro"],
-  ["Modelos de transmissão: pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa", "team"],
+  ["Overlays básicos: mapa simples, pedais minimalistas, delta só número, participantes compacto, pneus em 4 quadrados, curva em linha, radar com luzes laterais", "free"],
+  ["Overlays completos: gráfico de pedais com volante, delta com previsão e combustível, participantes com colunas e classes, pneus como no ACC, próxima curva completa, mapa com asfalto e modo seguir, radar visto de cima e circular", "pro"],
+  ["Modelos de transmissão: pedais painel do piloto, delta barra larga, participantes torre, pneus em faixa, radar em halo ao redor do carro", "team"],
   ["Pro incluído para até 10 pilotos da sua equipe e painel do dono", "team"],
   ["Sem anúncios no site", "pro"],
 ];

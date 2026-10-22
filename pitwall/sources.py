@@ -531,8 +531,11 @@ class _DemoField:
                               "pace": rng.uniform(1.07, 1.12) if gt4 else rng.uniform(0.985, 1.045), "dist": -0.012 * (i + 1) + rng.uniform(-0.2, 0.9),
                               "best_ms": None, "last_ms": None, "laps_done": 0, "pit": False, "lap_t": 0.0})
         self.base = None
+        self.track = None      # com a pista, os carros ganham posição (x, y) e o radar funciona no modo demo
+        self._t = 0.0
 
-    def step(self, dt, me_dist, my_best, my_last, my_cur_ms):
+    def step(self, dt, me_dist, my_best, my_last, my_cur_ms, me_xy=None):
+        self._t += dt
         base_s = ((my_best or my_last or 95000) if my_best or my_last else 95000) / 1000.0
         out = []
         for c in self.cars:
@@ -546,16 +549,29 @@ class _DemoField:
             out.append({"id": c["id"], "first": c["first"], "last": c["last"], "short": c["short"], "number": c["number"],
                         "team": c["team"], "cls": c["cls"], "brand": c["brand"], "model": c["model"], "cls_color": c["cls_color"], "spline": c["dist"] % 1.0 if c["dist"] > 0 else (c["dist"] % 1.0),
                         "laps": max(0, int(c["dist"])), "pos": 0, "cup_pos": 0, "best_ms": c["best_ms"],
-                        "last_ms": c["last_ms"], "pit": c["pit"], "_dist": c["dist"]})
+                        "last_ms": c["last_ms"], "pit": c["pit"], "_dist": c["dist"], **self._xy(c)})
         out.append({"id": 0, "first": "Piloto", "last": "Demo", "short": "DEM", "number": 99, "team": "", "cls": "GT3",
                     "brand": "MCL", "model": "720S Evo", "cls_color": "#e8505b",
                     "spline": me_dist % 1.0, "laps": int(me_dist), "pos": 0, "cup_pos": 0,
-                    "best_ms": my_best or None, "last_ms": my_last or None, "pit": False, "_dist": me_dist})
+                    "best_ms": my_best or None, "last_ms": my_last or None, "pit": False, "_dist": me_dist,
+                    **({"x": me_xy[0], "y": me_xy[1]} if me_xy else {})})
         for i, c in enumerate(sorted(out, key=lambda c: -c["_dist"])):
             c["pos"] = c["cup_pos"] = i + 1
         for c in out:
             c.pop("_dist", None)
         return out
+
+
+def _demo_xy(self, c):
+    if self.track is None:
+        return {}
+    tx, tz, _, i = self.track.at(c["dist"] % 1.0)
+    off = 3.4 * math.sin(self._t * 0.35 + c["id"] * 1.7)          # vai de um lado ao outro da pista, às vezes emparelhando
+    nx, nz = self.track.normals[i]
+    return {"x": tx + nx * off, "y": tz + nz * off}
+
+
+_DemoField._xy = _demo_xy
 
 
 class DemoSource:
@@ -617,6 +633,7 @@ class DemoSource:
         bt = [400.0, 330.0]      # temperatura dos freios (dianteiro, traseiro)
         wall0 = time.time()
         field_ = _DemoField(self.rng, tr.length)
+        field_.track = tr
         while completed < self.laps:
             x, z, vt, i = tr.at(d)
             off = style["line"](i)
@@ -726,7 +743,7 @@ class DemoSource:
                 tyre_wear=tuple(min(0.9, 0.012 * (stint_laps + d) + (0.004 if k < 2 else 0)) for k in range(4)),
                 tyre_compound="dry_compound", pad_life=(24.0, 24.0, 22.0, 22.0),
                 session_time_left=max(0.0, 20 * 60_000 - t * 1000) if self.session_type == "Race" else -1.0,
-                rain=(0, 1, 3) if (t % 240) < 120 else (1, 2, 2), flags=_demo_flags(t), cars=field_.step(dt, completed + d, best, last, lap_ms), player_id=0,
+                rain=(0, 1, 3) if (t % 240) < 120 else (1, 2, 2), flags=_demo_flags(t), cars=field_.step(dt, completed + d, best, last, lap_ms, (x, z)), player_id=0,
                 session_total_ms=20 * 60_000.0 if self.session_type == "Race" else -1.0, total_laps=self.laps if self.session_type == "Race" else 0,
             )
             if self.realtime:

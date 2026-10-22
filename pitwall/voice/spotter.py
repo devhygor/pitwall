@@ -22,6 +22,9 @@ class Spotter:
         self.hist: deque = deque(maxlen=40)       # (t, x, z) do seu carro
         self._err = [[0.0, 0.0] for _ in _TRANSFORMS]   # soma de erro e peso de cada transformação
         self.tf = None
+        self._tf_i = None                         # índice da transformação em uso (só troca com folga grande)
+        self.radar: list = []                     # carros por perto: {id, n, fwd (m, + à frente), side (m, + à direita)}
+        self.track_len = 0.0                      # comprimento da pista (m), para o radar do iRacing
         self.left = 0
         self.right = 0
         self.source = ""                          # "iracing" | "acc" | ""
@@ -35,6 +38,8 @@ class Spotter:
         self.hist.clear()
         self._err = [[0.0, 0.0] for _ in _TRANSFORMS]
         self.tf = None
+        self._tf_i = None
+        self.radar = []
         self.left = self.right = 0
         self._said = (0, 0)
 
@@ -63,7 +68,13 @@ class Spotter:
         means = sorted((s[0] / s[1], k) for k, s in enumerate(self._err) if s[1] > 0)
         if means and self._err[means[0][1]][1] > 80:
             best = means[0]
-            self.tf = _TRANSFORMS[best[1]] if best[0] < 25.0 else None
+            if best[0] < 25.0:
+                cur = self._tf_i
+                cur_mean = (self._err[cur][0] / self._err[cur][1]) if cur is not None and self._err[cur][1] else 1e9
+                # só troca de transformação com folga grande: trocar à toa é o que inverte esquerda e direita
+                if cur is None or (best[1] != cur and best[0] < cur_mean * 0.5):
+                    self._tf_i = best[1]
+                    self.tf = _TRANSFORMS[best[1]]
 
     # ---- atualização -----------------------------------------------------------------------
     def update(self, f, st) -> tuple[int, int]:
@@ -72,8 +83,12 @@ class Spotter:
         if lr is not None:
             self.source = "iracing"
             self.left, self.right = {2: (1, 0), 3: (0, 1), 4: (1, 1), 5: (2, 0), 6: (0, 2)}.get(int(lr), (0, 0))
+            if self.settings and self.settings.get("eng_spotter_swap"):
+                self.left, self.right = self.right, self.left
+            self._radar_iracing(f, st)
             return self.left, self.right
         self.source = ""
+        self.radar = []
         if f.status != "live" or f.speed < 25 or not st.rows or not st.me:
             self.left = self.right = 0
             return 0, 0
@@ -95,10 +110,14 @@ class Spotter:
                 continue
             v = (float(r["x"]), float(r["y"]))
             dx, dz = sa * v[a] - f.x, sb * v[b] - f.z
-            if abs(dx) > 14 or abs(dz) > 14:
+            if abs(dx) > 70 or abs(dz) > 70:
                 continue
             fwd = dx * hx + dz * hz
             side = dx * rx + dz * rz
+            if abs(fwd) <= 65 and abs(side) <= 18:
+                self.radar.append({"id": r.get("id"), "n": r.get("number"), "fwd": round(fwd, 1), "side": round(side, 1)})
+            if abs(dx) > 14 or abs(dz) > 14:
+                continue
             if -6.5 < fwd < 4.5 and 1.0 < abs(side) < 5.5:
                 if side < 0:
                     L += 1
@@ -106,6 +125,25 @@ class Spotter:
                     R += 1
         self.left, self.right = min(L, 2), min(R, 2)
         return self.left, self.right
+
+    def _radar_iracing(self, f, st):
+        """iRacing não dá a posição dos carros: a distância vem da pista (spline) e o lado, do aviso do próprio jogo."""
+        self.radar = []
+        L = float(self.track_len or 0) or 5000.0
+        me = next((c for c in (f.cars or []) if c.get("id") == f.player_id), None)
+        if me is None:
+            return
+        near = []
+        for c in f.cars:
+            if c.get("id") == f.player_id or c.get("pit"):
+                continue
+            d = ((float(c.get("spline", 0)) - float(me.get("spline", 0)) + 0.5) % 1.0 - 0.5) * L
+            if abs(d) <= 65:
+                near.append({"id": c.get("id"), "n": c.get("number"), "fwd": round(d, 1), "side": 0.0})
+        for want, sign in ((self.left, -1), (self.right, 1)):       # quem está ao lado: os mais próximos na linha do seu carro
+            for c in sorted((x for x in near if abs(x["fwd"]) < 7 and x["side"] == 0.0), key=lambda x: abs(x["fwd"]))[:want]:
+                c["side"] = sign * 3.4
+        self.radar = near
 
     # ---- falas -----------------------------------------------------------------------------
     def calls(self) -> list[str]:

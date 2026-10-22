@@ -19,6 +19,11 @@ BINS = 400           # pontos do contorno da pista (um por fatia de norm_pos)
 SAMPLES = 2400       # ~40 s de pedais a 60 Hz
 
 
+from types import SimpleNamespace
+
+from .voice.spotter import Spotter
+
+
 class OverlayHub:
     def __init__(self, db=None, recorder=None, settings=None):
         self.db = db
@@ -48,6 +53,8 @@ class OverlayHub:
         self._gh: dict = {}          # histórico da distância até cada carro (tendência: aproximando/afastando)
         self._ih: dict = {}          # histórico do intervalo de cada carro para o da frente
         self._win = 25.0
+        self.spotter = Spotter(settings)     # radar: carros ao lado, atrás e à frente (não depende do engenheiro)
+        self._radar_at = 0.0
 
     def active(self) -> bool:
         """O jogo está mandando dados agora? (frames novos nos últimos 3 s, fora do menu)
@@ -76,6 +83,7 @@ class OverlayHub:
             if f.track != self.track:
                 self._new_track(f.track)
             if f.status == "live":
+                self._radar_update(f, now)
                 self._seq += 1
                 self._samples.append((self._seq, now, f.gas, f.brake, f.steer, f.speed, f.gear, f.rpm))
                 if f.x or f.z:
@@ -176,6 +184,25 @@ class OverlayHub:
         return {"track": track, "length": self._length, "pts": pts, "filled": round(filled, 3), "sectors": [sec[0] or 1 / 3, sec[1] or 2 / 3],
                 "corners": [{**c, "name": names.get(str(c["n"]), "")} for c in corners]}
 
+    def _radar_on(self) -> bool:
+        try:
+            ov = (self.settings.get("overlays") or {}).get("radar") or {}
+            return ov.get("mode", "off") != "off" or bool(self.settings.get("overlay_edit"))
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _radar_update(self, f, now):
+        if self.settings is None or now - self._radar_at < 0.05 or not f.cars or not self._radar_on():
+            return
+        self._radar_at = now
+        rows = [{**c, "me": c.get("id") == f.player_id} for c in f.cars]
+        st = SimpleNamespace(rows=rows, me=next((r for r in rows if r["me"]), None))
+        self.spotter.track_len = self._length or 0
+        try:
+            self.spotter.update(f, st)
+        except Exception:  # noqa: BLE001
+            pass
+
     def snapshot(self, since: int = 0, parts: str = "all") -> dict:
         want = set(parts.split(",")) if parts != "all" else {"pedals", "flags", "cars", "delta", "tyres"}
         now = time.monotonic()
@@ -204,6 +231,10 @@ class OverlayHub:
                     last = self._samples[-1] if self._samples else None
                     out["me"] = {"spline": f.norm_pos, "id": f.player_id}
                     out["live"] = {"speed": round(f.speed), "brake": round(last[3], 3) if last else 0, "gas": round(last[2], 3) if last else 0}
+                if "radar" in want:
+                    sp = self.spotter
+                    out["radar"] = {"source": sp.source, "calibrated": sp.tf is not None or sp.source == "iracing",
+                                    "left": sp.left, "right": sp.right, "cars": list(sp.radar)}
                 if "cars" in want:
                     out["standings"] = self._standings(f)
                     out["me"] = {"spline": f.norm_pos, "x": f.x, "z": f.z, "id": f.player_id}

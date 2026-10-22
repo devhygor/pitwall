@@ -75,7 +75,7 @@ async function renderPlans() {
     const cur = myPlan.plan === pl.code;
     const LISTS = {
       free: ["Gravar, analisar e comparar voltas", "Replay e overlays básicos no jogo (mapa simples, pedais, delta, pneus e curva enxutos)", "Engenheiro de voz: avisos e perguntas básicas", "Compare com amigos em 1 equipe", "Vídeos das últimas 5 sessões"],
-      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box)", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Overlays completos: pedais com gráfico, delta com combustível, participantes com classes, pneus como no ACC, curva completa, mapa com asfalto", "Várias equipes", "Sem anúncios no site"],
+      pro: ["Tudo do plano Grátis, e mais:", "Engenheiro de voz completo (pneus, freios, rivais, clima, box)", "Voz online, mais natural", "Personalidade: humor, elogio e bronca", "Observador: carros ao lado, três de lado, livre", "Vídeos e setups sem limite", "Overlays completos: pedais com gráfico, delta com combustível, participantes com classes, pneus como no ACC, curva completa, mapa com asfalto, radar visto de cima e circular", "Várias equipes", "Sem anúncios no site"],
       team: ["Tudo do plano Pro, e mais:", "Pro incluído para até 10 pilotos da sua equipe", "Modelos de transmissão: torre de participantes, painel do piloto, delta em barra larga, pneus em faixa", "Painel do dono para gerenciar os pilotos", "Até 3 computadores por licença"],
     };
     const feats = (LISTS[pl.code] || (pl.features || []).map((f) => FEATURE_NAME[f] || f)).map((t, i) => `<li${i === 0 && /^Tudo do/.test(t) ? ' class="all"' : ""}>${esc(t)}</li>`).join("");
