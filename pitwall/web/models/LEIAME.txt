@@ -1,0 +1,9 @@
+pitwall_gt.glb — carro padrão do editor visual de setup.
+
+Origem: modelo GT gerado por IA (geometria sem textura nem logos), reduzido com tools/decimar_modelo.py
+(700 mil triângulos, ~17 MB). A pintura (livery Pitwall), os vidros, pneus e aros são aplicados por código.
+
+PENDENTE (dono do projeto): registrar aqui a ferramenta de IA que gerou o arquivo original, o plano usado e os termos de uso
+comercial (ex.: link/print dos termos na data da geração). Sem isso, não distribua o instalador publicamente.
+
+Modelos de terceiros com licença não comercial NÃO devem ficar nesta pasta nem no repositório.

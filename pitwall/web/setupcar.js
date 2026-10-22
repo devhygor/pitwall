@@ -280,7 +280,7 @@
     const paintTools = () => {
       const t = $q("#sc3dTools"); if (!stage) return;
       t.innerHTML = `${[["car", "Carro"], ["front", "Frente"], ["side", "Lateral"], ["rear", "Traseira"], ["top", "Topo"]].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}
-        <button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura Pitwall (verde neon e carbono) e ${stage.isModel ? "a pintura original do modelo (com os decalques dele)" : "a cor da marca"}">🎨 Pintura ${paintMode === "pitwall" ? "Pitwall" : stage.isModel ? "original" : "da marca"}</button>
+        <button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura Pitwall (verde neon e carbono) e ${stage.isModel && !stage.isRaw ? "a pintura original do modelo (com os decalques dele)" : "a cor da marca"}">🎨 Pintura ${paintMode === "pitwall" ? "Pitwall" : stage.isModel && !stage.isRaw ? "original" : "da marca"}</button>
         <button type="button" class="${stage.xray ? "on" : ""}" id="sc3dX" title="Mostra molas, amortecedores, braços e barras estabilizadoras (o carro fica transparente)">🔧 Suspensão</button>`;
       t.querySelectorAll("[data-v]").forEach((b) => b.onclick = () => stage.view(b.dataset.v));
       $q("#sc3dX").onclick = () => { stage.setXray(!stage.xray); paintTools(); };
@@ -290,16 +290,19 @@
       if (!window.WebGL2RenderingContext && !window.WebGLRenderingContext) throw new Error("sem WebGL");
       const mod = await import("/static/setupcar3d.js");
       const host = $q("#sc3dHost"); host.hidden = false; $q(".sc-svgwrap").classList.add("is3d");
-      let modelUrl = null;
+      // carro padrão do Pitwall (vem no app, vale para todos); um .glb do próprio usuário na pasta de dados ainda tem prioridade
+      let modelUrl = "/static/models/pitwall_gt.glb";
       try {
         const mi = await api(`/api/model3d/info?car=${encodeURIComponent(info.car)}&brand=${brandKey}`);
-        if (mi.found) { modelUrl = `/api/model3d/file?car=${encodeURIComponent(info.car)}&brand=${brandKey}`; host.insertAdjacentHTML("beforeend", `<div class="sc3d-load" id="sc3dLoad">Carregando o modelo 3D…</div>`); }
-      } catch (e) { /* sem modelo local */ }
+        if (mi.found) modelUrl = `/api/model3d/file?car=${encodeURIComponent(info.car)}&brand=${brandKey}`;
+      } catch (e) { /* usa o padrão */ }
+      host.insertAdjacentHTML("beforeend", `<div class="sc3d-load" id="sc3dLoad">Carregando o modelo 3D…</div>`);
       stage = await mod.createStage(host, {
         modelUrl, onProgress: (p) => { const l = $q("#sc3dLoad"); if (l) l.textContent = `Carregando o modelo 3D… ${Math.round(p * 100)}%`; },
         brand: brandKey, items, spots, extras: info.extras || {},
         onHover: (k, el) => (k ? showTip(k, el) : hideTip()), onSelect: (k) => select(k),
       });
+      window.__pwStage = stage;                       // (depuração e testes)
       const ld = $q("#sc3dLoad"); if (ld) ld.remove();
       $q("#scSvg").style.display = "none"; root.querySelectorAll(".sc-spot").forEach((e) => (e.style.display = "none"));
       $q("#sc3dTools").hidden = false; paintTools(); paintAll();

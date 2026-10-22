@@ -1,8 +1,8 @@
 """Reduz um modelo .glb de malha única (ex.: gerado por IA) para um tamanho leve, mantendo a forma.
 
-Uso:  .venv\\Scripts\\python.exe tools\\decimar_modelo.py entrada.glb saida.glb [triângulos alvo, padrão 200000]
+Uso:  .venv\\Scripts\\python.exe tools\\decimar_modelo.py entrada.glb saida.glb [triângulos alvo, padrão 700000]
 
-Precisa de:  pip install fast-simplification numpy scipy   (só para quem prepara o modelo; o app não depende disso).
+Precisa de:  pip install fast-simplification numpy   (só para quem prepara o modelo; o app não depende disso).
 A saída tem só posição, normais e índices (sem texturas): o editor de setup pinta o carro com a pintura Pitwall.
 """
 import json
@@ -87,11 +87,11 @@ def escrever_glb(caminho, pos, nor, idx):
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         sys.exit(__doc__)
-    alvo = int(sys.argv[3]) if len(sys.argv) > 3 else 200_000
+    alvo = int(sys.argv[3]) if len(sys.argv) > 3 else 700_000
     pos, idx, nor0 = ler_glb(sys.argv[1])
     print(f"entrada: {len(pos)} vértices, {len(idx)} triângulos")
     red = max(0.0, min(0.99, 1 - alvo / len(idx)))
     p2, f2 = fs.simplify(pos, idx, target_reduction=red)
     f2 = f2.reshape(-1, 3)
     print(f"saída:   {len(p2)} vértices, {len(f2)} triângulos")
-    escrever_glb(sys.argv[2], p2, normais_do_original(p2, pos, nor0) if nor0 is not None else normais(p2, f2), f2)
+    escrever_glb(sys.argv[2], p2, normais(p2, f2), f2)     # normais calculadas na malha nova (as herdadas do original deixam buracos pretos)

@@ -160,7 +160,7 @@ function makePitwallLivery(P, key, clean = false) {
   const base = g.createLinearGradient(0, V(0.5), 0, V(0)); base.addColorStop(0, "#2dff9c"); base.addColorStop(0.5, emerald); base.addColorStop(1, deep);
   g.fillStyle = base; g.fillRect(0, 0, W, H);
   const rr = (() => { let x = 7; return () => ((x = (x * 16807) % 2147483647) / 2147483647); })();
-  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${rr() > 0.5 ? "255,255,255" : "0,60,30"},${0.04 + rr() * 0.12})`; g.fillRect(rr() * W, rr() * H, 1 + rr() * 2.2, 1 + rr() * 2.2); }
+  for (let i = 0; i < (clean ? 0 : 9000); i++) { g.fillStyle = `rgba(${rr() > 0.5 ? "255,255,255" : "0,60,30"},${0.04 + rr() * 0.12})`; g.fillRect(rr() * W, rr() * H, 1 + rr() * 2.2, 1 + rr() * 2.2); }
   // saia, assoalho e traseira em carbono
   g.fillStyle = dark;
   const skirt = (vMid, sgn) => {
@@ -545,13 +545,12 @@ function adoptRaw(gltf, brand) {
   const halfW = [TW.front / 2, TW.front / 2, TW.rear / 2, TW.rear / 2];
   g.deleteAttribute("uv");
   // UV: projeta a pintura Pitwall (a mesma textura do carro por código) pelo lado, por cima e por trás
-  const UV = new Float32Array(n * 2);
+  const UV = new Float32Array(n * 2), YM = 0.58;
   for (let i = 0; i < n; i++) {
-    const x = PA[3 * i], y = PA[3 * i + 1], z = PA[3 * i + 2], ny = NA ? NA[3 * i + 1] : 0, nz = NA ? NA[3 * i + 2] : 0;
-    let v;
-    if (ny > 0.55) v = 0.25 - clamp(z, -0.75, 0.75) * 0.32;                       // por cima: centro em v=0,25
-    else { const t = clamp((y - 0.5) / 0.42 * 0.22, -0.2, 0.24); v = z >= 0 ? (t < 0 ? 1 + t : t) : 0.5 - t; }   // lados
-    UV[2 * i] = clamp((x + 2.32) / 4.64, 0, 1); UV[2 * i + 1] = v;
+    const x = PA[3 * i], y = PA[3 * i + 1], z = PA[3 * i + 2];
+    let a = Math.atan2(y - YM, z);                      // ângulo em volta do eixo do carro: lado direito 0, teto π/2, lado esquerdo π (igual à textura)
+    if (a < -Math.PI / 2) a += Math.PI * 2;               // a costura fica embaixo (invisível); a textura repete em v
+    UV[2 * i] = clamp((x + 2.32) / 4.64, 0, 1); UV[2 * i + 1] = a / (Math.PI * 2);
   }
   g.setAttribute("uv", new THREE.BufferAttribute(UV, 2));
   // classificação por triângulo
@@ -572,7 +571,7 @@ function adoptRaw(gltf, brand) {
   const mk = (cl, w) => { let m = 0; for (let t = 0; t < T; t++) if (cls[t] === cl && (w === undefined || wheelOf[t] === w)) m++; const out = new Uint32Array(m * 3); let p = 0; for (let t = 0; t < T; t++) if (cls[t] === cl && (w === undefined || wheelOf[t] === w)) { out[p++] = idx[3 * t]; out[p++] = idx[3 * t + 1]; out[p++] = idx[3 * t + 2]; } return out; };
   const geo = (arr) => { const gg = new THREE.BufferGeometry(); gg.setAttribute("position", g.attributes.position); if (NA) gg.setAttribute("normal", g.attributes.normal); gg.setAttribute("uv", g.attributes.uv); gg.setIndex(new THREE.BufferAttribute(arr, 1)); return gg; };
   const P = PROFILES[brand] || PROFILES.generic;
-  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: makePitwallLivery(P, brand, true), metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.03 });
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: (() => { const t = makePitwallLivery(P, brand, true); t.wrapT = THREE.RepeatWrapping; return t; })(), metalness: 0.45, roughness: 0.24, clearcoat: 1, clearcoatRoughness: 0.03 });
   const carbon = new THREE.MeshStandardMaterial({ color: "#0b0e12", metalness: 0.4, roughness: 0.45 });
   const glass = new THREE.MeshPhysicalMaterial({ color: "#0c1520", metalness: 0.6, roughness: 0.06, clearcoat: 1, opacity: 0.88, transparent: true });
   const rubber = new THREE.MeshStandardMaterial({ color: "#121316", roughness: 0.92 });
@@ -803,7 +802,7 @@ export async function createStage(host, opts) {
   }
   apply(); frame();
   return {
-    isModel: !!car.isModel, setPaint(mode) { if (car.isModel) car.restyle(mode); else car.setScheme(mode === "pitwall" ? "pitwall" : "brand"); },
+    isModel: !!car.isModel, isRaw: !!car.isRaw, setPaint(mode) { if (car.isModel) car.restyle(mode); else car.setScheme(mode === "pitwall" ? "pitwall" : "brand"); },
     setEdits(e) { for (const k of Object.keys(edits)) delete edits[k]; Object.assign(edits, e); apply(); },
     setXray, view, els, destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); renderer.dispose(); host.innerHTML = ""; },
     get xray() { return xray; }, renderer, scene, camera, car, sus,
