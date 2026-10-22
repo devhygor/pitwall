@@ -42,8 +42,9 @@ async function renderVoiceEngineer() {
         <div id="eOfflineBox">
         ${setRow("Voz offline", "Piper é uma voz neural em português, baixada uma vez (cerca de 60 MB). “Ouvir amostra”: antes de baixar toca uma frase de demonstração do projeto Piper; depois de baixada, fala frases de corrida com a voz. A voz do Windows (Maria) já vem instalada, mas soa mais robótica.",
           sel("eOff", [["piper", "Piper (neural, recomendada)"], ["windows", "Windows (Maria)"]], S.eng_offline_engine))}
-        <div id="ePiperRow">${setRow("Voz do Piper", "<span id='ePiperMsg'></span>",
-          `<div class="eng-inline">${sel("ePiper", dev.piper_voices.map((v) => [v.id, v.name + (v.installed ? " ✓" : " (baixar)")]), S.eng_piper_voice)}<button class="btn sm" id="ePiperStop">Parar</button><button class="btn sm" id="ePiperPlay" title="Toca uma amostra da voz, sem precisar baixar">Ouvir amostra</button><button class="btn sm" id="ePiperDl">Baixar</button></div>`)}</div>
+        <div id="ePiperRow">${setRow("Voz do Piper", "Baixada uma vez; depois funciona sem internet. O estado do download aparece abaixo.",
+          `<div class="eng-inline">${sel("ePiper", dev.piper_voices.map((v) => [v.id, v.name + (v.installed ? " ✓" : " (baixar)")]), S.eng_piper_voice)}<button class="btn sm" id="ePiperStop">Parar</button><button class="btn sm" id="ePiperPlay" title="Toca uma amostra da voz, sem precisar baixar">Ouvir amostra</button><button class="btn sm primary" id="ePiperDl">Baixar</button><button class="btn sm quiet" id="ePiperRm" style="display:none">Remover</button></div>`)}
+          <div class="dl" id="ePiperBox"></div></div>
         <div id="eWinRow">${setRow("Voz do Windows", winAll.length ? "" : "Nenhuma voz encontrada.",
           sel("eWin", [["", "Automática (português do Brasil)"], ...winAll.map((v) => [v.name, `${v.name} (${v.culture})`])], S.eng_win_voice))}</div>
         </div>
@@ -72,8 +73,8 @@ async function renderVoiceEngineer() {
         <div id="eWakeRow">${setRow("Palavra de ativação", "No microfone aberto, ele só responde se você chamar por esse nome antes (ex.: “Engenheiro, quem está atrás?”).",
           `<div class="eng-inline">${tgl("eWake", S.eng_wake)}<input id="eWakeWord" type="text" value="${esc(S.eng_wake_word)}" style="min-width:110px"></div>`)}</div>
         ${setRow("Reconhecimento de voz", "Roda no seu computador (Whisper), sem internet depois de baixado. Maior = entende melhor e é mais lento.",
-          `<div class="eng-inline">${sel("eStt", dev.stt_models.map((m) => [m.id, m.name + (m.installed ? " ✓" : "")]), S.eng_stt_model)}<button class="btn sm" id="eSttDl">Baixar</button></div>`)}
-        <div class="sub" id="eSttMsg"></div>
+          `<div class="eng-inline">${sel("eStt", dev.stt_models.map((m) => [m.id, m.name + (m.installed ? " ✓" : "")]), S.eng_stt_model)}<button class="btn sm primary" id="eSttDl">Baixar</button><button class="btn sm quiet" id="eSttRm" style="display:none">Remover</button></div>`)}
+        <div class="dl" id="eSttBox"></div>
       </div>
 
       <div class="set-card"><h2>Personalidade</h2>
@@ -145,6 +146,10 @@ async function renderVoiceEngineer() {
   };
   $("#ePiperDl").onclick = async () => { await post("/api/engineer/piper/download", { name: $("#ePiper").value }); pollNow(); };
   $("#eSttDl").onclick = async () => { await post("/api/engineer/stt/download", { name: $("#eStt").value }); pollNow(); };
+  $("#ePiperRm").onclick = async () => { if (confirm("Remover esta voz do computador? Você pode baixar de novo quando quiser.")) { await post("/api/engineer/piper/remove", { name: $("#ePiper").value }); pollNow(); } };
+  $("#eSttRm").onclick = async () => { if (confirm("Remover este modelo de reconhecimento do computador? O engenheiro para de te ouvir até baixar de novo.")) { await post("/api/engineer/stt/remove", { name: $("#eStt").value }); pollNow(); } };
+  $("#ePiper").addEventListener("change", () => setTimeout(pollNow, 80));
+  $("#eStt").addEventListener("change", () => setTimeout(pollNow, 80));
   $("#ePttClr").onclick = async () => { await put({ eng_ptt: "" }); sync(); poll(); };
   $("#ePttSet").onclick = async () => {
     await post("/api/engineer/bind/start");
@@ -195,6 +200,42 @@ async function renderVoiceEngineer() {
   const chip = (txt, cls) => `<span class="eng-chip ${cls || ""}">${esc(txt)}</span>`;
   let lastLog = "";
   let wasDl = false;
+  const prevDl = {}, flashDl = {};
+  const NOMINAL = { tiny: 75, base: 145, small: 484 };
+  // estado claro de cada download: baixado (com tamanho), não baixado, baixando (barra) ou erro; rótulos do botão acompanham
+  function paintDl(c) {
+    const box = $(c.box), dl = $(c.dl), rm = $(c.rm), selEl = $(c.sel);
+    if (!box || !dl || !rm || !selEl) return;
+    const id = selEl.value, it = (c.items || []).find((x) => x.id === id) || {};
+    const base = (c.baseNames || []).find((x) => x.id === id);
+    const nameOf = (x) => ((c.baseNames || []).find((b) => b.id === x) || {}).name || x;
+    // marca ✓ nas listas sem redesenhar a tela
+    (c.items || []).forEach((x) => { const o = selEl.querySelector(`option[value="${x.id}"]`); if (o) o.textContent = nameOf(x.id).replace(/ ✓| \(baixar\)/g, "") + (x.installed ? " ✓ baixada" : ""); });
+    const busy = c.prog.state === "baixando";
+    if (prevDl[c.kind] === "baixando" && c.prog.state === "pronto") flashDl[c.kind] = { until: Date.now() + 8000, name: nameOf(c.prog.name) };
+    prevDl[c.kind] = c.prog.state;
+    const fl = flashDl[c.kind] && flashDl[c.kind].until > Date.now() ? flashDl[c.kind] : null;
+    const size = it.size_mb ? ` (${it.size_mb} MB)` : "";
+    let html = "";
+    if (busy) {
+      const pct = Math.max(2, c.prog.pct || 0);
+      html = `<div class="dl-txt">⬇ Baixando ${esc(nameOf(c.prog.name))}… <b>${c.prog.pct || 0}%</b></div><div class="dl-bar"><i style="width:${pct}%"></i></div>`;
+    } else if (c.prog.state === "erro") {
+      html = `<div class="dl-txt bad">✕ Não deu para baixar: ${esc(c.prog.error)}</div>`;
+    } else if (fl) {
+      html = `<div class="dl-txt ok">✓ Download concluído! ${esc(fl.name)} já pode ser usada.</div>`;
+    } else if (it.installed) {
+      html = `<div class="dl-txt ok">✓ ${esc(nameOf(id).replace(/ ✓.*| \(baixar\)/g, ""))} já está baixada${size} e pronta para usar.</div>`;
+    } else {
+      html = `<div class="dl-txt">Ainda não baixada · cerca de ${c.nominal || NOMINAL[id] || "?"} MB</div>`;
+    }
+    if (box.dataset.h !== html) { box.innerHTML = html; box.dataset.h = html; }
+    dl.disabled = busy; rm.disabled = busy;
+    dl.textContent = busy ? "Baixando…" : it.installed ? "Baixar de novo" : "Baixar";
+    dl.classList.toggle("primary", !it.installed && !busy);
+    dl.classList.toggle("quiet", !!it.installed);
+    rm.style.display = it.installed ? "" : "none";
+  }
   let lastTest = (await api("/api/engineer/status")).test.id;
   async function poll() {
     if (current.name !== "engineer") return;
@@ -244,13 +285,9 @@ async function renderVoiceEngineer() {
     $("#eLvl").style.width = Math.round(st.listener.level * 100) + "%";
     // downloads
     const pp = st.tts.piper.progress;
-    const nowDl = pp.state === "baixando" || st.stt.progress.state === "baixando";
-    if (wasDl && !nowDl) { clearInterval(lfmTimer); renderVoiceEngineer(); return; }   // terminou de baixar: redesenha as listas
-    wasDl = nowDl;
-    $("#ePiperMsg").textContent = pp.state === "baixando" ? `Baixando ${pp.name}… ${pp.pct}%` : pp.state === "erro" ? "Erro: " + pp.error : "";
     const sp = st.stt.progress;
-    const sm = st.stt.models.find((m) => m.id === S.eng_stt_model);
-    $("#eSttMsg").textContent = sp.state === "baixando" ? `Baixando modelo ${sp.name}… ${sp.pct}%` : sp.state === "erro" ? "Erro: " + sp.error : sm && sm.installed ? "Modelo instalado." : "Modelo ainda não baixado.";
+    paintDl({ box: "#ePiperBox", dl: "#ePiperDl", rm: "#ePiperRm", sel: "#ePiper", kind: "piper", items: st.tts.piper.voices, prog: pp, nominal: 63, what: "voz", baseNames: dev.piper_voices });
+    paintDl({ box: "#eSttBox", dl: "#eSttDl", rm: "#eSttRm", sel: "#eStt", kind: "stt", items: st.stt.models, prog: sp, nominal: 0, what: "modelo", baseNames: dev.stt_models });
     const sps = st.spotter;
     $("#eSpot").textContent = !sps.source ? "sem dados (precisa estar na pista com outros carros)" : `${sps.source === "iracing" ? "iRacing" : "ACC"} · esquerda: ${sps.left} · direita: ${sps.right}${sps.source === "acc" && !sps.calibrated ? " · calibrando…" : ""}`;
     const log = st.log.slice().reverse().map((l) => {

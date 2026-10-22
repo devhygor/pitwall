@@ -1067,3 +1067,10 @@ input.tgl:checked { background: linear-gradient(120deg, #2ee59d, #3b9cff); }
 .plan-row.on { color: var(--text); }
 .plan-row i { width: 22px; text-align: center; font-style: normal; color: var(--accent); }
 .plan-row em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 2px 8px; border-radius: 99px; background: rgba(185,140,255,.15); color: var(--accent-3); }
+
+/* ---- estado de downloads (voz e reconhecimento) ---- */
+.dl { margin: -6px 0 6px; padding: 0 0 8px; min-height: 22px; font-size: 13px; }
+.dl-txt { color: var(--muted); } .dl-txt.ok { color: var(--accent); } .dl-txt.bad { color: var(--bad); }
+.dl-bar { height: 8px; margin-top: 6px; border-radius: 99px; background: #19212e; overflow: hidden; }
+.dl-bar i { display: block; height: 100%; background: var(--grad); border-radius: 99px; transition: width .4s ease; }
+.btn:disabled { opacity: .55; cursor: default; }

@@ -198,6 +198,22 @@ class PiperTTS:
     def model_path(self, name: str) -> Path:
         return self.dir / f"{name}.onnx"
 
+    def size_mb(self, name: str) -> int:
+        try:
+            return int(sum(p.stat().st_size for p in self.dir.glob(f"{name}.*") if p.is_file()) / 1e6)
+        except OSError:
+            return 0
+
+    def remove(self, name: str):
+        for p in self.dir.glob(f"{name}.*"):
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        self._voices.pop(name, None)
+        if self.progress.get("name") == name:
+            self.progress = {"name": "", "pct": 0, "state": "idle", "error": ""}
+
     def installed(self, name: str) -> bool:
         return self.model_path(name).exists() and self.model_path(name).with_suffix(".onnx.json").exists()
 
@@ -403,7 +419,7 @@ class TTS:
             "order": self.order(), "last_engine": self.last_engine, "last_error": self.last_error,
             "edge": {"lib": self.edge.lib_ok(), "voices": [{"id": i, "name": n} for i, n in EDGE_VOICES]},
             "piper": {"lib": self.piper.lib_ok(), "progress": self.piper.progress,
-                      "voices": [{"id": i, "name": n, "installed": self.piper.installed(i)} for i, n, _ in PIPER_VOICES]},
+                      "voices": [{"id": i, "name": n, "installed": self.piper.installed(i), "size_mb": self.piper.size_mb(i)} for i, n, _ in PIPER_VOICES]},
             "windows": {"available": self.win.available(), "voices": self.win._voices if self.win._voices is not None else None},
         }
 

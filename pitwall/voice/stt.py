@@ -60,6 +60,16 @@ class WhisperSTT:
         except OSError:
             return 0
 
+    def remove(self, name: str | None = None):
+        import shutil
+        name = name or self.name()
+        with self._lock:
+            if self._model_name == name:
+                self._model, self._model_name = None, ""
+        shutil.rmtree(self._folder(name), ignore_errors=True)
+        if self.progress.get("name") == name:
+            self.progress = {"state": "idle", "name": "", "error": "", "pct": 0}
+
     def download(self, name: str | None = None):
         """Baixa o modelo (bloqueante)."""
         name = name or self.name()
@@ -121,4 +131,4 @@ class WhisperSTT:
     def status(self) -> dict:
         return {"lib": self.lib_ok(), "model": self.name(), "installed": self.installed(), "progress": self.progress,
                 "loaded": self._model is not None,
-                "models": [{"id": i, "name": n, "installed": self.installed(i)} for i, n in MODELS]}
+                "models": [{"id": i, "name": n, "installed": self.installed(i), "size_mb": self.size_mb(i)} for i, n in MODELS]}

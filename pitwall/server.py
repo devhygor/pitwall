@@ -886,6 +886,19 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
             raise HTTPException(400, err)
         return {"ok": True}
 
+    @app.post("/api/engineer/piper/remove")
+    def eng_piper_remove(name: str = Body(..., embed=True)):
+        e = _eng()
+        e.tts.piper.remove(name)
+        return {"ok": True}
+
+    @app.post("/api/engineer/stt/remove")
+    def eng_stt_remove(name: str = Body("", embed=True)):
+        e = _eng()
+        e.stt.remove(name or None)
+        e.apply()
+        return {"ok": True}
+
     @app.post("/api/engineer/stt/download")
     def eng_stt_download(name: str = Body("", embed=True)):
         import threading
