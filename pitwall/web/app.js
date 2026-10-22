@@ -1481,6 +1481,7 @@ async function renderSetups() {
   const lib = await api("/api/setups");
   const all = lib.cars.flatMap((c) => c.tracks.flatMap((t) => t.files));
   const st = setupsState;
+  st.all = all;
   const cars = lib.cars.map((c) => c.car);
   if (st.car && !cars.includes(st.car)) st.car = "";
   const tracks = [...new Set(all.filter((f) => !st.car || f.car === st.car).map((f) => f.track))].sort();
@@ -1657,34 +1658,54 @@ async function shareBox(setupId) {                       // botão "Compartilhar
   };
 }
 
+const dMs = (ms, plus = true) => (ms == null ? "—" : (ms > 0 && plus ? "+" : ms < 0 ? "−" : "") + (Math.abs(ms) / 1000).toFixed(3).replace(".", ",") + " s");
+
 async function showSetup(id) {
   view.querySelectorAll(".srow").forEach((tr) => tr.classList.toggle("sel", +tr.dataset.id === id));
   const s = await api(`/api/setups/${id}`);
   try { const l = await api("/api/license"); OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); } catch (e) { /* sem licença: tratado como grátis */ }
   const genLock = !OV_FEATS.has("setup_gen");
   const groups = [...new Set(s.rows.map((r) => r.group))];
+  const st = s.stats;
+  const others = (setupsState.all || []).filter((x) => x.id !== id && x.car === s.car && x.track === s.track);
+  const kindTxt = s.kind === "Q" ? "Classificação" : s.kind === "R" ? "Corrida" : "";
   $("#sDetail").innerHTML = `
-    <h2 style="margin-bottom:2px">${esc(s.name)}</h2>
-    <div class="sub" style="margin-bottom:10px">${esc(pretty(s.car))} · ${esc(pretty(s.track))} · ${esc(srcLabel(s.source))}${s.version ? " " + esc(s.version) : ""}</div>
-    ${s.stats ? `<div class="note okk" style="margin-bottom:10px">Seu melhor tempo com este setup: <b>${fmtLap(s.stats.best_ms)}</b> · ${s.stats.laps} volta${s.stats.laps === 1 ? "" : "s"} em ${s.stats.sessions} sess${s.stats.sessions === 1 ? "ão" : "ões"}${s.stats.estimated ? " (estimado: você não marcou o setup nas sessões)" : ""}.</div>`
-      : `<div class="note" style="margin-bottom:10px">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para o Pitwall juntar seus tempos aqui.</div>`}
-    <div class="gen-box" id="sGen"><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup: ver recomendações<em class="tier">Pro</em></button>
-      <label class="sub" style="display:flex;align-items:center;gap:6px">Pressão alvo (psi) <input id="eTarget" type="number" step="0.1" value="26.5" style="width:70px"></label></div>
-      <div class="sub" style="margin-top:6px">O Pitwall analisa as suas últimas voltas com este setup (equilíbrio, travadas, pressões e freios) e sugere ajustes. Depois você cria uma <b>versão nova</b> ou <b>atualiza este setup</b>.</div>
-      <div id="eOut"></div></div>
-    ${groups.map((g) => `<h3>${esc(g)}</h3><table class="stab"><tbody>
-      ${s.rows.filter((r) => r.group === g).map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${
-        r.values.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ")}${r.unit ? " " + r.unit : ""}</td></tr>`).join("")}
-    </tbody></table>`).join("")}
+    <div class="sd-head"><h2>${esc(s.name)}</h2><div class="sd-sub">${esc(pretty(s.car))} · ${esc(pretty(s.track))}</div></div>
+    <div class="sd-tags"><span class="tag ${s.source === "GO Setups" ? "go" : s.source === "Pitwall" ? "pw" : ""}">${esc(srcLabel(s.source))}${s.version ? " " + esc(s.version) : ""}</span>
+      ${kindTxt ? `<span class="tag2">${kindTxt}</span>` : ""}${s.variant ? `<span class="tag2">${esc(s.variant)}</span>` : ""}${s.temp_c != null ? `<span class="tag2">${s.temp_c}°C</span>` : ""}</div>
+    <div class="sd-kpis">
+      <div><small>Meu melhor</small><b>${st ? fmtLap(st.best_ms) : "—"}</b></div>
+      <div><small>Voltas</small><b>${st ? st.laps : 0}</b></div>
+      <div><small>Sessões</small><b>${st ? st.sessions : 0}</b></div>
+      <div><small>Último uso</small><b>${st && st.last_used ? fmtDate(st.last_used) : "—"}</b></div>
+    </div>
+    ${st ? (st.estimated ? `<div class="sd-note">Tempos estimados: você não marcou este setup nas sessões, então usei o que o Pitwall detectou.</div>` : "")
+      : `<div class="sd-note">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para juntar seus tempos aqui.</div>`}
+    <div class="sd-actions">
+      <button class="btn primary ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup<em class="tier">Pro</em></button>
+      ${s.parent_id ? `<button class="btn" id="sVsParent" title="Ver se os ajustes funcionaram">Comparar com o original</button>` : ""}
+      ${others.length ? `<select id="sCmpWith" title="Compara o que você andou com cada setup"><option value="">Comparar com…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}${o.best_ms ? " · " + fmtLap(o.best_ms) : ""}</option>`).join("")}</select>` : ""}
+    </div>
+    <details class="sd-more"><summary>Opções do gerador</summary>
+      <label class="sub" style="display:flex;align-items:center;gap:6px;margin-top:6px">Pressão alvo (psi) <input id="eTarget" type="number" step="0.1" value="26.5" style="width:70px"></label>
+      <div class="sub" style="margin-top:6px">O Pitwall analisa as suas últimas voltas com este setup (equilíbrio, travadas, pressões e freios) e sugere ajustes. Depois você cria uma <b>versão nova</b> ou <b>atualiza este setup</b> (com backup).</div></details>
+    <div id="eOut"></div>
+    <details class="sd-det" open><summary>Ajustes do setup</summary>
+      ${groups.map((g) => `<h3>${esc(g)}</h3><table class="stab"><tbody>
+        ${s.rows.filter((r) => r.group === g).map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${
+          r.values.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ")}${r.unit ? " " + r.unit : ""}</td></tr>`).join("")}
+      </tbody></table>`).join("")}</details>
     <div id="sShare" style="margin-top:14px"></div>
     <div id="sDel" style="margin-top:14px"><button class="btn sm quiet danger" id="sDelBtn">Apagar este setup</button></div>`;
   shareBox(id);
+  const vp = $("#sVsParent"); if (vp) vp.onclick = () => showDiff(s.parent_id, id);
+  const cw = $("#sCmpWith"); if (cw) cw.onchange = (e) => { if (e.target.value) showDiff(id, +e.target.value); };
   $("#sDelBtn").onclick = () => {
     $("#sDel").innerHTML = `<div class="note warn"><b>Apagar “${esc(s.name)}”?</b>
       <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="sDelFile" checked> Apagar também o arquivo da pasta do ACC (guardo uma cópia de segurança em <code>setups_apagados</code>)</label>
-      ${s.stats ? `<div class="sub">As ${s.stats.laps} volta(s) com ele continuam; só deixam de apontar para este setup.</div>` : ""}
+      ${st ? `<div class="sub">As ${st.laps} volta(s) com ele continuam; só deixam de apontar para este setup.</div>` : ""}
       <div class="row" style="gap:8px;margin-top:8px"><button class="btn sm danger" id="sDelYes">Apagar</button><button class="btn sm quiet" id="sDelNo">Cancelar</button></div></div>`;
-    $("#sDelNo").onclick = () => { $("#sDel").innerHTML = `<button class="btn sm quiet danger" id="sDelBtn2">Apagar este setup</button>`; $("#sDelBtn2").onclick = () => showSetup(id); };
+    $("#sDelNo").onclick = () => showSetup(id);
     $("#sDelYes").onclick = async () => {
       $("#sDelYes").disabled = true;
       try {
@@ -1701,7 +1722,6 @@ async function showSetup(id) {
     try {
       const r = await api(`/api/setups/${id}/advice?target=${parseFloat($("#eTarget").value) || 26.5}`);
       const m = r.meta || {};
-      $("#eOut").insertAdjacentHTML("beforebegin", "");
       renderEngineer(r, id, s.name, { nextName: m.next_name, update: true });
       $("#eOut").insertAdjacentHTML("afterbegin", `<div class="note" style="margin-top:8px">${m.sessions && m.sessions.length ? (m.assumed
         ? `Você ainda não usou este setup: a análise é das suas últimas sessões com este carro e pista (${m.sessions.length}). Confira se faz sentido.`
@@ -1711,19 +1731,54 @@ async function showSetup(id) {
 }
 
 async function showDiff(a, b) {
-  const d = await api(`/api/setups/diff?a=${a}&b=${b}`);
+  $("#sDetail").innerHTML = `<div class="sub">Comparando…</div>`;
+  const [d, p] = await Promise.all([api(`/api/setups/diff?a=${a}&b=${b}`), api(`/api/setups/performance?a=${a}&b=${b}`)]);
   const st = setupsState;
+  const changed = d.rows.filter((r) => !r.same);
+  const fmt = (vals, r) => vals == null ? "—" : vals.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ") + (r.unit ? " " + r.unit : "");
+  const V = p.verdict || {}, A = p.a, B = p.b, has = V.kind !== "sem_dados";
+  const good = (x) => (x == null || x === 0 ? "" : x < 0 ? "gd" : "bd");                    // tempo menor no B = bom
+  const row = (label, va, vb, delta) => `<tr><td>${label}</td><td class="num">${va}</td><td class="num">${vb}</td><td class="num ${delta != null ? good(delta) : ""}">${delta != null ? dMs(delta) : ""}</td></tr>`;
+  const sec = (i) => (A.sectors[i] != null && B.sectors[i] != null ? row(`Melhor S${i + 1}`, fmtSec(A.sectors[i]), fmtSec(B.sectors[i]), B.sectors[i] - A.sectors[i]) : "");
   const draw = () => {
     const rows = d.rows.filter((r) => !st.diffOnly || !r.same);
-    const fmt = (vals, r) => vals == null ? "—" : vals.map((v, i) => `${r.names[i] ? `<span class="sub">${r.names[i]}</span> ` : ""}${v}`).join(" · ") + (r.unit ? " " + r.unit : "");
     $("#sDetail").innerHTML = `
-      <div class="row"><h2 style="margin:0">Comparação</h2><span class="spacer"></span>
+      <div class="sd-head"><h2>Comparação</h2><div class="sd-sub">Os ajustes fizeram diferença?</div></div>
+      <div class="cmp-names"><div><b class="va">A</b> ${esc(d.a)}</div><div><b class="vb">B</b> ${esc(d.b)}</div></div>
+      ${has ? `<div class="verdict v-${V.kind}"><b>${esc(V.text)}</b>
+          <div class="conf">Confiança: <b>${esc(p.confidence)}</b> · ${A.pace_laps} voltas de ritmo (A) x ${B.pace_laps} (B)</div>
+          ${(p.notes || []).map((n) => `<div class="vnote">• ${esc(n)}</div>`).join("")}</div>
+        <table class="stab cmp-tab"><thead><tr><th></th><th><b class="va">A</b></th><th><b class="vb">B</b></th><th>B − A</th></tr></thead><tbody>
+          ${row("Melhor volta", fmtLap(A.best_ms), fmtLap(B.best_ms), B.best_ms - A.best_ms)}
+          ${row("Ritmo (mediana)", fmtLap(A.pace_ms), fmtLap(B.pace_ms), B.pace_ms - A.pace_ms)}
+          ${row("Média das voltas de ritmo", fmtLap(A.avg_ms), fmtLap(B.avg_ms), B.avg_ms - A.avg_ms)}
+          ${row("Oscilação entre voltas (±)", A.std_ms != null ? "±" + (A.std_ms / 1000).toFixed(2).replace(".", ",") + " s" : "—", B.std_ms != null ? "±" + (B.std_ms / 1000).toFixed(2).replace(".", ",") + " s" : "—", A.std_ms != null && B.std_ms != null ? B.std_ms - A.std_ms : null)}
+          ${sec(0)}${sec(1)}${sec(2)}
+          ${row("Voltas · sessões", `${A.laps} · ${A.sessions}`, `${B.laps} · ${B.sessions}`, null)}
+          ${row("Pista / ar", A.road_temp != null ? `${A.road_temp}° / ${A.air_temp ?? "—"}°` : "—", B.road_temp != null ? `${B.road_temp}° / ${B.air_temp ?? "—"}°` : "—", null)}
+        </tbody></table>
+        <h3>Tempo de cada volta</h3><div id="cmpChart" class="cmp-chart"></div>
+        <div class="note" style="margin-top:6px">Só voltas limpas. “Ritmo” ignora voltas mais de 4% lentas que a melhor (erros e trânsito).</div>`
+        : `<div class="verdict v-sem_dados"><b>${esc(V.text)}</b></div>`}
+      <div class="row" style="margin-top:16px"><h3 style="margin:0">O que mudou no setup <span class="sub">(${changed.length} ajuste${changed.length === 1 ? "" : "s"})</span></h3><span class="spacer"></span>
         <label class="sub"><input type="checkbox" id="dOnly" ${st.diffOnly ? "checked" : ""}> só diferenças</label></div>
-      <div class="sub" style="margin:4px 0 10px"><b class="va">A</b> ${esc(d.a)}<br><b class="vb">B</b> ${esc(d.b)}</div>
       ${rows.length ? `<table class="stab diff"><thead><tr><th></th><th>A</th><th>B</th></tr></thead><tbody>
         ${rows.map((r) => `<tr class="${r.same ? "" : "chg"}"><td>${esc(r.label)}</td><td class="num">${fmt(r.a, r)}</td><td class="num">${fmt(r.b, r)}</td></tr>`).join("")}
-      </tbody></table>` : `<div class="sub">Os dois setups são iguais.</div>`}`;
+      </tbody></table>` : `<div class="sub">Os dois setups têm os mesmos ajustes.</div>`}`;
     $("#dOnly").onchange = (e) => { st.diffOnly = e.target.checked; draw(); };
+    const box = $("#cmpChart");
+    if (box && has) {
+      const n = Math.max(A.series.length, B.series.length), idx = Array.from({ length: n }, (_, i) => i + 1);
+      const pad = (ser) => idx.map((_, i) => (ser[i] ? ser[i].t / 1000 : null));
+      const yv = [...A.series, ...B.series].map((x) => x.t / 1000), lo = Math.min(...yv), cap = lo * 1.08;
+      plots.push(new uPlot({
+        width: box.clientWidth || 380, height: 200, legend: { show: false }, scales: { x: { time: false }, y: { range: (u, mn, mx) => [mn * 0.998, Math.min(mx, cap) * 1.002] } },
+        axes: [axis({ values: (u, v) => v.map((x) => (Number.isInteger(x) ? x : "")) }), axis({ values: (u, v) => v.map((x) => fmtLap(x * 1000).slice(0, -2)), size: 64 })],
+        series: [{ label: "Volta" }, { label: "A", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: css("--accent"), width: 1.5, points: { size: 5, fill: css("--accent") }, spanGaps: false },
+          { label: "B", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: "#b98cff", width: 1.5, points: { size: 5, fill: "#b98cff" }, spanGaps: false }],
+        cursor: { drag: { x: false, y: false } },
+      }, [idx, pad(A.series), pad(B.series)], box));
+    }
   };
   draw();
 }

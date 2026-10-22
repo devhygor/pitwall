@@ -232,6 +232,13 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def setup_import():
         return setups.import_folder(db)
 
+    @app.get("/api/setups/performance")
+    def setup_performance(a: int, b: int):
+        try:
+            return setups.compare_performance(db, a, b)
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e))
+
     @app.get("/api/setups/diff")
     def setup_diff(a: int, b: int):
         try:

@@ -379,6 +379,17 @@ class DB:
         return {r["sid"]: {"best_ms": r["best_ms"], "laps": r["laps"], "sessions": r["sessions"], "last_used": r["last_used"],
                            "estimated": not r["explicit_laps"]} for r in rows}
 
+    def setup_laps(self, setup_id: int) -> list[dict]:
+        """Suas voltas limpas feitas com o setup (o escolhido na sessão; sem escolha, o sugerido), em ordem de tempo."""
+        with self.connect() as c:
+            return [dict(r) for r in c.execute("""
+                SELECT l.id, l.session_id, l.lap_number, l.lap_time_ms, l.s1_ms, l.s2_ms, l.s3_ms, l.air_temp, l.road_temp,
+                       s.started_at, s.session_type
+                FROM laps l JOIN sessions s ON s.id = l.session_id
+                WHERE COALESCE(s.setup_id, s.suggested_setup_id) = ? AND COALESCE(s.kind, 'own') = 'own'
+                  AND l.valid = 1 AND l.out_lap = 0 AND l.in_lap = 0
+                ORDER BY s.started_at, l.lap_number""", (setup_id,))]
+
     def sessions_using_setup(self, setup_id: int, car: str, track: str, limit: int = 3) -> tuple[list[int], bool]:
         """Últimas sessões em que este setup foi usado; sem nenhuma, as últimas do mesmo carro e pista (assumido=True)."""
         with self.connect() as c:

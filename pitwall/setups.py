@@ -201,7 +201,11 @@ def load(db, setup_id: int) -> dict:
 def info(db, setup_id: int) -> dict:
     s = load(db, setup_id)
     content = s.pop("content")
-    return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s)}
+    parent = None
+    m = re.match(r"^Gerado a partir de '(.+)'$", s.get("notes") or "")
+    if m:
+        parent = next((x["id"] for x in db.setups_list() if x["car"] == s["car"] and x["track"] == s["track"] and x["name"] == m.group(1) and x["id"] != s["id"]), None)
+    return {**s, "rows": describe(content), "stats": db.setup_stats().get(int(setup_id)), "next_name": next_version_name(db, s), "parent_id": parent}
 
 
 TRACK_ABBR = {
@@ -343,6 +347,71 @@ def diff(db, id_a: int, id_b: int) -> dict:
                      "a": x["values"] if x else None, "b": y["values"] if y else None,
                      "same": bool(x and y and x["raw"] == y["raw"])})
     return {"a": sa["name"], "b": sb["name"], "rows": rows}
+
+
+def _perf(db, setup_id: int) -> dict:
+    """Desempenho real com um setup: melhor volta, ritmo (mediana das voltas de ritmo), consistência, setores e condições."""
+    from statistics import mean, median, pstdev
+    laps = db.setup_laps(int(setup_id))
+    times = [l["lap_time_ms"] for l in laps]
+    out = {"setup_id": int(setup_id), "laps": len(laps), "sessions": len({l["session_id"] for l in laps}), "best_ms": min(times) if times else None,
+           "pace_ms": None, "avg_ms": None, "std_ms": None, "pace_laps": 0, "road_temp": None, "air_temp": None,
+           "sectors": [None, None, None], "series": [], "last_used": laps[-1]["started_at"] if laps else None}
+    if not laps:
+        return out
+    best = min(times)
+    pace = [t for t in times if t <= best * 1.04]            # só voltas de ritmo: voltas lentas (erro, trânsito) não entram na média
+    out["pace_laps"] = len(pace)
+    out["pace_ms"] = round(median(pace))
+    out["avg_ms"] = round(mean(pace))
+    out["std_ms"] = round(pstdev(pace)) if len(pace) > 1 else None
+    rt = [l["road_temp"] for l in laps if l.get("road_temp") is not None]
+    at = [l["air_temp"] for l in laps if l.get("air_temp") is not None]
+    out["road_temp"] = round(mean(rt), 1) if rt else None
+    out["air_temp"] = round(mean(at), 1) if at else None
+    out["sectors"] = [min((l[k] for l in laps if l.get(k)), default=None) for k in ("s1_ms", "s2_ms", "s3_ms")]
+    out["series"] = [{"t": l["lap_time_ms"], "s": l["started_at"]} for l in laps][-80:]
+    return out
+
+
+def compare_performance(db, id_a: int, id_b: int) -> dict:
+    """Os ajustes funcionaram? Compara o que você realmente andou com cada setup e dá um veredito com o grau de confiança."""
+    a, b = _perf(db, id_a), _perf(db, id_b)
+    n = min(a["pace_laps"], b["pace_laps"])
+    res = {"a": a, "b": b, "verdict": None, "confidence": "nenhuma", "notes": []}
+    if not a["laps"] or not b["laps"]:
+        who = "A" if not a["laps"] else "B"
+        res["verdict"] = {"kind": "sem_dados", "text": f"Ainda não há voltas suas com o setup {who}. Marque-o na sessão (ou ande com ele) para poder comparar."}
+        return res
+    d_best, d_pace = b["best_ms"] - a["best_ms"], b["pace_ms"] - a["pace_ms"]
+    noise = max(a["std_ms"] or 0, b["std_ms"] or 0)
+    res["confidence"] = "baixa" if n < 5 else "média" if n < 15 else "boa"
+    res["delta"] = {"best_ms": d_best, "pace_ms": d_pace, "std_ms": (b["std_ms"] or 0) - (a["std_ms"] or 0)}
+    # diferença só conta se for maior que o "ruído" normal das suas voltas
+    limit = max(80, 0.5 * noise)
+    if abs(d_pace) < limit and abs(d_best) < limit:
+        kind, text = "empate", "Sem diferença clara no ritmo: as voltas com os dois setups são parecidas."
+    else:
+        win, d = ("B", d_pace) if d_pace < 0 else ("A", -d_pace)
+        if abs(d_pace) < limit:                       # ritmo igual, mas o melhor tempo mudou
+            win, d = ("B", d_best) if d_best < 0 else ("A", -d_best)
+            kind, text = win.lower(), f"O melhor tempo é do setup {win} ({abs(d_best) / 1000:.3f} s mais rápido), mas o ritmo médio ficou parecido."
+        else:
+            kind, text = win.lower(), f"O setup {win} é mais rápido: {abs(d_pace) / 1000:.3f} s por volta no ritmo ({abs(d_best) / 1000:.3f} s no melhor tempo)."
+    res["verdict"] = {"kind": kind, "text": text}
+    if n < 5:
+        res["notes"].append("Poucas voltas de ritmo (menos de 5 num dos lados): a diferença pode ser acaso. Ande mais voltas com os dois.")
+    if a["road_temp"] is not None and b["road_temp"] is not None and abs(a["road_temp"] - b["road_temp"]) >= 5:
+        res["notes"].append(f"A pista estava {abs(a['road_temp'] - b['road_temp']):.0f} °C mais {'quente' if b['road_temp'] > a['road_temp'] else 'fria'} com o setup B: parte da diferença pode ser da temperatura.")
+    if a["sessions"] == 1 and b["sessions"] == 1:
+        res["notes"].append("Cada setup tem uma sessão só: o seu dia, o pneu e o grip podem pesar tanto quanto o ajuste.")
+    sd = (b["std_ms"] or 0) - (a["std_ms"] or 0)
+    if abs(sd) >= 150 and a["std_ms"] and b["std_ms"]:
+        res["notes"].append(f"Consistência: o setup {'B' if sd < 0 else 'A'} varia menos entre as voltas ({abs(sd) / 1000:.2f} s a menos de oscilação).")
+    comma = lambda t: re.sub(r"(\d)\.(\d)", lambda m: m.group(1) + "," + m.group(2), t)            # números em português
+    res["verdict"]["text"] = comma(res["verdict"]["text"])
+    res["notes"] = [comma(n) for n in res["notes"]]
+    return res
 
 
 def _write_acc(car: str, track: str, stem: str, content: dict) -> Path:

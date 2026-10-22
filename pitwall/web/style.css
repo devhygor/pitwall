@@ -1217,3 +1217,19 @@ select option, select optgroup { background: var(--panel, #121821); color: var(-
 .u-over { overflow: visible; }
 
 .slist th.sortable { cursor: pointer; user-select: none; white-space: nowrap; } .slist th.sortable:hover { color: var(--text); } .slist th.sortable i { font-style: normal; font-size: 9px; margin-left: 5px; color: var(--accent); } .slist th.sortable.on { color: var(--text); }
+
+/* setups: painel de detalhes e comparação */
+.sd-head h2 { margin: 0; font-size: 19px; line-height: 1.25; } .sd-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.sd-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.sd-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+.sd-kpis > div { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.sd-kpis small { color: var(--muted); font-size: 11px; } .sd-kpis b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.sd-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 10px; line-height: 1.45; }
+.sd-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; } .sd-actions select { max-width: 100%; }
+.sd-more, .sd-det { margin: 10px 0; } .sd-more summary, .sd-det summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; } .sd-det summary { font-weight: 600; color: var(--text); }
+.cmp-names { display: grid; gap: 4px; font-size: 13px; margin: 8px 0 12px; } .cmp-names > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.verdict { border-radius: 12px; padding: 12px 14px; margin: 8px 0 12px; background: rgba(255,255,255,.05); border: 1px solid var(--line); line-height: 1.45; }
+.verdict.v-a, .verdict.v-b { background: rgba(46,229,157,.1); border-color: rgba(46,229,157,.4); } .verdict.v-sem_dados { background: rgba(255,200,60,.08); border-color: rgba(255,200,60,.35); }
+.verdict .conf { margin-top: 6px; font-size: 12.5px; color: var(--muted); } .verdict .vnote { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+.cmp-tab td.gd { color: var(--good, #3fd68b); font-weight: 600; } .cmp-tab td.bd { color: var(--bad, #ff6b6b); font-weight: 600; }
+.cmp-chart { width: 100%; min-height: 200px; overflow: hidden; }
