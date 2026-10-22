@@ -3264,14 +3264,14 @@ function ovPanel(n, S) {
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "gap", "Distância do carro à frente e atrás", c.gap, "Metros até o carro mais próximo na sua linha")}
       ${ovChip(n, "numbers", "Número dos carros", c.numbers)}</div>` + ovSlider(n, "range", "Alcance do radar", c.range || 40, 20, 80, 5, " m"));
     const cm = c.carmap || {}, cmLock = !OV_FEATS.has(OV_T), ccMode = c.carcolor === "white" ? "static" : (c.carcolor || "heat"), swLock = ovLocked("radar", "carstatic");
-    g += ovGroup("Quando aparece", ovSeg(n, "showmode", [["always", "Sempre na tela"], ["near", "Só quando houver carro perto"]], c.showmode || "always") +
+    g += ovGroup(`Quando aparece ${ovTag(OPT_FEATURE, !OV_FEATS.has(OPT_FEATURE))}`, ovSeg(n, "showmode", [["always", "Sempre na tela"], ["near", "Só quando houver carro perto"]], c.showmode || "always") +
       ovSlider(n, "nearm", "Considerar “perto” até", c.nearm || 30, 8, 80, 2, " m"),
       "no modo “só quando houver carro perto”, o radar some da tela e volta quando alguém chega perto de você");
-    g += ovGroup("Cor dos carros", ovSeg(n, "carcolor", [["heat", "Colorido por proximidade"], ["static", "Cor fixa"]], ccMode) +
+    g += ovGroup(`Cor dos carros ${ovTag(OPT_FEATURE, !OV_FEATS.has(OPT_FEATURE))}`, ovSeg(n, "carcolor", [["heat", "Colorido por proximidade"], ["static", "Cor fixa"]], ccMode) +
       `<div class="swatches ${swLock ? "locked" : ""}" id="swRow" style="${ccMode === "static" ? "" : "display:none"}">${[["#f4f7ff", "Branco"], ["#3ee08f", "Verde"], ["#4aa3ff", "Azul"], ["#ffd24a", "Amarelo"], ["#ff9f43", "Laranja"], ["#c77dff", "Roxo"], ["#36d6e7", "Ciano"], ["#9aa7bd", "Cinza"]]
         .map(([hx, nm]) => `<button type="button" class="sw ${((c.carstatic || "#f4f7ff").toLowerCase() === hx) ? "on" : ""}" data-sw="${hx}" title="${nm}" style="--c:${hx}" ${swLock ? 'data-need="overlay_custom"' : ""}></button>`).join("")}</div>`,
       "o carro que estiver ao seu lado fica vermelho, pulsa e ganha um alerta (!) para chamar a atenção");
-    g += ovGroup("Carrinhos por classe", `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => { const cur = Number.isInteger(cm[k]) ? cm[k] : "auto";
+    g += ovGroup(`Carrinhos por classe ${ovTag(OPT_FEATURE, !OV_FEATS.has(OPT_FEATURE))}`, `<div class="carmap ${cmLock ? "locked" : ""}">${CAR_KINDS.map(([k, t]) => { const cur = Number.isInteger(cm[k]) ? cm[k] : "auto";
       return `<div class="cm-row" data-class="${k}"><div class="cm-name"><b>${t}</b><small>${cur === "auto" ? "automático" : "desenho: " + carVariantName(k, cur)}</small></div>
         <div class="cm-opts"><button type="button" class="cm-opt cm-auto ${cur === "auto" ? "on" : ""}" data-pick="${k}:auto" ${cmLock ? "disabled" : ""}><span class="cm-a">A</span><span>Automático</span></button>${[0, 1, 2, 3].map((v) => `<button type="button" class="cm-opt ${cur === v ? "on" : ""}" data-pick="${k}:${v}" title="${carVariantName(k, v)}" ${cmLock ? "disabled" : ""}>
           <canvas data-thumb="${k}:${v}" width="64" height="104"></canvas><span>${carVariantName(k, v)}</span></button>`).join("")}</div></div>`; }).join("")}
@@ -3279,7 +3279,7 @@ function ovPanel(n, S) {
         : `<div class="sub">Para cada classe você escolhe entre 4 desenhos de carrinho, ou deixa em <b>Automático</b> (o radar varia o desenho pelo modelo do carro). O radar descobre a classe de cada carro sozinho (ACC e iRacing). <button type="button" class="btn xs" id="cmReset">Tudo automático</button></div>`}</div>`,
       "escolha o carrinho de cada classe");
     const spLock = ovLocked("radar", "special"), spCur = spLock ? null : (c.special || null);
-    g += ovGroup("Carros especiais", `<div class="carmap ${spLock ? "locked" : ""}"><div class="cm-opts cm-special">
+    g += ovGroup(`Carros especiais ${ovTag(OPT_FEATURE, !OV_FEATS.has(OPT_FEATURE))}`, `<div class="carmap ${spLock ? "locked" : ""}"><div class="cm-opts cm-special">
         <button type="button" class="cm-opt ${spCur ? "" : "on"}" data-special="" ${spLock ? 'data-need="overlay_custom"' : ""}><span class="cm-a">✕</span><span>Nenhum</span></button>
         ${CAR_SPECIALS.map(([k, t]) => `<button type="button" class="cm-opt ${spCur === k ? "on" : ""}" data-special="${k}" title="${t}" ${spLock ? 'data-need="overlay_custom"' : ""}><canvas data-sthumb="${k}" width="64" height="104"></canvas><span>${t}</span></button>`).join("")}</div>
       ${ovSeg(n, "specialfor", [["me", "Só no meu carro"], ["others", "Nos outros carros"], ["all", "Em todos"]], c.specialfor || "me")}

@@ -113,8 +113,8 @@ function drawSpecial(ctx, cx, cy, h, col, o) {
     glassFill(poly([[-0.68, 0.3], [0.68, 0.3], [0.76, 0.46], [-0.76, 0.46]]));
     ctx.fillStyle = _mix(rgb, WHITE, 0.2); rr(X(-0.74), Y(0.46), w * 0.74, h * 0.27, w * 0.05); ctx.fill(); ctx.strokeStyle = "rgba(0,0,0,.3)"; ctx.lineWidth = lw * 0.6; ctx.stroke();                          // teto
     glassFill(poly([[-0.7, 0.73], [0.7, 0.73], [0.62, 0.84], [-0.62, 0.84]]));
-    ctx.fillStyle = "#fff6c8"; rr(X(-0.82), Y(0.025), w * 0.3, h * 0.03, h * 0.012); ctx.fill(); rr(X(0.52), Y(0.025), w * 0.3, h * 0.03, h * 0.012); ctx.fill();
-    ctx.fillStyle = "#ff3b4e"; rr(X(-0.86), Y(0.93), w * 0.16, h * 0.05, h * 0.012); ctx.fill(); rr(X(0.7), Y(0.93), w * 0.16, h * 0.05, h * 0.012); ctx.fill();
+    ctx.fillStyle = "#fff6c8"; rr(X(-0.82), Y(0.025), w * 0.3, h * 0.03, h * 0.012); ctx.fill(); rr(X(0.22), Y(0.025), w * 0.3, h * 0.03, h * 0.012); ctx.fill();
+    ctx.fillStyle = "#ff3b4e"; rr(X(-0.86), Y(0.93), w * 0.16, h * 0.05, h * 0.012); ctx.fill(); rr(X(0.54), Y(0.93), w * 0.16, h * 0.05, h * 0.012); ctx.fill();
     // a escada no teto, saindo pela traseira
     ctx.fillStyle = "#2a2f38"; for (const v of [0.5, 0.7]) { rr(X(-0.86), Y(v), w * 0.86, h * 0.02, h * 0.008); ctx.fill(); }          // bagageiro
     const L = (u) => X(u) - w * 0.018, top = Y(0.2), bot = Y(1.1);
