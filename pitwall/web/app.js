@@ -3255,13 +3255,6 @@ function ovPanel(n, S) {
     g += ovGroup("Modelo", ovSeg(n, "bstyle", [["dot", "Luz redonda"], ["bar", "Barra"], ["icon", "Carro com ondas", OV_P]], c.bstyle || "dot"),
       "amarelo: tem carro no seu ponto cego; vermelho e piscando: carro colado ao lado");
     g += ovGroup("Mostrar", `<div class="ovchips">${ovChip(n, "always", "Aparecer apagada quando livre", c.always !== false, "Desligado, a luz só aparece quando há carro")}</div>`);
-    const spLock = ovLocked("radar", "special"), spCur = spLock ? null : (c.special || null);
-    g += ovGroup("Carros especiais", `<div class="carmap ${spLock ? "locked" : ""}"><div class="cm-opts cm-special">
-        <button type="button" class="cm-opt ${spCur ? "" : "on"}" data-special="" ${spLock ? 'data-need="overlay_custom"' : ""}><span class="cm-a">✕</span><span>Nenhum</span></button>
-        ${CAR_SPECIALS.map(([k, t]) => `<button type="button" class="cm-opt ${spCur === k ? "on" : ""}" data-special="${k}" title="${t}" ${spLock ? 'data-need="overlay_custom"' : ""}><canvas data-sthumb="${k}" width="64" height="104"></canvas><span>${t}</span></button>`).join("")}</div>
-      ${ovSeg(n, "specialfor", [["me", "Só no meu carro"], ["others", "Nos outros carros"], ["all", "Em todos"]], c.specialfor || "me")}
-      <div class="sub">${spLock ? ovTag("overlay_custom", true) + " " : ""}Só por diversão: troque o desenho por um carro especial. As cores e o alerta de perigo continuam valendo.</div></div>`,
-      "ex.: um Uno com escada no teto");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
       "se a luz acender do lado errado, ligue isto");
     g += `<p class="sub" style="margin:8px 0 0">Use um overlay para cada lado: ligue o esquerdo e o direito, clique em “Editar na tela do jogo” e arraste cada luz para a borda da tela (ou ao lado do retrovisor). Dá para ligar só um dos lados.</p>`;
@@ -3285,6 +3278,13 @@ function ovPanel(n, S) {
       ${cmLock ? `<div class="sub">${ovTag(OV_T, true)} Por padrão o radar escolhe sozinho um desenho para cada carro. No plano Pro você escolhe o desenho de cada classe.</div>`
         : `<div class="sub">Para cada classe você escolhe entre 4 desenhos de carrinho, ou deixa em <b>Automático</b> (o radar varia o desenho pelo modelo do carro). O radar descobre a classe de cada carro sozinho (ACC e iRacing). <button type="button" class="btn xs" id="cmReset">Tudo automático</button></div>`}</div>`,
       "escolha o carrinho de cada classe");
+    const spLock = ovLocked("radar", "special"), spCur = spLock ? null : (c.special || null);
+    g += ovGroup("Carros especiais", `<div class="carmap ${spLock ? "locked" : ""}"><div class="cm-opts cm-special">
+        <button type="button" class="cm-opt ${spCur ? "" : "on"}" data-special="" ${spLock ? 'data-need="overlay_custom"' : ""}><span class="cm-a">✕</span><span>Nenhum</span></button>
+        ${CAR_SPECIALS.map(([k, t]) => `<button type="button" class="cm-opt ${spCur === k ? "on" : ""}" data-special="${k}" title="${t}" ${spLock ? 'data-need="overlay_custom"' : ""}><canvas data-sthumb="${k}" width="64" height="104"></canvas><span>${t}</span></button>`).join("")}</div>
+      ${ovSeg(n, "specialfor", [["me", "Só no meu carro"], ["others", "Nos outros carros"], ["all", "Em todos"]], c.specialfor || "me")}
+      <div class="sub">${spLock ? ovTag("overlay_custom", true) + " " : ""}Só por diversão: troque o desenho por um carro especial. As cores e o alerta de perigo continuam valendo.</div></div>`,
+      "ex.: um Uno com escada no teto");
     g += ovGroup("Lados", `<div class="ovchips"><button type="button" class="ovchip ${S.eng_spotter_swap ? "on" : ""}" data-swap="1"><i></i>Inverter esquerda e direita</button></div>`,
       "se o radar mostrar o carro do lado errado, ligue isto (vale também para o aviso falado do engenheiro)");
     g += `<p class="sub" style="margin:8px 0 0">No ACC o radar usa a posição dos carros; na primeira volta ele calibra sozinho. No iRacing a distância vem da pista e o lado, do aviso do próprio jogo (por isso o iRacing mostra os carros à frente e atrás só na sua linha).</p>`;
