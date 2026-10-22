@@ -21,3 +21,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 three.js (three.module.min.js, OrbitControls.js, RoomEnvironment.js) - MIT License
 Copyright © 2010-2023 three.js authors - https://github.com/mrdoob/three.js
+
+three.js Reflector.js - MIT License (three.js authors)
