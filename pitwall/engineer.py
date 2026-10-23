@@ -178,6 +178,9 @@ def analyze(laps: list[dict], setup: dict | None = None, target_psi: float = 26.
                 add("advancedSetup.mechanicalBalance.aRBRear", -1, "Barra traseira mais macia melhora a tração", strength * 0.7)
 
     # ---------------- travamento e patinagem
+    res["stats"] = {"lock_front": locks_f / braking_zones if braking_zones >= 4 else None,
+                    "lock_rear": locks_r / braking_zones if braking_zones >= 4 else None,
+                    "spin": spins / power_zones if power_zones >= 4 else None}
     if braking_zones >= 4:
         fl, rl = locks_f / braking_zones, locks_r / braking_zones
         if fl > 0.2:

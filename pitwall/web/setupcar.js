@@ -144,7 +144,7 @@
     let sel = null, advice = { changes: [], findings: [] }, mirror = false, saved = {};
     // estado de cada recomendação: pending (falta aplicar) · applied (já está nas alterações) · other (você escolheu outro valor) · saved (já gravada no arquivo)
     const recs = () => (advice.changes || []).filter((c) => byPath[c.path]);
-    const recState = (c) => (saved[c.path] != null ? "saved" : (edits[c.path] || 0) === c.delta ? "applied" : edits[c.path] ? "other" : "pending");
+    const recState = (c) => (c.done || saved[c.path] != null ? "saved" : (edits[c.path] || 0) === c.delta ? "applied" : edits[c.path] ? "other" : "pending");
     const recCounts = () => { const l = recs(), done = l.filter((c) => ["applied", "saved"].includes(recState(c))).length; return { total: l.length, done, todo: l.filter((c) => !saved[c.path] && recState(c) !== "applied") }; };
     const signed = (n) => (n > 0 ? "+" : "") + n;
     const adviceBySpot = () => { const m = {}; for (const ch of advice.changes || []) { const it = byPath[ch.path]; if (it) (m[it.spot] = m[it.spot] || []).push(ch); } return m; };
@@ -355,7 +355,8 @@
       advice = await loadAdvice(info.id);
       saved = PwRecs.get(info.id, PwRecs.sig(advice));
       const f = (advice.findings || []).filter((x) => x.kind !== "ok").slice(0, 2);
-      $q("#scFind").innerHTML = f.length ? f.map((x) => `<span class="sc-fd" title="${esc(x.detail || "")}">⚠ ${esc(x.title)}</span>`).join("")
+      const mnote = advice.meta && advice.meta.note;
+      $q("#scFind").innerHTML = mnote ? `<span class="sc-fd muted">${esc(mnote)}</span>` : f.length ? f.map((x) => `<span class="sc-fd" title="${esc(x.detail || "")}">⚠ ${esc(x.title)}</span>`).join("")
         : advice.error ? `<span class="sc-fd muted">${esc(advice.error)}</span>` : `<span class="sc-fd ok">✓ Nada fora do normal nas suas últimas voltas</span>`;
       paintAll();
     } else $q("#scFind").innerHTML = `<span class="sc-fd muted">🔒 Editar e salvar são do plano Pro ou Equipe. Você pode explorar o carro e ver os valores.</span>`;

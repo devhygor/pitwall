@@ -89,6 +89,8 @@ MIGRATIONS = {
                  "setup_src": "TEXT",               # manual (escolhido pelo piloto) | auto (reconhecido pelo Pitwall) | skip (piloto disse que não sabe)
                  "setup_ask": "TEXT",               # JSON: ids dos setups candidatos quando o Pitwall não teve certeza
                  "setup_fp": "TEXT"},               # JSON: o que a telemetria mostrou com o carro parado (para conferir/calibrar)
+    "setups": {"content_changed_at": "TEXT",      # quando o conteúdo mudou (atualização no próprio arquivo); voltas anteriores são de outro conteúdo
+               "prev_content": "TEXT"},           # JSON do conteúdo antes da última atualização (base das análises antigas)
     "laps": {"start_wall": "REAL", "brake_temp": "TEXT", "susp_max": "TEXT",
              "events": "TEXT"},                       # JSON: incidentes da volta [{type, d, ...}]
 }
@@ -441,8 +443,18 @@ class DB:
 
     def update_setup_content(self, setup_id: int, sha1: str, content: str, file_mtime: float, imported_at: str, notes: str | None = None):
         with self._lock, self.connect() as c:
-            c.execute("UPDATE setups SET sha1 = ?, content = ?, file_mtime = ?, imported_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
-                      (sha1, content, file_mtime, imported_at, notes, setup_id))
+            c.execute("UPDATE setups SET prev_content = content, content_changed_at = ?, sha1 = ?, content = ?, file_mtime = ?, imported_at = ?,"
+                      " notes = COALESCE(?, notes) WHERE id = ?",
+                      (imported_at, sha1, content, file_mtime, imported_at, notes, setup_id))
+
+    def sessions_for_evidence(self, car: str, track: str, limit: int = 40) -> list[dict]:
+        """Suas sessões recentes (com voltas) neste carro e pista e o setup de cada uma (o escolhido/reconhecido, senão o sugerido)."""
+        with self.connect() as c:
+            rows = c.execute("""SELECT s.id, s.started_at, COALESCE(s.setup_id, s.suggested_setup_id) AS sid
+                                FROM sessions s WHERE s.car = ? AND lower(s.track) = lower(?) AND COALESCE(s.kind, 'own') = 'own'
+                                  AND EXISTS (SELECT 1 FROM laps l WHERE l.session_id = s.id)
+                                ORDER BY s.started_at DESC LIMIT ?""", (car, track, limit)).fetchall()
+        return [dict(r) for r in rows]
 
     def delete_setup(self, setup_id: int) -> int:
         """Remove o setup; as sessões que o usavam ficam sem setup (as voltas continuam). Devolve quantas sessões foram desligadas."""

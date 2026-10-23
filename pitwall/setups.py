@@ -291,18 +291,190 @@ def delete_setup(db, setup_id: int, remove_file: bool = True) -> dict:
     return {"ok": True, "name": s["name"], "file_moved_to": moved, "sessions_unlinked": used}
 
 
-def advice(db, setup_id: int, target: float = 26.5) -> dict:
-    """Recomendações para este setup, a partir das suas últimas sessões com ele (ou do mesmo carro e pista, se ainda não usou)."""
-    from . import engineer
-    s = load(db, setup_id)
-    ids, assumed = db.sessions_using_setup(setup_id, s["car"], s["track"])
+def _as_dict(content):
+    if isinstance(content, str):
+        try:
+            return json.loads(content)
+        except ValueError:
+            return None
+    return content if isinstance(content, dict) else None
+
+
+def evidence(db, s: dict, limit: int = 3) -> dict:
+    """De quais voltas vêm as recomendações, e com QUAL conteúdo de setup elas foram feitas.
+
+    A recomendação só vale para o setup que gerou os dados. Voltas feitas com outro setup (ou com este antes de uma
+    atualização no próprio arquivo) são evidência do setup de origem: depois as recomendações são ajustadas para o
+    que este setup já tem (ver `_rebase`)."""
+    rows = db.sessions_for_evidence(s["car"], s["track"])
+    changed = s.get("content_changed_at") or ""
+    mine = [r for r in rows if r["sid"] == s["id"]]
+    direct = [r for r in mine if r["started_at"] >= changed][:limit]
+    if direct:
+        return {"ids": [r["id"] for r in direct], "basis": _as_dict(s["content"]), "basis_id": s["id"], "basis_name": s["name"], "direct": True}
+    old = [r for r in mine if r["started_at"] < changed and s.get("prev_content")]
+    other = [r for r in rows if r["sid"] != s["id"]]
+    pick = max(old[:1] + other[:1], key=lambda r: r["started_at"], default=None)
+    if pick is None:
+        return {"ids": [], "basis": None, "basis_id": None, "basis_name": "", "direct": False}
+    if pick in old:
+        ids = [r["id"] for r in old[:limit]]
+        return {"ids": ids, "basis": _as_dict(s["prev_content"]), "basis_id": s["id"], "basis_name": f"{s['name']} (antes da atualização)", "direct": False}
+    other_id = pick["sid"]
+    ids = [r["id"] for r in other if r["sid"] == other_id][:limit]
+    base = db.setup(other_id) if other_id else None
+    return {"ids": ids, "basis": _as_dict(base["content"]) if base else None, "basis_id": other_id, "basis_name": base["name"] if base else "", "direct": False}
+
+
+MIN_LAPS = 3          # abaixo disso a análise é ruído: não recomenda mudança nenhuma
+
+
+def _parent_id(db, s: dict):
+    m = re.match(r"^Gerado a partir de '(.+)'$", s.get("notes") or "")
+    if not m:
+        return None
+    return next((x["id"] for x in db.setups_list() if x["car"] == s["car"] and x["track"] == s["track"] and x["name"] == m.group(1) and x["id"] != s["id"]), None)
+
+
+def _ancestors(db, s: dict) -> set:
+    """Setups dos quais este foi gerado (pai, avô...): só neles as recomendações podem ser convertidas."""
+    out, cur = set(), s
+    for _ in range(12):
+        pid = _parent_id(db, cur)
+        if pid is None or pid in out:
+            break
+        out.add(pid)
+        cur = db.setup(pid) or {}
+        if not cur:
+            break
+    return out
+
+
+def _rebase(changes: list[dict], target: dict) -> tuple[list[dict], int]:
+    """Converte as recomendações (calculadas sobre o setup de ORIGEM dos dados) para ESTE setup.
+
+    Cada recomendação é um valor-alvo (origem + delta). Se este setup já chegou nele (ou passou) a recomendação está cumprida
+    ("done"); senão vira só o que falta. Isso evita pedir de novo o que a versão nova já aplicou."""
+    out, done = [], 0
+    for c in changes:
+        tv = get_value(target, c["path"])
+        want = c.get("to")
+        if tv is None or want is None:
+            out.append(c)
+            continue
+        is_psi = c.get("unit") == "psi"
+        reached = (tv >= want if c["delta"] > 0 else tv <= want)
+        if is_psi and abs(want - tv) < 2:                 # menos de 0,2 psi de diferença: já está na janela
+            reached = True
+        if reached:
+            out.append({**c, "done": True, "from": tv, "delta": 0, "to": tv, **({"from_disp": psi(tv), "to_disp": psi(tv)} if is_psi else {})})
+            done += 1
+            continue
+        nc = {**c, "from": tv, "delta": int(want - tv)}
+        if is_psi:
+            nc.update({"from_disp": psi(tv), "to_disp": psi(max(0, want))})
+        out.append(nc)
+    return out, done
+
+
+def _pace(laps: list[dict]):
+    t = sorted(l["lap_time_ms"] for l in laps if l.get("valid") and not l.get("out_lap") and not l.get("in_lap") and l.get("lap_time_ms"))
+    if not t:
+        return None
+    ok = [x for x in t if x <= t[0] * 1.04]               # ignora voltas com erro/trânsito
+    return {"ms": int(ok[len(ok) // 2]), "best": t[0], "n": len(ok)}
+
+
+def _progress(before: dict, after: dict, pace_b, pace_a) -> dict:
+    """O ajuste anterior funcionou? Compara o equilíbrio e o ritmo das voltas ANTES e DEPOIS dele."""
+    import math
+    items = []
+    bb = {(b["phase"], b["class"]): b for b in before.get("balance", [])}
+    for a in after.get("balance", []):
+        b = bb.get((a["phase"], a["class"]))
+        if not b or b["n"] < 3 or a["n"] < 3 or (b["state"] == "neutro" and a["state"] == "neutro"):
+            continue
+        db_, da_ = abs(math.log(b["ratio"])), abs(math.log(a["ratio"]))
+        items.append({"label": a["label"], "before": f"{b['ratio']:.2f}", "after": f"{a['ratio']:.2f}", "state_before": b["state"], "state_after": a["state"],
+                      "verdict": "melhorou" if da_ < db_ - 0.03 else "piorou" if da_ > db_ + 0.03 else "igual"})
+    for key, label in (("lock_front", "Travamento das dianteiras"), ("lock_rear", "Travamento das traseiras"), ("spin", "Patinagem na saída")):
+        b, a = (before.get("stats") or {}).get(key), (after.get("stats") or {}).get(key)
+        if b is None or a is None or max(a, b) < 0.1:
+            continue
+        items.append({"label": label, "before": f"{round(b * 100)}%", "after": f"{round(a * 100)}%", "state_before": "", "state_after": "",
+                      "verdict": "melhorou" if a < b - 0.07 else "piorou" if a > b + 0.07 else "igual"})
+    pace = None
+    if pace_b and pace_a:
+        pace = {"before_ms": pace_b["ms"], "after_ms": pace_a["ms"], "diff_ms": pace_a["ms"] - pace_b["ms"], "n_before": pace_b["n"], "n_after": pace_a["n"]}
+    return {"items": items, "pace": pace}
+
+
+def _laps_of(db, ids):
     laps = []
     for sid in reversed(ids):                      # da mais antiga para a mais nova (a análise usa as últimas voltas)
         laps.extend(db.session_laps_full(sid))
-    res = engineer.analyze(laps, s["content"], target) if laps else {"error": "Ainda não há voltas suas neste carro e pista para analisar. Grave uma sessão com este setup.",
-                                                                       "findings": [], "changes": [], "pressures": [], "balance": [], "temps": {}, "laps_used": []}
+    return laps
+
+
+def advice(db, setup_id: int, target: float = 26.5) -> dict:
+    """Recomendações para este setup.
+
+    1. Com voltas feitas COM este setup: a análise é dele, direta.
+    2. Sem voltas com ele (setup novo, p. ex. a versão que o gerador acabou de criar): a análise é das voltas do setup de origem e as
+       recomendações são convertidas para o que ESTE setup ainda não tem. Quem já aplicou tudo vê "nada a fazer: dirija com ele".
+    3. Se este setup nasceu de outro e já tem voltas, mostra se o ajuste funcionou (equilíbrio, travamento e ritmo antes × depois)."""
+    from . import engineer
+    s = load(db, setup_id)
+    ev = evidence(db, s)
+    ids, laps = ev["ids"], _laps_of(db, ev["ids"])
+    empty = {"findings": [], "changes": [], "pressures": [], "balance": [], "temps": {}, "laps_used": []}
+    note = ""
+    target_content = _as_dict(s["content"])
+    basis = ev["basis"]
+    if not laps:
+        res = {**empty, "error": "Ainda não há voltas suas neste carro e pista para analisar. Grave uma sessão com este setup."}
+        applied = 0
+    else:
+        res = engineer.analyze(laps, basis if basis is not None else target_content, target)
+        applied = 0
+        note = ""
+        related = ev["direct"] or ev["basis_id"] == s["id"] or ev["basis_id"] in _ancestors(db, s)
+        if res.get("analyzed_laps", 0) < MIN_LAPS and not res.get("error"):
+            res["changes"] = []                                 # 1 ou 2 voltas não dizem como o carro se comporta
+            note = f"Só {res.get('analyzed_laps', 0)} volta(s) limpa(s) analisada(s): são poucas para recomendar. Dirija pelo menos {MIN_LAPS + 2} voltas limpas e gere de novo."
+        elif not ev["direct"] and not related:
+            res["changes"], res["findings"] = [], []            # dados de um setup sem parentesco com este: não valem para ele
+            note = "Este setup ainda não foi dirigido e as voltas que existem são de outro setup, sem parentesco com ele. Dirija com ele algumas voltas e eu recomendo."
+            res["error"] = ""
+        elif not ev["direct"] and basis is not None and res.get("changes"):
+            res["changes"], applied = _rebase(res["changes"], target_content)
+        # os achados descrevem o carro COM O SETUP DE ORIGEM (a tela avisa quando ele não é este)
+    progress = None
+    if ev["direct"] and laps:
+        info_ = info(db, setup_id)
+        before_ids, before_name = [], ""
+        if info_.get("parent_id"):
+            par = db.setup(info_["parent_id"])
+            before_name = par["name"] if par else ""
+            # só vale se as voltas de antes são mesmo do pai (não "assumidas")
+            direct_parent = [r["id"] for r in db.sessions_for_evidence(s["car"], s["track"]) if r["sid"] == info_["parent_id"]][:3]
+            before_ids = direct_parent
+        elif s.get("prev_content") and s.get("content_changed_at"):
+            before_ids = [r["id"] for r in db.sessions_for_evidence(s["car"], s["track"]) if r["sid"] == s["id"] and r["started_at"] < s["content_changed_at"]][:3]
+            before_name = "antes da atualização"
+        if before_ids:
+            lb = _laps_of(db, before_ids)
+            parent_basis = _as_dict(db.setup(info_["parent_id"])["content"]) if info_.get("parent_id") else _as_dict(s["prev_content"])
+            rb = engineer.analyze(lb, parent_basis or target_content, target)
+            if rb.get("analyzed_laps") and res.get("analyzed_laps"):
+                progress = {**_progress(rb, res, _pace(lb), _pace(laps)), "before_name": before_name}
     stats = db.setup_stats().get(int(setup_id))
-    return {**res, "meta": {"sessions": ids, "assumed": assumed, "stats": stats, "next_name": next_version_name(db, s)}}
+    nlaps = res.get("analyzed_laps") or 0
+    conf = "alta" if nlaps >= 6 else "média" if nlaps >= 3 else "baixa"
+    total = len(res.get("changes") or [])
+    return {**res, "meta": {"sessions": ids, "assumed": not ev["direct"], "stats": stats, "next_name": next_version_name(db, s),
+                            "basis": {"id": ev["basis_id"], "name": ev["basis_name"], "direct": ev["direct"], "known": basis is not None},
+                            "applied": applied, "total": total, "confidence": conf, "progress": progress, "note": note if laps else ""}}
 
 
 def update_in_place(db, setup_id: int, changes: list[dict]) -> dict:

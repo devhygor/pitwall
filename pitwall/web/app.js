@@ -1565,20 +1565,33 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
   const sig = r.meta && window.PwRecs ? PwRecs.sig(r) : "";
   const saved = setupId && r.meta && window.PwRecs ? PwRecs.get(setupId, sig) : {};        // já gravadas no arquivo deste setup
   const doneNow = opt.doneNow || {};                                                       // aplicadas agora numa versão nova: caminho -> nome
-  const isDone = (c) => saved[c.path] != null || doneNow[c.path] != null;
+  const isDone = (c) => !!c.done || saved[c.path] != null || doneNow[c.path] != null;
   const chgCard = (c, i) => {
     const done = isDone(c), on = !done && (opt.checked ? opt.checked.includes(c.path) : (c.unit === "psi" || i < 3));
-    const val = c.from == null ? `<b>${c.delta > 0 ? "+" : ""}${c.delta} clique(s)</b>` : `<span>${esc(String(fmtV(c, c.from, c.from_disp)))}</span><i>→</i><b>${esc(String(fmtV(c, c.to, c.to_disp)))}</b>`;
+    const val = c.done ? `<b>${esc(String(fmtV(c, c.from, c.from_disp)))}</b>` : c.from == null ? `<b>${c.delta > 0 ? "+" : ""}${c.delta} clique(s)</b>` : `<span>${esc(String(fmtV(c, c.from, c.from_disp)))}</span><i>→</i><b>${esc(String(fmtV(c, c.to, c.to_disp)))}</b>`;
     return `<label class="chg ${done ? "done" : on ? "on" : ""}" data-i="${i}">
       <input type="checkbox" data-chg="${i}" ${on ? "checked" : ""} ${done ? "disabled" : ""}>
       <span class="chg-box" aria-hidden="true"></span>
       <span class="chg-main"><span class="chg-t"><b>${esc(c.label)}</b><span class="chg-v">${val}</span></span>
         <span class="chg-why">${c.reasons.map(esc).join(" · ")}</span></span>
-      <span class="chg-st">${done ? (doneNow[c.path] != null ? "✓ Aplicado em “" + esc(doneNow[c.path]) + "”" : "✓ Já aplicado") : on ? "Marcado" : "Pendente"}</span></label>`;
+      <span class="chg-st">${done ? (doneNow[c.path] != null ? "✓ Aplicado em “" + esc(doneNow[c.path]) + "”" : c.done ? "✓ Já neste setup" : "✓ Já aplicado") : on ? "Marcado" : "Pendente"}</span></label>`;
   };
   const nDone = r.changes.filter(isDone).length;
+  const mt = r.meta || {};
+  const verdictIc = { melhorou: "✓", piorou: "✗", igual: "＝" };
+  const prog = mt.progress;
+  const metaHtml = !r.meta ? "" : `
+    ${mt.note ? `<div class="note warn">${esc(mt.note)}</div>` : ""}
+    ${mt.basis && mt.basis.known && r.analyzed_laps ? `<div class="adv-basis ${mt.basis.direct ? "direct" : ""}"><b>${mt.basis.direct ? "Análise deste setup" : "Análise das voltas de outro setup"}</b>
+      <span>${mt.basis.direct ? `Baseada em ${r.analyzed_laps} volta(s) limpa(s) com ele.` : `As voltas são do setup “${esc(mt.basis.name)}”. As recomendações abaixo já descontam o que este setup mudou${mt.total ? `: <b>${mt.applied}</b> de <b>${mt.total}</b> já aplicad${mt.total === 1 ? "a" : "as"}` : ""}. Dirija com este setup para uma análise direta.`}</span>
+      <em class="conf c-${mt.confidence}">confiança ${mt.confidence}</em></div>` : ""}
+    ${prog && (prog.items.length || prog.pace) ? `<div class="adv-prog"><h3>O ajuste anterior funcionou?</h3><div class="sub">Comparando as voltas com “${esc(prog.before_name)}” (antes) e com este setup (depois).</div>
+      ${prog.items.map((i) => `<div class="pr ${i.verdict}"><i>${verdictIc[i.verdict]}</i><span>${esc(i.label)}</span><b>${esc(i.before)} → ${esc(i.after)}</b><em>${i.verdict}</em></div>`).join("")}
+      ${prog.pace ? `<div class="pr ${prog.pace.diff_ms < -80 ? "melhorou" : prog.pace.diff_ms > 80 ? "piorou" : "igual"}"><i>${prog.pace.diff_ms < -80 ? "✓" : prog.pace.diff_ms > 80 ? "✗" : "＝"}</i><span>Ritmo (mediana das voltas limpas)</span><b>${fmtLap(prog.pace.before_ms)} → ${fmtLap(prog.pace.after_ms)}</b><em>${prog.pace.diff_ms < 0 ? "−" : "+"}${(Math.abs(prog.pace.diff_ms) / 1000).toFixed(3).replace(".", ",")} s</em></div>` : ""}
+      <div class="note">Condições de pista e clima diferentes entre as sessões também mexem nesses números: use como indício, não como prova.</div></div>` : ""}`;
   out.innerHTML = `
     ${r.error ? `<div class="note warn">${esc(r.error)}</div>` : ""}
+    ${metaHtml}
     <div class="eng">
       <div>
         <h3>O que o carro está fazendo</h3>
@@ -2017,9 +2030,6 @@ async function showSetup(id) {
       const r = await api(`/api/setups/${id}/advice?target=${parseFloat($("#eTarget").value) || 26.5}`);
       const m = r.meta || {};
       renderEngineer(r, id, s.name, { nextName: m.next_name, update: true });
-      $("#eOut").insertAdjacentHTML("afterbegin", `<div class="note" style="margin-top:8px">${m.sessions && m.sessions.length ? (m.assumed
-        ? `Você ainda não usou este setup: a análise é das suas últimas sessões com este carro e pista (${m.sessions.length}). Confira se faz sentido.`
-        : `Baseado nas suas últimas ${m.sessions.length} sessão(ões) com este setup.`) : "Sem sessões para analisar."}</div>`);
     } catch (e) { $("#eOut").innerHTML = `<div class="note warn">${esc(e.message)}</div>`; }
   };
 }
