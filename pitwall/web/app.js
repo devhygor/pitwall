@@ -1527,6 +1527,21 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
   const sevCls = { alta: "bad", média: "warn", info: "info" };
   const stateCls = { subesterço: "us", sobresterço: "os", neutro: "ok" };
   const fmtV = (c, v, disp) => (v == null ? "—" : c.unit === "psi" ? `${disp} psi` : v);
+  const sig = r.meta && window.PwRecs ? PwRecs.sig(r) : "";
+  const saved = setupId && r.meta && window.PwRecs ? PwRecs.get(setupId, sig) : {};        // já gravadas no arquivo deste setup
+  const doneNow = opt.doneNow || {};                                                       // aplicadas agora numa versão nova: caminho -> nome
+  const isDone = (c) => saved[c.path] != null || doneNow[c.path] != null;
+  const chgCard = (c, i) => {
+    const done = isDone(c), on = !done && (opt.checked ? opt.checked.includes(c.path) : (c.unit === "psi" || i < 3));
+    const val = c.from == null ? `<b>${c.delta > 0 ? "+" : ""}${c.delta} clique(s)</b>` : `<span>${esc(String(fmtV(c, c.from, c.from_disp)))}</span><i>→</i><b>${esc(String(fmtV(c, c.to, c.to_disp)))}</b>`;
+    return `<label class="chg ${done ? "done" : on ? "on" : ""}" data-i="${i}">
+      <input type="checkbox" data-chg="${i}" ${on ? "checked" : ""} ${done ? "disabled" : ""}>
+      <span class="chg-box" aria-hidden="true"></span>
+      <span class="chg-main"><span class="chg-t"><b>${esc(c.label)}</b><span class="chg-v">${val}</span></span>
+        <span class="chg-why">${c.reasons.map(esc).join(" · ")}</span></span>
+      <span class="chg-st">${done ? (doneNow[c.path] != null ? "✓ Aplicado em “" + esc(doneNow[c.path]) + "”" : "✓ Já aplicado") : on ? "Marcado" : "Pendente"}</span></label>`;
+  };
+  const nDone = r.changes.filter(isDone).length;
   out.innerHTML = `
     ${r.error ? `<div class="note warn">${esc(r.error)}</div>` : ""}
     <div class="eng">
@@ -1535,65 +1550,85 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
         <div class="findings">${r.findings.map((f) => `<div class="finding ${sevCls[f.severity] || "info"}">
           <b>${esc(f.title)}</b><span>${esc(f.detail)}</span></div>`).join("")}</div>
         ${r.balance.length ? `<h3>Equilíbrio por fase da curva</h3>
-        <table class="baltab"><thead><tr><th>Fase</th><th>Comportamento</th><th>Frente ÷ traseira</th><th>Curvas</th></tr></thead><tbody>
+        <div class="tbl-scroll"><table class="baltab"><thead><tr><th>Fase</th><th>Comportamento</th><th>Frente ÷ traseira</th><th>Curvas</th></tr></thead><tbody>
           ${r.balance.map((b) => `<tr><td>${esc(b.label)}</td><td><span class="pill ${stateCls[b.state]}">${b.state}</span></td>
-            <td class="num">${b.ratio.toFixed(2)}</td><td class="num">${b.n}</td></tr>`).join("")}</tbody></table>
+            <td class="num">${b.ratio.toFixed(2)}</td><td class="num">${b.n}</td></tr>`).join("")}</tbody></table></div>
         <div class="note">Frente ÷ traseira = quanto os pneus dianteiros escorregam em relação aos traseiros. Acima de ~1,12 a frente
           escorrega mais (subesterço); abaixo de ~0,90 é a traseira (sobresterço). Voltas analisadas: ${r.laps_used.join(", ")}.</div>` : ""}
       </div>
       <div>
         <h3>Ajustes sugeridos</h3>
         ${r.changes.length ? `
-        <table class="chgtab"><thead><tr><th></th><th>Parâmetro</th><th>Atual</th><th>Sugerido</th><th>Por quê</th></tr></thead><tbody>
-          ${r.changes.map((c, i) => `<tr>
-            <td><input type="checkbox" data-chg="${i}" ${c.unit === "psi" || i < 3 ? "checked" : ""}></td>
-            <td>${esc(c.label)}</td>
-            <td class="num">${fmtV(c, c.from, c.from_disp)}</td>
-            <td class="num"><b>${c.from == null ? (c.delta > 0 ? "+" : "") + c.delta + " clique(s)" : fmtV(c, c.to, c.to_disp)}</b></td>
-            <td class="why">${c.reasons.map(esc).join("; ")}</td></tr>`).join("")}</tbody></table>
+        <div class="chg-top"><div class="chg-prog"><div class="sc-prog"><i style="width:${Math.round(nDone / r.changes.length * 100)}%"></i></div>
+            <span><b id="eDoneN">${nDone}</b> de ${r.changes.length} já aplicados · <b id="eSelN">0</b> marcados</span></div>
+          <div class="chg-ctl"><button class="btn sm" id="eAllOn" title="Marca todos os ajustes que ainda faltam">Marcar todos</button><button class="btn sm quiet" id="eAllOff">Limpar</button></div></div>
+        <div class="chg-list" id="eChg">${r.changes.map(chgCard).join("")}</div>
         ${setupId ? `
-        <div class="gen"><input id="eName" value="${esc(opt.nextName || "Pitwall - " + (setupName || "setup"))}" title="Padrão: Pitwall + pista + carro + Q/R + versão. Pode trocar pelo nome que quiser." style="min-width:260px">
-          <button class="btn primary" id="eGen">Criar versão nova no ACC</button>
-          <button class="btn" id="eUpd" title="Aplica os ajustes marcados no próprio arquivo deste setup (guarda um backup antes)">Atualizar este setup</button></div>
+        <div class="gen"><input id="eName" value="${esc(opt.nextName || "Pitwall - " + (setupName || "setup"))}" title="Padrão: Pitwall + pista + carro + Q/R + versão. Pode trocar pelo nome que quiser.">
+          <div class="gen-b"><button class="btn primary" id="eGen">Criar versão nova no ACC</button>
+          <button class="btn" id="eUpd" title="Aplica os ajustes marcados no próprio arquivo deste setup (guarda um backup antes)">Atualizar este setup</button></div></div>
         <div id="eGenOut"></div>` :
         `<div class="note">Escolha o setup que você usou para ver os valores atuais e criar um setup novo já ajustado.</div>`}
         <div class="note">Mude poucas coisas por vez e grave mais voltas para confirmar. Sem os dados reais de cada carro, os ajustes
           são em cliques: confira no menu do jogo se o valor faz sentido. Erros de pilotagem também aparecem como comportamento do carro.</div>`
         : `<div class="sub">Nenhum ajuste necessário.</div>`}
         ${r.pressures.length ? `<h3>Pneus e freios</h3>
-        <table class="baltab"><thead><tr><th></th>${r.pressures.map((p) => `<th>${p.wheel}</th>`).join("")}</tr></thead><tbody>
+        <div class="tbl-scroll"><table class="baltab"><thead><tr><th></th>${r.pressures.map((p) => `<th>${p.wheel}</th>`).join("")}</tr></thead><tbody>
           <tr><td>Pressão a quente</td>${r.pressures.map((p) => `<td class="num ${Math.abs(p.delta_psi) >= 0.2 ? "neg" : "posg"}">${p.hot.toFixed(1)}</td>`).join("")}</tr>
           ${r.temps.tyre ? `<tr><td>Temp. do pneu (°C)</td>${r.temps.tyre.map((t) => `<td class="num">${Math.round(t)}</td>`).join("")}</tr>` : ""}
           ${r.temps.brake ? `<tr><td>Temp. do freio (°C)</td>${r.temps.brake.map((t) => `<td class="num">${Math.round(t)}</td>`).join("")}</tr>` : ""}
-        </tbody></table>` : ""}
+        </tbody></table></div>` : ""}
       </div>
     </div>`;
+  if (opt.flash && $("#eGenOut")) $("#eGenOut").innerHTML = opt.flash;
+  const cards = [...out.querySelectorAll(".chg")];
+  const picked = () => cards.filter((l) => l.querySelector("input").checked).map((l) => r.changes[+l.dataset.i]);
+  const refresh = () => {
+    cards.forEach((l) => {
+      if (l.classList.contains("done")) return;
+      const on = l.querySelector("input").checked;
+      l.classList.toggle("on", on); l.querySelector(".chg-st").textContent = on ? "Marcado" : "Pendente";
+    });
+    const n = $("#eSelN"); if (n) n.textContent = picked().length;
+    const g = $("#eGen"), u = $("#eUpd");
+    if (g) g.textContent = picked().length ? `Criar versão nova (${picked().length})` : "Criar versão nova no ACC";
+    if (u) u.textContent = picked().length ? `Atualizar este setup (${picked().length})` : "Atualizar este setup";
+  };
+  cards.forEach((l) => l.querySelector("input").onchange = refresh);
+  const on = $("#eAllOn"), off = $("#eAllOff");
+  if (on) on.onclick = () => { cards.forEach((l) => { if (!l.classList.contains("done")) l.querySelector("input").checked = true; }); refresh(); };
+  if (off) off.onclick = () => { cards.forEach((l) => { l.querySelector("input").checked = false; }); refresh(); };
+  refresh();
   const upd = $("#eUpd");
   if (upd) upd.onclick = async () => {
-    const chosen = [...out.querySelectorAll("[data-chg]")].filter((c) => c.checked).map((c) => r.changes[+c.dataset.chg]);
+    const chosen = picked();
     if (!chosen.length) { $("#eGenOut").innerHTML = `<div class="note warn">Marque pelo menos um ajuste.</div>`; return; }
-    if (!confirm("Aplicar os ajustes marcados direto no arquivo deste setup? Eu guardo um backup do original antes, então dá para voltar.")) return;
+    if (!confirm(`Aplicar ${chosen.length} ajuste(s) direto no arquivo deste setup? Eu guardo um backup do original antes, então dá para voltar.`)) return;
     upd.disabled = true;
     try {
       const res = await api(`/api/setups/${setupId}/apply`, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "update", changes: chosen.map((c) => ({ path: c.path, delta: c.delta })) }) });
-      $("#eGenOut").innerHTML = res.unchanged ? `<div class="note okk">Nada mudou: o setup já está assim.</div>`
-        : res.already ? `<div class="note okk">Esse resultado já existe como <b>${esc(res.name)}</b>.</div>`
-        : `<div class="note okk">Pronto! <b>${esc(res.name)}</b> foi atualizado no ACC. Backup do original em <code>${esc(res.backup || "")}</code>.</div>`;
+      if (res.unchanged || res.already) {
+        $("#eGenOut").innerHTML = res.unchanged ? `<div class="note okk">Nada mudou: o setup já está assim.</div>` : `<div class="note okk">Esse resultado já existe como <b>${esc(res.name)}</b>.</div>`;
+      } else {
+        if (window.PwRecs && r.meta) PwRecs.mark(setupId, sig, chosen.map((c) => ({ path: c.path, delta: c.delta })));
+        renderEngineer(r, setupId, setupName, { ...opt, checked: [], flash: `<div class="note okk">✓ Pronto! <b>${esc(res.name)}</b> foi atualizado no ACC com ${chosen.length} ajuste(s). Backup do original em <code>${esc(res.backup || "")}</code>.</div>` });
+      }
     } catch (e) { $("#eGenOut").innerHTML = `<div class="note warn">Não deu para atualizar: ${esc(e.message)}</div>`; }
     finally { upd.disabled = false; }
   };
   const gen = $("#eGen");
   if (gen) gen.onclick = async () => {
-    const chosen = [...out.querySelectorAll("[data-chg]")].filter((c) => c.checked).map((c) => r.changes[+c.dataset.chg]);
+    const chosen = picked();
     if (!chosen.length) { $("#eGenOut").innerHTML = `<div class="note warn">Marque pelo menos um ajuste.</div>`; return; }
     gen.disabled = true;
     try {
       const res = await api("/api/setups/generate", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ base_id: setupId, name: $("#eName").value, changes: chosen.map((c) => ({ path: c.path, delta: c.delta })) }) });
-      $("#eGenOut").innerHTML = res.already
-        ? `<div class="note okk">Esse setup já existe: <b>${esc(res.name)}</b> (nada novo foi criado).</div>`
-        : `<div class="note okk">Pronto! <b>${esc(res.name)}</b> foi salvo no ACC (Setups → carro → pista) e na sua biblioteca.</div>`;
+      if (res.already) { $("#eGenOut").innerHTML = `<div class="note okk">Esse setup já existe: <b>${esc(res.name)}</b> (nada novo foi criado).</div>`; return; }
+      if (window.PwRecs && r.meta && res.id) PwRecs.mark(res.id, sig, chosen.map((c) => ({ path: c.path, delta: c.delta })));     // a versão nova já nasce com isso aplicado
+      const dn = { ...doneNow }; chosen.forEach((c) => { dn[c.path] = res.name; });
+      renderEngineer(r, setupId, setupName, { ...opt, checked: [], doneNow: dn, flash: `<div class="note okk">✓ Pronto! <b>${esc(res.name)}</b> foi salvo no ACC (Setups → carro → pista) e na sua biblioteca, com ${chosen.length} ajuste(s).</div>` });
     } catch (e) {
       $("#eGenOut").innerHTML = `<div class="note warn">Não deu para salvar: ${esc(e.message)}</div>`;
     } finally { gen.disabled = false; }
