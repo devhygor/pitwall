@@ -51,22 +51,53 @@ def _set_app_id():
         pass
 
 
+def _own_windows(title: str) -> list[int]:
+    """Janelas deste processo com o título dado (FindWindow pelo título pegava, por exemplo, uma
+    pasta "Pitwall" aberta no Explorer, e a janela do app ficava com o ícone do Python)."""
+    import ctypes
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    pid, found = __import__("os").getpid(), []
+    proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def cb(hwnd, _lp):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid:
+            buf = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(hwnd, buf, 256)
+            if buf.value == title:
+                found.append(hwnd)
+        return True
+
+    user32.EnumWindows(proc(cb), 0)
+    return found
+
+
 def _set_window_icon(title: str):
     if sys.platform != "win32":
         return
-    try:
+
+    def apply():
         import ctypes
         user32 = ctypes.windll.user32
-        hwnd = user32.FindWindowW(None, title)
-        if not hwnd:
-            return
         ico = str(icon_path())
-        for size, which in ((16, 0), (32, 1)):        # ICON_SMALL, ICON_BIG
-            h = user32.LoadImageW(None, ico, 1, size, size, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
-            if h:
-                user32.SendMessageW(hwnd, 0x80, which, h)            # WM_SETICON
-    except Exception:  # noqa: BLE001
-        pass
+        for hwnd in _own_windows(title):
+            for size, which in ((16, 0), (32, 1)):        # ICON_SMALL, ICON_BIG
+                h = user32.LoadImageW(None, ico, 1, size, size, 0x10)   # IMAGE_ICON, LR_LOADFROMFILE
+                if h:
+                    user32.SendMessageW(hwnd, 0x80, which, h)            # WM_SETICON
+
+    def later():                                        # a janela nativa pode ainda não existir no 1º instante
+        import time
+        for delay in (0, 0.5, 1.5, 4):
+            time.sleep(delay)
+            try:
+                apply()
+            except Exception:  # noqa: BLE001
+                pass
+
+    threading.Thread(target=later, daemon=True).start()
 
 
 def run(url: str, recorder, server, app, start_hidden: bool = False):
@@ -115,6 +146,7 @@ def run(url: str, recorder, server, app, start_hidden: bool = False):
 
     win.events.closing += on_closing
     win.events.shown += lambda: _set_window_icon(title)
+    win.events.loaded += lambda: _set_window_icon(title)
     app.state.ui_show = show          # a 2ª abertura do Pitwall só mostra esta janela
 
     # overlays transparentes por cima do jogo (mapa, pedais, participantes e delta)
