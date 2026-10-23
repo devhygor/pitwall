@@ -1887,6 +1887,7 @@ async function paintTeamSetups() {
   const teamSel = teams.length > 1 ? `<select id="tsTeam">${teams.map((t) => `<option value="${t.id}" ${t.id === tsState.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : `<span class="sub">${esc(teams[0].name)}</span>`;
   let r;
   try { r = await api(`/api/team/setups?team_id=${tsState.team}`); } catch (e) { r = { ok: false, error: "erro", msg: e.message }; }
+  if (!box.isConnected) return;
   if (!r.ok) {
     const msg = r.error === "plano"
       ? `Os <b>setups da equipe</b> são para quem está na equipe e tem o plano <b>Pro</b> ou <b>Equipe</b> ativo (todo mundo pode <i>enviar</i> o seu, mas ver e baixar os dos companheiros é do plano). Com o plano, o setup de cada melhor volta dos companheiros fica reunido aqui e dá para baixar para o ACC com um clique. <a class="lnk" href="#/plano">Ver o plano</a>`
@@ -1928,15 +1929,16 @@ async function shareBox(setupId) {                       // botão "Compartilhar
   const box = $("#sShare");
   if (!box) return;
   let st; try { st = await api("/api/team/status"); } catch (e) { return; }
+  if (!box.isConnected) return;                           // o painel foi trocado enquanto carregava (clique em outro setup)
   const teams = st.teams || [];
   if (!st.logged_in || !teams.length) { box.innerHTML = `<div class="sub">Para compartilhar com a equipe, entre com o Google e participe de uma equipe (menu Equipe).</div>`; return; }
   box.innerHTML = `<h3>Compartilhar com a equipe</h3><div class="row" style="gap:8px;flex-wrap:wrap">
     <select id="shTeam">${teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
     <input id="shNote" placeholder="nota (ex.: bom na chuva)" style="flex:1;min-width:140px"><button class="btn primary sm" id="shGo">Compartilhar</button></div><div id="shOut" class="sub" style="margin-top:6px"></div>`;
-  $("#shGo").onclick = async () => {
-    const out = $("#shOut"); out.textContent = "Enviando…";
+  box.querySelector("#shGo").onclick = async () => {
+    const out = box.querySelector("#shOut"); out.textContent = "Enviando…";
     try {
-      const r = await api("/api/team/setups/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: $("#shTeam").value, setup_id: setupId, note: $("#shNote").value }) });
+      const r = await api("/api/team/setups/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ team_id: box.querySelector("#shTeam").value, setup_id: setupId, note: box.querySelector("#shNote").value }) });
       out.textContent = r.ok ? "✓ Compartilhado com a equipe." : "Não foi possível compartilhar.";
     } catch (e) { out.textContent = e.message; }
   };
@@ -1948,6 +1950,7 @@ async function showSetup(id) {
   view.querySelectorAll(".srow").forEach((tr) => tr.classList.toggle("sel", +tr.dataset.id === id));
   const s = await api(`/api/setups/${id}`);
   try { const l = await api("/api/license"); OV_FEATS.clear(); for (const f of l.features || []) OV_FEATS.add(f.id); } catch (e) { /* sem licença: tratado como grátis */ }
+  if (!$("#sDetail") || (setupsState.open !== id && !setupsState.cmp)) return;      // outra tela/linha foi aberta enquanto carregava
   const genLock = !OV_FEATS.has("setup_gen");
   const groups = [...new Set(s.rows.map((r) => r.group))];
   const st = s.stats;
