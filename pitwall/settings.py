@@ -97,7 +97,8 @@ DEFAULTS = {
     "eng_wake_word": "engenheiro",
     "eng_listen": True,                 # ouvir o piloto (desligue para só receber avisos)
     "eng_stt_model": "base",            # tiny | base | small (Whisper)
-    "eng_verbosity": "normal",          # pouco | normal | muito
+    "eng_verbosity": "normal",          # minimo (só o crítico) | pouco | normal | muito
+    "eng_min_gap": 0,                   # pausa mínima (s) entre avisos não urgentes; 0 = sem pausa (livre para todos os planos)
     "eng_personality": "profissional",  # profissional | humor | bravo | variavel (ver pitwall/voice/humor.py)
     "eng_humor_level": "normal",        # pouco | normal | muito: com que frequência comenta
     "eng_events": {},                   # categorias de aviso ligadas/desligadas (ver pitwall/voice/events.py)

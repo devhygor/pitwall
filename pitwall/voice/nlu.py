@@ -24,6 +24,14 @@ _RULES_SRC: list[tuple[str, list[list[str]], int]] = [
     # --- conversa e controle --------------------------------------------------------------------
     ("mute", [["silencio", "cala ", "calado", "fica quieto", "fique quieto", "para de falar", "pare de falar", "chega de aviso", "sem aviso", "desliga os aviso", "nao fale", "nao fala"]], 9),
     ("unmute", [["volta a falar", "volte a falar", "pode falar de novo", "pode voltar", "liga os aviso", "ativa os aviso", "avisos de volta", "pode avisar"]], 9),
+    # quantidade de avisos (plano Pro): relativo (mais/menos) ou direto (só o essencial / normal)
+    ("talk_less", [["(fal|avis)\\w* menos", "menos (aviso|conversa|fala|papo)", "(diminu|reduz|baix)\\w* (os |a |o )?(aviso|fala|conversa|papo|quantidade)",
+                    "(fala|avisa|conversa)\\w* (demais|muito)", "(esta|ta) (falando|avisando) (demais|muito|toda hora|o tempo todo)", "muito aviso", "aviso demais",
+                    "muita (conversa|fala)", "(para|pare) de (falar|avisar) tanto", "menos barulho"]], 10),
+    ("talk_more", [["(fal|avis)\\w* mais(?! (alto|baixo|devagar|rapido|forte|claro))", "mais (aviso|conversa|fala|papo)", "(aument|ampli|sub)\\w* (os |a |o )?(aviso|fala|conversa|papo|quantidade)",
+                    "pode (falar|avisar|conversar) mais", "quero (mais aviso|que (voce )?fale mais|que (voce )?avise mais)"]], 10),
+    ("talk_min", [["so (o |os |as |a )?(essencial|essenciais|importante|importantes|critico|criticos|necessario|basico)", "modo minimo", "nivel minimo", "(aviso|fala)\\w* minim"]], 10),
+    ("talk_normal", [["(aviso|fala|conversa|quantidade|nivel)\\w* normal", "volta\\w* (ao|pro|para o) normal", "deix\\w* (no )?normal", "(poe|ponha|coloca|coloque) (no )?normal"]], 10),
     ("repeat", [["repete", "repita", "fala de novo", "fale de novo", "diz de novo", "o que voce disse", "o que disse", "nao entendi", "nao ouvi", "como assim"]], 8),
     ("radio_check", [["radio check", "teste de radio", "me ouve", "me escuta", "esta me ouvindo", "ta me ouvindo", "esta ai", "ta ai", "esta na escuta", "voce me ouve", "check de radio"]], 8),
     ("thanks", [["obrigad", "valeu", "brigad", "show", "beleza", "tmj", "tamo junto", "boa"]], 2),

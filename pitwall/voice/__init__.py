@@ -34,12 +34,25 @@ _PREWARM_KEYS = ("car_left", "car_right", "two_left", "two_right", "three_wide",
 
 
 class _Item:
-    __slots__ = ("text", "prio", "until", "cat", "key", "at")
+    __slots__ = ("text", "prio", "until", "cat", "key", "at", "check", "dead", "preempted")
 
-    def __init__(self, text, prio, ttl, cat, key):
+    def __init__(self, text, prio, ttl, cat, key, check=None):
         self.text, self.prio, self.cat, self.key = text, prio, cat, key
+        self.check = check                               # "isso ainda vale?" (olha o jogo na hora de falar)
+        self.dead = False                                # cancelada (silêncio, interrupção, tecla de falar)
+        self.preempted = False                           # o observador passou na frente
         self.at = time.monotonic()
         self.until = self.at + ttl
+
+    def valid(self) -> bool:
+        if self.dead:
+            return False
+        if self.check is None:
+            return True
+        try:
+            return bool(self.check())
+        except Exception:  # noqa: BLE001
+            return True
 
 
 class Speaker:
@@ -71,36 +84,50 @@ class Speaker:
     def speaking_recently(self) -> bool:
         return self.player.playing or time.monotonic() - self._last_end < 0.6
 
-    def enqueue(self, text, prio=2, ttl=12.0, cat="", key=""):
-        it = _Item(text, prio, ttl, cat, key or text)
+    def enqueue(self, text, prio=2, ttl=12.0, cat="", key="", check=None):
+        it = _Item(text, prio, ttl, cat, key or text, check)
         with self._cv:
             self._items = [i for i in self._items if i.key != it.key]
             self._items.append(it)
             if len(self._items) > 8:
                 self._items.sort(key=lambda i: (-i.prio, i.at))
                 self._items = self._items[:8]
-            if self._now is not None and prio >= 5 and self._now.prio < 5:
-                self.player.stop()                       # o observador corta a fala atual
+            now = self._now
+            if now is not None and prio >= 5 and now.prio < 5:
+                now.preempted = True                     # o observador corta a fala atual (tocando ou ainda sintetizando)
+                self.player.stop()
             self._cv.notify_all()
         self.start()
 
     def interrupt(self):
         with self._cv:
             self._items.clear()
+            n = self._now
+            if n is not None:
+                n.dead = True
         self.player.stop()
 
     def clear(self):
+        """Esvazia a fila e cancela a fala que ainda está sendo preparada (silêncio/desligar)."""
         with self._cv:
             self._items.clear()
+            n = self._now
+            if n is not None and not self.player.playing:
+                n.dead = True
 
     def pending(self) -> int:
         return len(self._items)
 
     def _pick(self):
         now = time.monotonic()
-        self._items = [i for i in self._items if i.until > now]
+        self._items = [i for i in self._items if i.until > now and i.valid()]
         busy = self.eng.busy()
-        cand = [i for i in self._items if not (busy and i.prio <= 2)]
+        try:
+            gap = float(self.eng.settings.get("eng_min_gap") or 0) if self.eng.settings else 0.0
+        except (TypeError, ValueError):
+            gap = 0.0
+        quiet = gap > 0 and now - self._last_end < gap             # respeita a pausa mínima entre avisos não urgentes
+        cand = [i for i in self._items if not ((busy or quiet) and i.prio <= 2)]
         if not cand:
             return None
         it = max(cand, key=lambda i: (i.prio, -i.at))
@@ -123,12 +150,42 @@ class Speaker:
             finally:
                 self._now = None
                 self._last_end = time.monotonic()
+            if it.preempted and not it.dead and it.prio >= 3 and time.monotonic() < it.until:
+                with self._cv:                          # foi atropelada pelo observador antes de falar: volta pra fila
+                    it.preempted = False
+                    if not any(i.key == it.key for i in self._items):
+                        self._items.append(it)
+
+    def _synth(self, it: _Item):
+        """Sintetiza sem prender a fila: se a fala perder a hora, for cancelada ou o observador pedir passagem,
+        larga a síntese (ela termina sozinha e fica no cache) e segue para a próxima."""
+        box: dict = {}
+        done = threading.Event()
+
+        def run():
+            try:
+                box["r"] = self.eng.tts.synth(it.text)
+            except Exception as e:  # noqa: BLE001
+                box["e"] = e
+            finally:
+                done.set()
+        threading.Thread(target=run, daemon=True, name="pitwall-synth").start()
+        while not done.wait(0.03):
+            if self._stop.is_set() or it.dead or it.preempted or time.monotonic() > it.until:
+                return None
+        if "e" in box:
+            raise box["e"]
+        return box["r"]
 
     def _speak(self, it: _Item):
         s = self.eng.settings
-        x, sr = self.eng.tts.synth(it.text)
-        if time.monotonic() > it.until + (4.0 if it.prio >= 4 else 0.0):
-            return                                       # demorou e perdeu a hora
+        r = self._synth(it)
+        if r is None:
+            return
+        x, sr = r
+        # perdeu a hora (só a resposta a uma pergunta tem tolerância), foi cancelada, atropelada ou já não vale mais
+        if time.monotonic() > it.until + (4.0 if it.cat == "reply" else 0.0) or it.dead or it.preempted or not it.valid():
+            return
         radio = bool(s.get("eng_radio")) if s else False
         if radio:
             lv = int(s.get("eng_radio_level") if s.get("eng_radio_level") is not None else 60)
@@ -198,6 +255,7 @@ class Engineer:
         self.muted = bool(v)
         if v:
             self.speaker.clear()
+            self.speaker.player.stop()
 
     # ---- entrada de dados --------------------------------------------------------------------------
     def feed(self, f):
@@ -216,22 +274,34 @@ class Engineer:
             self.spotter.update(f, self.state)
             if self._on("spotter") and self.allows("spotter") and not self.muted:
                 for k in self.spotter.calls():
-                    self.speaker.enqueue(phrases.say(k), prio=5, ttl=1.6, cat="spotter", key=f"spot_{k}")
+                    self.speaker.enqueue(phrases.say(k), prio=5, ttl=1.6, cat="spotter", key=f"spot_{k}",
+                                         check=self._spot_check(k))
             self.monitor.update(self.state)
         except Exception as e:  # noqa: BLE001
             self.errors.append(f"{type(e).__name__}: {e}")
 
+    def _spot_check(self, k: str):
+        """O aviso do observador só vale se a situação ainda for a mesma na hora de falar."""
+        sp = self.spotter
+        return {
+            "car_left": lambda: sp.left > 0, "two_left": lambda: sp.left > 0, "still_left": lambda: sp.left > 0,
+            "car_right": lambda: sp.right > 0, "two_right": lambda: sp.right > 0, "still_right": lambda: sp.right > 0,
+            "three_wide": lambda: sp.left > 0 and sp.right > 0,
+            "clear_left": lambda: sp.left == 0, "clear_right": lambda: sp.right == 0,
+            "clear_all": lambda: sp.left == 0 and sp.right == 0,
+        }.get(k)
+
     def _on(self, cat) -> bool:
         return bool((self.settings.get("eng_events") or DEFAULT_EVENTS).get(cat, True))
 
-    def say(self, text, prio=2, ttl=12.0, cat="", key=""):
-        """Fala proativa (respeita o silêncio pedido pelo piloto)."""
+    def say(self, text, prio=2, ttl=12.0, cat="", key="", check=None):
+        """Fala proativa (respeita o silêncio pedido pelo piloto). `check` diz se ainda vale falar na hora H."""
         if not self.enabled or self.muted:
             return
-        self.speaker.enqueue(text, prio=prio, ttl=ttl, cat=cat, key=key)
+        self.speaker.enqueue(text, prio=prio, ttl=ttl, cat=cat, key=key, check=check)
 
     def reply(self, text):
-        self.speaker.enqueue(text, prio=4, ttl=30.0, cat="reply", key="reply")
+        self.speaker.enqueue(text, prio=4, ttl=20.0, cat="reply", key="reply")
 
     # ---- conversa --------------------------------------------------------------------------------
     def on_listen_start(self):

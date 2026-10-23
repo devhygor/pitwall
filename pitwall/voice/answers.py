@@ -16,7 +16,7 @@ NO_PLAYER = "Não estou vendo você na pista agora."
 HELP = ("Pergunte sobre combustível, pneus, freios, posição, voltas, tempo restante, clima, bandeiras e penalidades. "
         "Sobre os outros pilotos, pergunte pelo carro de trás, o da frente, o líder, um número de carro, uma posição ou o nome do piloto: "
         "quem é, diferença, melhor volta, última volta, carro, classe, se parou no box, se está mais rápido. "
-        "Diga silêncio para eu parar os avisos, e repete para eu falar de novo.")
+        "Diga silêncio para eu parar os avisos, e repete para eu falar de novo. No plano Pro, diga fala menos ou fala mais para ajustar a quantidade de avisos.")
 
 
 EXAMPLES = [
@@ -39,6 +39,7 @@ EXAMPLES = [
         "O Fulano parou no box?", "Qual a diferença para o Fulano?", "Estou sendo dobrado?"]},
     {"group": "Humor, dicas e broncas", "items": ["Como estou indo?", "Me dá uma dica", "Me elogia", "Me dá uma bronca", "Conta uma piada"]},
     {"group": "Controle", "items": ["Repete", "Silêncio (para os avisos)", "Pode voltar a falar", "Rádio check", "Ajuda"]},
+    {"group": "Quantidade de avisos (Pro)", "items": ["Fala menos", "Fala mais", "Só o essencial", "Volta ao normal"]},
 ]
 
 
@@ -119,6 +120,7 @@ def _cmp_time(a, b) -> str:
     return f", {seg(abs(d))} {'mais lenta' if d > 0 else 'mais rápida'} que a sua"
 
 
+TALK_INTENTS = {"talk_less", "talk_more", "talk_min", "talk_normal"}      # mexem na configuração: só quem pode personalizar (Pro)
 FREE_INTENTS = {"mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "fuel_level", "fuel_laps", "fuel_end",
                 "position", "last_lap", "best_lap", "laps_left", "time_left", "lap_number", "session_info", "track_info", "car_info"}
 PERSONALITY_INTENTS = {"praise", "scold", "joke", "tip", "how_am_i"}
@@ -126,6 +128,8 @@ UPGRADE = "Essa pergunta faz parte do plano Pro. Veja o menu Plano para conhecer
 
 
 def answer(p: Parsed, eng) -> str:
+    if p.intent in TALK_INTENTS and not eng.allows("voice_custom"):
+        return UPGRADE
     if p.intent in PERSONALITY_INTENTS and not eng.allows("voice_personality"):
         return UPGRADE
     if p.intent not in FREE_INTENTS and p.intent not in PERSONALITY_INTENTS and not eng.allows("voice_full"):
@@ -135,7 +139,7 @@ def answer(p: Parsed, eng) -> str:
         return phrases.say("not_understood")
     st = eng.state
     f = st.f
-    if f is None and p.intent not in ("mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "praise", "scold", "joke"):
+    if f is None and p.intent not in ("talk_less", "talk_more", "talk_min", "talk_normal", "mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "praise", "scold", "joke"):
         return "Ainda não estou recebendo dados do jogo."
     try:
         return fn(p, eng, st, f) or phrases.say("no_data")
@@ -152,6 +156,31 @@ def h_mute(p, eng, st, f):
 def h_unmute(p, eng, st, f):
     eng.set_muted(False)
     return phrases.say("unmuted")
+
+
+_LEVELS = ["minimo", "pouco", "normal", "muito"]
+_LEVEL_SAY = {"minimo": "Ok, só o essencial: bandeiras, penalidades e emergências.",
+              "pouco": "Ok, vou falar menos e só o que for importante.",
+              "normal": "Ok, volto ao ritmo normal de avisos.",
+              "muito": "Ok, vou avisar mais, com mais detalhes."}
+
+
+def h_talk(p, eng, st, f):
+    """Muda "Quanto ele fala" (eng_verbosity) pela voz: mais/menos um degrau, ou direto para mínimo/normal."""
+    cur = eng.settings.get("eng_verbosity") or "normal"
+    i = _LEVELS.index(cur) if cur in _LEVELS else 2
+    if p.intent == "talk_min":
+        new = "minimo"
+    elif p.intent == "talk_normal":
+        new = "normal"
+    else:
+        new = _LEVELS[max(0, min(len(_LEVELS) - 1, i + (1 if p.intent == "talk_more" else -1)))]
+    if new == cur and p.intent in ("talk_less", "talk_more", "talk_min"):
+        return "Já estou no mínimo, só o essencial." if new == "minimo" else "Já estou avisando o máximo que dá."
+    eng.settings.update({"eng_verbosity": new})
+    if p.intent == "talk_more" and new == "pouco":
+        return "Ok, falo um pouco mais, mas só o importante."
+    return _LEVEL_SAY[new]
 
 
 def h_repeat(p, eng, st, f):
@@ -637,6 +666,7 @@ def h_rv_summary(p, eng, st, f):
 
 
 _H = {
+    "talk_less": h_talk, "talk_more": h_talk, "talk_min": h_talk, "talk_normal": h_talk,
     "mute": h_mute, "unmute": h_unmute, "repeat": h_repeat, "radio_check": h_radio, "thanks": h_thanks, "help": h_help,
     "hello": h_hello, "praise": h_praise, "scold": h_scold, "joke": h_joke, "tip": h_tip, "how_am_i": h_how_am_i, "fuel_level": h_fuel_level, "fuel_laps": h_fuel_laps, "fuel_use": h_fuel_use, "fuel_end": h_fuel_end,
     "pit_when": h_pit_when, "tyre_temp": h_tyre_temp, "tyre_press": h_tyre_press, "tyre_wear": h_tyre_wear, "tyre_all": h_tyre_all,

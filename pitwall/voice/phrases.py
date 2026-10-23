@@ -93,6 +93,9 @@ P: dict[str, list[str]] = {
     "laps_left": ["Faltam {n} voltas.", "{n} voltas para o fim."],
     "laps_two": ["Duas voltas para o fim.", "Faltam duas voltas, mantenha o foco."],
     "last_lap": ["Última volta! Dê o seu melhor.", "Volta final, sem erros.", "É a última volta, vai com tudo."],
+    "pre_race": ["Volta de apresentação. Aproveite para aquecer pneus e freios: balance o carro e freie forte, sem exagero.",
+                 "Ainda é a volta de apresentação. Esquente os pneus, os freios, e mantenha a posição no grid.",
+                 "Pré-largada. Aqueça freios e pneus, mantenha o pelotão fechado e fique atento às luzes."],
     "race_start": ["Luzes apagaram, boa largada!", "Largou! Cuidado na primeira curva.", "Corrida iniciada, mantenha a calma na largada."],
     # ---- clima -------------------------------------------------------------------------------
     "rain_soon": ["Chuva prevista para os próximos {m} minutos.", "Atenção, vai chover em cerca de {m} minutos."],

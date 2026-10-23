@@ -135,6 +135,8 @@ class ACCSource:
                 if ss.get("end", 0) and ss["end"] > 0 and ss.get("time", -1) >= 0:
                     f.session_total_ms = float(ss["time"] + ss["end"])
                 f.player_id = getattr(sm.Graphics, "player_car_id", -1)
+                if "phase" in ss:                        # SessionPhase do broadcast: 1-4 = largada, apresentação, grid
+                    f.extra["pre_race"] = int(ss["phase"]) in (1, 2, 3, 4)
             f.total_laps = int(getattr(sm.Graphics, "number_of_laps", 0) or 0)
             yield f
             time.sleep(period)
@@ -335,7 +337,7 @@ class IRacingSource:
             rain=(int(round(float(prec) * 5)),) if prec is not None else (),
             session_total_ms=float(tt) * 1000 if tt and 0 < tt < 1e7 else -1.0,
             total_laps=int(sl) if sl and 0 < sl < 10000 else 0,
-            extra={"car_lr": self._car_lr(ir)},
+            extra={"car_lr": self._car_lr(ir), "pre_race": int(ir["SessionState"] or 0) in (1, 2, 3)},  # 3 = voltas de apresentação
         )
 
     @staticmethod

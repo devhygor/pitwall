@@ -97,7 +97,8 @@ async function renderVoiceEngineer() {
     </section>
     <section class="set-sec" data-sec="avisos">
       <div class="set-card"><h2>Avisos automáticos</h2>
-        ${setRow("Quanto ele fala", "Controla a frequência dos avisos.", sel("eVerb", [["pouco", "Pouco (só o importante)"], ["normal", "Normal"], ["muito", "Muito"]], S.eng_verbosity))}
+        ${setRow("Quanto ele fala", "Mínimo: só o crítico (bandeiras, penalidades, combustível, rodadas). Pouco: sem as informações extras e com avisos mais espaçados. Muito: repete mais.", sel("eVerb", [["minimo", "Mínimo (só o crítico)"], ["pouco", "Pouco (só o importante)"], ["normal", "Normal"], ["muito", "Muito"]], S.eng_verbosity))}
+        ${setRow("Pausa entre avisos", "Tempo mínimo de silêncio entre um aviso e o próximo (não vale para o observador, bandeiras e respostas às suas perguntas). 0 = sem pausa.", `<div class="eng-inline"><input type="range" id="eGap" min="0" max="60" step="5" value="${S.eng_min_gap || 0}"><span id="eGapV" class="sub">${S.eng_min_gap ? S.eng_min_gap + " s" : "sem pausa"}</span></div>`)}
         <div class="eng-cats" id="eCats">${cat.categories.map((c) => `<label class="eng-cat"><input class="tgl" type="checkbox" data-cat="${c.id}" ${ev[c.id] === false ? "" : "checked"}><span>${esc(c.name)}</span></label>`).join("")}</div>
         ${setRow("Inverter esquerda/direita do observador", "Se ele avisar “carro à esquerda” quando o carro está à direita, ligue isto (vale também para o overlay Radar). Veja abaixo o que ele está enxergando.", tgl("eSwap", S.eng_spotter_swap))}
         <div class="kv"><span>Observador agora</span><span id="eSpot" class="sub">—</span></div>
@@ -162,6 +163,8 @@ async function renderVoiceEngineer() {
   $("#ePersDemo").onclick = () => post("/api/engineer/mood/demo", { personality: $("#ePers").value }).catch((e) => alert(e.message));
   bindSel("#ePttMode", "eng_ptt_mode"); bindSel("#eStt", "eng_stt_model"); bindSel("#eVerb", "eng_verbosity");
   $("#eWakeWord").addEventListener("change", (e) => put({ eng_wake_word: e.target.value.trim() || "engenheiro" }));
+  $("#eGap").addEventListener("input", (e) => { $("#eGapV").textContent = +e.target.value ? e.target.value + " s" : "sem pausa"; });
+  $("#eGap").addEventListener("change", (e) => put({ eng_min_gap: +e.target.value }));
   $("#eRate").addEventListener("input", (e) => { $("#eRateV").textContent = e.target.value + "%"; });
   $("#eRate").addEventListener("change", (e) => put({ eng_rate: +e.target.value }));
   for (const [id, key] of [["eRadioLv", "eng_radio_level"], ["eRadioNz", "eng_radio_noise"]]) {

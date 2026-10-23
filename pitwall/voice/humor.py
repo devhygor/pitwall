@@ -189,7 +189,7 @@ class Mood:
         self._decay()
         self.score = max(-1.0, min(1.0, self.score + DELTA.get(event, 0.0)))
         eng = self.eng
-        if not eng.enabled or eng.muted or self.personality() == "profissional" or not eng._on("humor"):
+        if not eng.enabled or eng.muted or self.personality() == "profissional" or not eng._on("humor") or eng.settings.get("eng_verbosity") == "minimo":
             return
         now = time.monotonic()
         if now - self._last < 14 or now < self._cool.get(event, 0.0):
@@ -209,7 +209,7 @@ class Mood:
     def spontaneous(self):
         """Comentário solto de vez em quando se o humor estiver forte para um lado."""
         eng = self.eng
-        if not eng.enabled or eng.muted or self.personality() == "profissional" or not eng._on("humor"):
+        if not eng.enabled or eng.muted or self.personality() == "profissional" or not eng._on("humor") or eng.settings.get("eng_verbosity") == "minimo":
             return
         now = time.monotonic()
         if now - self._idle_at < 300 or now - self._last < 60:

@@ -81,6 +81,8 @@ class Monitor:
         self.fuel_short_at = 0.0
         self.last_eval = 0.0
         self.race_started = False
+        self.was_pre = False
+        self.pre_said = False
         self.gap_due = False
         self.best_seen = None
         self.pit_seen: dict = {}
@@ -92,18 +94,33 @@ class Monitor:
         ev = self.eng.settings.get("eng_events") if self.eng.settings else None
         return bool((ev or DEFAULT_EVENTS).get(cat, True))
 
-    def _mult(self) -> float:
-        return {"pouco": 2.0, "normal": 1.0, "muito": 0.5}.get(self.eng.settings.get("eng_verbosity") if self.eng.settings else "normal", 1.0)
+    def _verb(self) -> str:
+        return (self.eng.settings.get("eng_verbosity") if self.eng.settings else "") or "normal"
 
-    def emit(self, cat, key, text, prio=2, ttl=12.0, cool=0.0, tag=None):
-        if not self._on(cat):
+    def _mult(self) -> float:
+        return {"minimo": 3.0, "pouco": 2.0, "normal": 1.0, "muito": 0.5}.get(self._verb(), 1.0)
+
+    def _min_prio(self) -> int:
+        """Só passam avisos com prioridade a partir daqui: mínimo = críticos (3+), pouco = sem informações (2+)."""
+        return {"minimo": 3, "pouco": 2}.get(self._verb(), 1)
+
+    def _live(self, fn):
+        """Transforma `fn(st, f)` numa checagem para a hora de falar (com o jogo como está AGORA)."""
+        def check():
+            st = self.eng.state
+            f = st.f
+            return bool(f and f.status == "live" and fn(st, f))
+        return check
+
+    def emit(self, cat, key, text, prio=2, ttl=12.0, cool=0.0, tag=None, check=None):
+        if not self._on(cat) or prio < self._min_prio():
             return False
         now = time.monotonic()
         tag = tag or key
         if now < self._cool.get(tag, 0.0):
             return False
         self._cool[tag] = now + cool * self._mult()
-        self.eng.say(text, prio=prio, ttl=ttl, cat=cat, key=tag)
+        self.eng.say(text, prio=prio, ttl=ttl, cat=cat, key=tag, check=check)
         ev = MOOD_EVENTS.get(key)
         mood = getattr(self.eng, "mood", None)
         if ev and mood is not None:
@@ -132,6 +149,8 @@ class Monitor:
         if prev is None:
             return
         self._greet(st, f, now)
+        if self._pre_race(st, f, now):
+            return
         self._flags(f)
         self._track_limits(st, f, prev)
         self._laps(st, f, prev, now)
@@ -157,6 +176,31 @@ class Monitor:
         self.emit("info", "greet", phrases.say("greet", track=_pretty(f.track), car=_pretty(f.car), session=session_label(f.session_type)),
                   prio=1, ttl=20, tag="greet")
 
+    def _pre_race(self, st, f, now) -> bool:
+        """Antes da largada (volta de apresentação/grid): as bandeiras do jogo não valem e o resto do painel ainda
+        não faz sentido. Fala só uma orientação de aquecimento; quando a corrida começa, avisa a largada."""
+        race = (f.session_type or "").lower().startswith("race")
+        pre = bool(race and (f.extra or {}).get("pre_race"))
+        if pre:
+            self.was_pre = True
+            self.pos_prev = self.pos_cand = None            # a ordem do grid ainda vai mudar: não é ultrapassagem
+            self.pit_prev = f.in_pit_lane
+            self.yellow_prev = [False, False, False]
+            for k, v in (f.flags or {}).items():
+                if k != "yellow":
+                    self.flag_prev[k] = bool(v)
+            if not self.pre_said and now - self.live_since >= 6.0 and self._on("session"):
+                self.pre_said = True
+                self.emit("session", "pre_race", phrases.say("pre_race"), prio=3, ttl=25, tag="pre_race",
+                          check=self._live(lambda st, f: bool((f.extra or {}).get("pre_race"))))
+            return True
+        if self.was_pre:
+            self.was_pre = False
+            if race and f.completed_laps == 0 and not self.race_started:
+                self.race_started = True
+                self.emit("session", "race_start", phrases.say("race_start"), prio=3, ttl=8, cool=120)
+        return False
+
     def _flags(self, f):
         fl = f.flags or {}
         y = list(fl.get("yellow") or [False] * 3)
@@ -164,14 +208,14 @@ class Monitor:
         old = self.yellow_prev
         new = [i for i, v in enumerate(y) if v and not old[i]]
         if any(y) and not any(old) and all(y):
-            self.emit("flags", "yellow", phrases.say("yellow_all"), prio=4, ttl=6, cool=20, tag="yellow")
+            self.emit("flags", "yellow", phrases.say("yellow_all"), prio=4, ttl=5, cool=20, tag="yellow", check=self._yellow_now(True))
         elif new:
             if len(new) == 1:
-                self.emit("flags", "yellow", phrases.say("yellow", s=new[0] + 1), prio=4, ttl=6, tag="yellow")
+                self.emit("flags", "yellow", phrases.say("yellow", s=new[0] + 1), prio=4, ttl=5, tag="yellow", check=self._yellow_now(True))
             else:
-                self.emit("flags", "yellow", "Bandeira amarela nos setores " + " e ".join(str(i + 1) for i in new) + ".", prio=4, ttl=6, tag="yellow")
+                self.emit("flags", "yellow", "Bandeira amarela nos setores " + " e ".join(str(i + 1) for i in new) + ".", prio=4, ttl=5, tag="yellow", check=self._yellow_now(True))
         elif not any(y) and any(old):
-            self.emit("flags", "yellow_end", phrases.say("yellow_end"), prio=3, ttl=8, cool=15)
+            self.emit("flags", "yellow_end", phrases.say("yellow_end"), prio=3, ttl=6, cool=15, check=self._yellow_now(False))
         self.yellow_prev = y
         for k, key, prio, cool in (("blue", "blue", 4, 25), ("red", "red", 4, 10), ("black", "black", 4, 20),
                                    ("white", "white", 3, 60), ("chequered", "chequered", 4, 30)):
@@ -184,11 +228,15 @@ class Monitor:
                 self.emit("session", "race_start", phrases.say("race_start"), prio=3, ttl=8, cool=120)
         self.flag_prev["green"] = bool(fl.get("green"))
 
+    def _yellow_now(self, want: bool):
+        return self._live(lambda st, f: any((f.flags or {}).get("yellow") or []) == want)
+
     def _track_limits(self, st, f, prev):
         if prev.is_valid_lap and not f.is_valid_lap and not f.in_pit_lane:
             self.invalid_streak += 1
             key = "lap_invalid" if self.invalid_streak == 1 or self.invalid_streak % 2 else "track_limits"
-            self.emit("track_limits", key, phrases.say(key), prio=3, ttl=8, cool=8, tag="invalid")
+            self.emit("track_limits", key, phrases.say(key), prio=3, ttl=6, cool=8, tag="invalid",
+                      check=self._live(lambda st, f: not f.is_valid_lap))
         if f.cut_penalty and not prev.cut_penalty:
             self.emit("penalties", "cut_penalty", phrases.say("cut_penalty"), prio=4, ttl=10, cool=20)
         elif (f.flags or {}).get("penalty") and not (prev.flags or {}).get("penalty"):
@@ -223,7 +271,7 @@ class Monitor:
             elif was_valid and f.best_time_ms:
                 d = (lt - f.best_time_ms) / 1000.0
                 key = "lap_slow" if d > 0.5 else "lap_fast"
-                if st.race and (self.eng.settings.get("eng_verbosity") or "normal") != "muito":
+                if st.race and self._verb() != "muito":
                     return                                  # em corrida só recorde pessoal e melhor volta (não fica falando toda volta)
                 self.emit("laps", key, phrases.say(key, time=laptime(lt), gap=seg(abs(d))), prio=1, ttl=20, cool=0, tag="laptime")
             elif not was_valid:
@@ -233,9 +281,9 @@ class Monitor:
 
     def _pit(self, f):
         if f.in_pit_lane and not self.pit_prev:
-            self.emit("pit", "pit_in", phrases.say("pit_in"), prio=2, ttl=6, cool=20)
+            self.emit("pit", "pit_in", phrases.say("pit_in"), prio=2, ttl=4, cool=20, check=self._live(lambda st, f: f.in_pit_lane))
         elif not f.in_pit_lane and self.pit_prev:
-            self.emit("pit", "pit_out", phrases.say("pit_out"), prio=2, ttl=8, cool=20)
+            self.emit("pit", "pit_out", phrases.say("pit_out"), prio=2, ttl=6, cool=20, check=self._live(lambda st, f: not f.in_pit_lane))
         self.pit_prev = f.in_pit_lane
 
     def _incident(self, f, now):
@@ -340,12 +388,14 @@ class Monitor:
                 gap = abs(g)
                 tr = st.trend(b)
                 who = b["name"].split(" ")[0] if b.get("name") else "ele"
+                still_b = self._live(lambda st, f, bid=b.get("id"): st.behind is not None and st.behind.get("id") == bid
+                                     and (lambda g: g is not None and -2.2 < g < 0)(st.gap_s(st.behind)))
                 if gap < 0.7 and race:
-                    self.emit("gaps", "defend", phrases.say("defend"), prio=2, ttl=8, cool=90, tag="defend")
+                    self.emit("gaps", "defend", phrases.say("defend"), prio=2, ttl=5, cool=90, tag="defend", check=still_b)
                 elif tr is not None and tr < -0.15 and gap < 2.0:
-                    self.emit("gaps", "behind_closing", phrases.say("behind_closing", who=who, gap=seg(gap)), prio=2, ttl=10, cool=60, tag="behind_c")
+                    self.emit("gaps", "behind_closing", phrases.say("behind_closing", who=who, gap=seg(gap)), prio=2, ttl=6, cool=60, tag="behind_c", check=still_b)
                 elif gap < 1.0:
-                    self.emit("gaps", "behind_close", phrases.say("behind_close", who=who, gap=seg(gap)), prio=2, ttl=10, cool=60, tag="behind_n")
+                    self.emit("gaps", "behind_close", phrases.say("behind_close", who=who, gap=seg(gap)), prio=2, ttl=6, cool=60, tag="behind_n", check=still_b)
             elif g is not None and g < -2.0:
                 tr = st.trend(b)
                 if tr is not None and tr > 0.3 and self._cool.get("behind_c", 0) > time.monotonic() - 120:
@@ -355,12 +405,14 @@ class Monitor:
             if g is not None and 0 < g < 1.5:
                 tr = st.trend(a)
                 who = a["name"].split(" ")[0] if a.get("name") else "ele"
+                still_a = self._live(lambda st, f, aid=a.get("id"): st.ahead is not None and st.ahead.get("id") == aid
+                                     and (lambda g: g is not None and 0 < g < 2.2)(st.gap_s(st.ahead)))
                 if g < 0.8 and race:
-                    self.emit("gaps", "attack", phrases.say("attack"), prio=2, ttl=8, cool=90, tag="attack")
+                    self.emit("gaps", "attack", phrases.say("attack"), prio=2, ttl=5, cool=90, tag="attack", check=still_a)
                 elif tr is not None and tr < -0.15:
-                    self.emit("gaps", "ahead_closing", phrases.say("ahead_closing", who=who, gap=seg(g)), prio=1, ttl=10, cool=60, tag="ahead_c")
+                    self.emit("gaps", "ahead_closing", phrases.say("ahead_closing", who=who, gap=seg(g)), prio=1, ttl=6, cool=60, tag="ahead_c", check=still_a)
                 else:
-                    self.emit("gaps", "ahead_close", phrases.say("ahead_close", who=who, gap=seg(g)), prio=1, ttl=10, cool=60, tag="ahead_n")
+                    self.emit("gaps", "ahead_close", phrases.say("ahead_close", who=who, gap=seg(g)), prio=1, ttl=6, cool=60, tag="ahead_n", check=still_a)
 
     def _positions(self, st, f, now):
         me = st.me
@@ -375,7 +427,8 @@ class Monitor:
                 self.pos_cand = (pos, now)
             elif now - self.pos_cand[1] >= 3.0 and f.completed_laps + f.norm_pos > 0.05:
                 key = "gained" if pos < self.pos_prev else "lost"
-                self.emit("positions", key, phrases.say(key, pos=pos), prio=2, ttl=10, cool=0, tag="pos")
+                self.emit("positions", key, phrases.say(key, pos=pos), prio=2, ttl=8, cool=0, tag="pos",
+                          check=lambda p=pos: bool(self.eng.state.me and self.eng.state.me.get("pos") == p))
                 self.pos_prev, self.pos_cand = pos, None
         else:
             self.pos_cand = None
