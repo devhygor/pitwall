@@ -210,6 +210,8 @@ class ACCSource:
             grip=getattr(g.track_grip_status, "name", "").replace("ACC_", "").title(),
             session_time_left=float(g.session_time_left or -1),
             flags=flags, tyre_compound=clean(getattr(g, "tyre_compound", "")), pad_life=w(p.pad_life),
+            extra={"tc": getattr(g, "tc_level", None), "tc_cut": getattr(g, "tc_cut_level", None), "abs": getattr(g, "abs_level", None),
+                   "emap": getattr(g, "engine_map", None), "bias": getattr(p, "brake_bias", None)},      # leituras ligadas ao setup (ver setupdetect.py)
             rain=tuple(int(getattr(getattr(g, k, None), "value", 0) or 0) for k in ("rain_intensity", "rain_intensity_in_10min", "rain_intensity_in_30min")),
         )
 

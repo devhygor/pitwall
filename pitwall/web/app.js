@@ -103,6 +103,7 @@ async function route() {
   document.body.classList.remove("gate");
   if (loginHeroOff) { loginHeroOff(); loginHeroOff = null; }
   routeInner();
+  if (AUTH.ok && h !== "#/overlay") setupAskStart();
   if (AUTH.ok && !AUTH.tourDone && !h.startsWith("#/overlay")) { AUTH.tourDone = true; maybeTour(); }
 }
 async function renderLogin() {
@@ -238,6 +239,39 @@ function routeInner() {
   location.hash = "#/";
 }
 window.addEventListener("hashchange", route);
+
+// ---------------------------------------------------------------- "qual setup você usou?" (quando o Pitwall não reconhece sozinho)
+let _saTimer = null;
+const _saDismissed = new Set(JSON.parse(sessionStorage.getItem("pw_sa_skip") || "[]"));
+function setupAskStart() {
+  setupAskCheck();
+  if (!_saTimer) _saTimer = setInterval(() => { if (!document.hidden && AUTH.ok && (location.hash || "#/") !== "#/overlay") setupAskCheck(); }, 45000);
+}
+async function setupAskCheck() {
+  let list = [];
+  try { list = await api("/api/setups/pending"); } catch (e) { return; }
+  list = list.filter((x) => !_saDismissed.has(x.id));
+  let box = document.getElementById("setupAsk");
+  if (!list.length) { if (box) box.remove(); return; }
+  const x = list[0];
+  if (!box) { box = document.createElement("div"); box.id = "setupAsk"; document.body.appendChild(box); }
+  const best = x.best_ms ? ` · melhor <b>${fmtLap(x.best_ms)}</b>` : "";
+  box.innerHTML = `<div class="sa-card" role="dialog" aria-label="Qual setup você usou?">
+    <div class="sa-h"><b>🔧 Qual setup você usou?</b><button class="sa-x" title="Perguntar depois" aria-label="Fechar">✕</button></div>
+    <div class="sa-s">${esc(TYPES[x.session_type] || x.session_type)} · ${esc(fmtDate(x.started_at))}<br>${esc(pretty(x.car))} · ${esc(pretty(x.track))}<br>${x.clean} volta${x.clean === 1 ? "" : "s"} limpa${x.clean === 1 ? "" : "s"}${best}</div>
+    <div class="sa-t">${x.narrowed ? "O Pitwall ficou em dúvida entre estes (pelo que o carro mostrou parado):" : "O Pitwall não conseguiu reconhecer sozinho. Escolha para juntar seus tempos ao setup:"}</div>
+    <div class="sa-opts">${x.candidates.map((c) => `<button class="sa-o" data-pick="${c.id}" title="${esc(c.name)}">${esc(c.name)}</button>`).join("")}</div>
+    <div class="sa-f"><button class="sa-skip">Não sei / nenhum destes</button>${list.length > 1 ? `<span class="sub">+${list.length - 1} sessão(ões) depois</span>` : ""}</div></div>`;
+  box.querySelector(".sa-x").onclick = () => { _saDismissed.add(x.id); sessionStorage.setItem("pw_sa_skip", JSON.stringify([..._saDismissed])); setupAskCheck(); };
+  box.querySelector(".sa-skip").onclick = async () => { await api(`/api/sessions/${x.id}/setup/skip`, { method: "POST" }); setupAskCheck(); };
+  box.querySelectorAll("[data-pick]").forEach((b) => b.onclick = async () => {
+    b.disabled = true;
+    await api(`/api/sessions/${x.id}/setup`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ setup_id: +b.dataset.pick }) });
+    toast("Setup ligado à sessão. Seus tempos já contam nele.", "ok");
+    setupAskCheck();
+    if ((location.hash || "").startsWith("#/setups")) renderSetups();
+  });
+}
 
 // ---------------------------------------------------------------- contexto (carro + pista em análise)
 const CTX = (() => { try { return JSON.parse(localStorage.getItem("pitwall.ctx") || "{}"); } catch (e) { return {}; } })();
@@ -1506,6 +1540,7 @@ async function engineerPanel(s) {
       <label>Pressão alvo a quente (psi) <input id="eTarget" type="number" step="0.1" value="26.5"></label>
       <button class="btn primary" id="eRun">Analisar meu carro</button>
     </div>
+    ${s.setup_src === "auto" ? `<div class="sub" style="margin:-4px 0 10px">✓ O Pitwall reconheceu este setup sozinho (pressão fria dos pneus, TC, ABS e mapa do motor). Se não for esse, é só trocar acima.</div>` : ""}
     <div id="eOut"></div>`;
   $("#eSetup").onchange = async () => {
     await api(`/api/sessions/${s.id}/setup`, { method: "PUT", headers: { "Content-Type": "application/json" },

@@ -85,7 +85,10 @@ MIGRATIONS = {
     "sessions": {"video_path": "TEXT", "video_start": "REAL", "video_offset": "REAL DEFAULT 0",
                  "setup_path": "TEXT", "setup_id": "INTEGER",
                  "kind": "TEXT DEFAULT 'own'",      # own = suas voltas; ideal = volta ideal; team = de companheiro
-                 "suggested_setup_id": "INTEGER", "remote_id": "TEXT"},
+                 "suggested_setup_id": "INTEGER", "remote_id": "TEXT",
+                 "setup_src": "TEXT",               # manual (escolhido pelo piloto) | auto (reconhecido pelo Pitwall) | skip (piloto disse que não sabe)
+                 "setup_ask": "TEXT",               # JSON: ids dos setups candidatos quando o Pitwall não teve certeza
+                 "setup_fp": "TEXT"},               # JSON: o que a telemetria mostrou com o carro parado (para conferir/calibrar)
     "laps": {"start_wall": "REAL", "brake_temp": "TEXT", "susp_max": "TEXT",
              "events": "TEXT"},                       # JSON: incidentes da volta [{type, d, ...}]
 }
@@ -282,8 +285,43 @@ class DB:
         return [self.lap(i) for i in ids]
 
     def set_session_setup(self, session_id: int, setup_id: int | None):
+        """Escolha do piloto (vale mais que o reconhecimento automático)."""
         with self._lock, self.connect() as c:
-            c.execute("UPDATE sessions SET setup_id = ? WHERE id = ?", (setup_id, session_id))
+            c.execute("UPDATE sessions SET setup_id = ?, setup_src = ?, setup_ask = NULL WHERE id = ?",
+                      (setup_id, "manual" if setup_id else None, session_id))
+
+    def set_detected_setup(self, session_id: int, setup_id: int | None, ask: list, fp: dict):
+        """Resultado do reconhecimento: com certeza liga o setup; sem certeza guarda os candidatos para perguntar."""
+        import json as _json
+        with self._lock, self.connect() as c:
+            r = c.execute("SELECT setup_id, setup_src FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if not r or r["setup_src"] == "manual":
+                return
+            if setup_id:
+                c.execute("UPDATE sessions SET setup_id = ?, setup_src = 'auto', setup_ask = NULL, setup_fp = ? WHERE id = ?",
+                          (setup_id, _json.dumps(fp), session_id))
+            elif r["setup_src"] == "auto" and r["setup_id"]:
+                c.execute("UPDATE sessions SET setup_fp = ? WHERE id = ?", (_json.dumps(fp), session_id))   # já tinha um certo: não perde
+            else:
+                c.execute("UPDATE sessions SET setup_ask = ?, setup_fp = ? WHERE id = ? AND COALESCE(setup_src, '') != 'skip'",
+                          (_json.dumps(ask) if ask else None, _json.dumps(fp), session_id))
+
+    def skip_session_setup(self, session_id: int):
+        with self._lock, self.connect() as c:
+            c.execute("UPDATE sessions SET setup_src = 'skip', setup_ask = NULL WHERE id = ? AND setup_id IS NULL", (session_id,))
+
+    def sessions_without_setup(self, days: int = 14, limit: int = 5) -> list[dict]:
+        """Suas sessões recentes com voltas limpas e sem setup definido (nem escolhido nem reconhecido), a perguntar ao piloto."""
+        with self.connect() as c:
+            rows = c.execute("""
+                SELECT s.id, s.started_at, s.session_type, s.car, s.track, s.setup_ask, s.suggested_setup_id,
+                       SUM(CASE WHEN l.valid = 1 AND l.out_lap = 0 AND l.in_lap = 0 THEN 1 ELSE 0 END) AS clean,
+                       MIN(CASE WHEN l.valid = 1 AND l.out_lap = 0 AND l.in_lap = 0 THEN l.lap_time_ms END) AS best_ms
+                FROM sessions s JOIN laps l ON l.session_id = s.id
+                WHERE COALESCE(s.kind, 'own') = 'own' AND s.setup_id IS NULL AND COALESCE(s.setup_src, '') != 'skip'
+                  AND s.started_at >= date('now', ?)
+                GROUP BY s.id HAVING clean > 0 ORDER BY s.started_at DESC LIMIT ?""", (f"-{int(days)} day", limit)).fetchall()
+        return [dict(r) for r in rows]
 
     # --- voltas externas (volta ideal, companheiros de equipe) ----------------
     def replace_external(self, kind: str, car: str, track: str, player: str, started_at: str,

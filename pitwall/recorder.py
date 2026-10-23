@@ -57,6 +57,7 @@ class Recorder:
         self.live_delta = None      # LiveDelta opcional (delta ao vivo contra o recorde)
         self.hub = None             # OverlayHub opcional (dados em tempo real dos overlays)
         self.engineer = None        # Engineer opcional (engenheiro de voz)
+        self.detector = None        # SetupDetector opcional (reconhece o setup carregado no ACC)
         self.on_lap_saved = []      # funções chamadas com (lap_id, car, track) depois de gravar uma volta
         self.session_id: Optional[int] = None
         self._session_key = None
@@ -123,6 +124,8 @@ class Recorder:
 
         prev = self._prev
         self._prev = f
+        if self.detector is not None:
+            self.detector.feed(f, self.session_id)
 
         # pendente: a volta cruzou a linha, esperamos o jogo atualizar last_time
         self._flush_pending(frame=f)

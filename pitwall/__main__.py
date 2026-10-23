@@ -140,6 +140,8 @@ def main(argv=None):
             db.set_suggested_setup(session_id, best[0]["id"])
             recorder.extra_live["suggested_setup"] = best[0]["name"]
     recorder.on_session_start.append(_suggest_setup)
+    from .setupdetect import Detector
+    recorder.detector = Detector(db, recorder)
 
     def _import_setups():
         from . import setups

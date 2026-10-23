@@ -221,6 +221,31 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def setup_library():
         return setups.library(db)
 
+    @app.get("/api/setups/pending")
+    def setups_pending():
+        """Sessões recentes com voltas limpas em que o Pitwall não sabe (ou não tem certeza) qual setup foi usado."""
+        import json as _json
+        out = []
+        for s in db.sessions_without_setup():
+            try:
+                ids = _json.loads(s["setup_ask"]) if s.get("setup_ask") else []
+            except ValueError:
+                ids = []
+            cands = [x for x in (db.setup(i) for i in ids) if x]
+            if not cands:
+                cands = [x for x in (db.setup(c["id"]) for c in setups.suggest(db, s["car"], s["track"], s["session_type"], None, None, limit=5)) if x]
+            if not cands:
+                continue                                         # nenhum setup da biblioteca para este carro e pista: nada a perguntar
+            out.append({"id": s["id"], "started_at": s["started_at"], "session_type": s["session_type"], "car": s["car"], "track": s["track"],
+                        "clean": s["clean"], "best_ms": s["best_ms"], "narrowed": bool(ids),
+                        "candidates": [{"id": c["id"], "name": c["name"]} for c in cands]})
+        return out
+
+    @app.post("/api/sessions/{sid}/setup/skip")
+    def skip_setup(sid: int):
+        db.skip_session_setup(sid)
+        return {"ok": True}
+
     @app.get("/api/setups/suggest")
     def setup_suggest(car: str, track: str, session_type: str = "Race", air: float | None = None,
                       road: float | None = None, grip: str = ""):
