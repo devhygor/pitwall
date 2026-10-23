@@ -32,6 +32,11 @@ _RULES_SRC: list[tuple[str, list[list[str]], int]] = [
                     "pode (falar|avisar|conversar) mais", "quero (mais aviso|que (voce )?fale mais|que (voce )?avise mais)"]], 10),
     ("talk_min", [["so (o |os |as |a )?(essencial|essenciais|importante|importantes|critico|criticos|necessario|basico)", "modo minimo", "nivel minimo", "(aviso|fala)\\w* minim"]], 10),
     ("talk_normal", [["(aviso|fala|conversa|quantidade|nivel)\\w* normal", "volta\\w* (ao|pro|para o) normal", "deix\\w* (no )?normal", "(poe|ponha|coloca|coloque) (no )?normal"]], 10),
+    # volume da voz do engenheiro (qualquer plano)
+    ("vol_up", [["(fal|avis)\\w* (um pouco |bem )?(mais )?(alto|forte)", "mais alto", "(aument|sub|eleva|coloca|poe|ponha)\\w* (um pouco )?(o )?(volume|som)",
+                 "volume (mais )?(alto|maior|pra cima|para cima)", "nao (to|estou|tou) (te )?(ouvindo|escutando)", "(ta|esta) (muito )?baixo", "muito baixo"]], 10),
+    ("vol_down", [["(fal|avis)\\w* (um pouco |bem )?(mais )?(baixo|baixinho)", "mais baixo", "(diminu|reduz|abaix|baix)\\w* (um pouco )?(o )?(volume|som)",
+                   "volume (mais )?(baixo|menor|pra baixo|para baixo)", "(ta|esta) (muito )?(alto|forte)", "muito alto"]], 10),
     ("repeat", [["repete", "repita", "fala de novo", "fale de novo", "diz de novo", "o que voce disse", "o que disse", "nao entendi", "nao ouvi", "como assim"]], 8),
     ("radio_check", [["radio check", "teste de radio", "me ouve", "me escuta", "esta me ouvindo", "ta me ouvindo", "esta ai", "ta ai", "esta na escuta", "voce me ouve", "check de radio"]], 8),
     ("thanks", [["obrigad", "valeu", "brigad", "show", "beleza", "tmj", "tamo junto", "boa"]], 2),

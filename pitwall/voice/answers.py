@@ -40,6 +40,7 @@ EXAMPLES = [
     {"group": "Humor, dicas e broncas", "items": ["Como estou indo?", "Me dá uma dica", "Me elogia", "Me dá uma bronca", "Conta uma piada"]},
     {"group": "Controle", "items": ["Repete", "Silêncio (para os avisos)", "Pode voltar a falar", "Rádio check", "Ajuda"]},
     {"group": "Quantidade de avisos (Pro)", "items": ["Fala menos", "Fala mais", "Só o essencial", "Volta ao normal"]},
+    {"group": "Volume da voz", "items": ["Fala mais alto", "Fala mais baixo", "Aumenta o volume", "Diminui o volume"]},
 ]
 
 
@@ -121,7 +122,7 @@ def _cmp_time(a, b) -> str:
 
 
 TALK_INTENTS = {"talk_less", "talk_more", "talk_min", "talk_normal"}      # mexem na configuração: só quem pode personalizar (Pro)
-FREE_INTENTS = {"mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "fuel_level", "fuel_laps", "fuel_end",
+FREE_INTENTS = {"vol_up", "vol_down", "mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "fuel_level", "fuel_laps", "fuel_end",
                 "position", "last_lap", "best_lap", "laps_left", "time_left", "lap_number", "session_info", "track_info", "car_info"}
 PERSONALITY_INTENTS = {"praise", "scold", "joke", "tip", "how_am_i"}
 UPGRADE = "Essa pergunta faz parte do plano Pro. Veja o menu Plano para conhecer ou fazer o teste grátis de 10 dias."
@@ -139,7 +140,7 @@ def answer(p: Parsed, eng) -> str:
         return phrases.say("not_understood")
     st = eng.state
     f = st.f
-    if f is None and p.intent not in ("talk_less", "talk_more", "talk_min", "talk_normal", "mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "praise", "scold", "joke"):
+    if f is None and p.intent not in ("vol_up", "vol_down", "talk_less", "talk_more", "talk_min", "talk_normal", "mute", "unmute", "repeat", "radio_check", "thanks", "help", "hello", "praise", "scold", "joke"):
         return "Ainda não estou recebendo dados do jogo."
     try:
         return fn(p, eng, st, f) or phrases.say("no_data")
@@ -181,6 +182,16 @@ def h_talk(p, eng, st, f):
     if p.intent == "talk_more" and new == "pouco":
         return "Ok, falo um pouco mais, mas só o importante."
     return _LEVEL_SAY[new]
+
+
+def h_volume(p, eng, st, f):
+    """Volume do engenheiro (eng_volume, 0-100) em passos de 10; vale na hora, também para a fala em andamento."""
+    cur = eng.volume
+    new = max(10, min(100, cur + (10 if p.intent == "vol_up" else -10)))
+    if new == cur:
+        return "Já estou no volume máximo." if new >= 100 else "Já estou no volume mínimo."
+    eng.settings.update({"eng_volume": new})
+    return f"Ok, volume em {new} por cento."
 
 
 def h_repeat(p, eng, st, f):
@@ -667,6 +678,7 @@ def h_rv_summary(p, eng, st, f):
 
 _H = {
     "talk_less": h_talk, "talk_more": h_talk, "talk_min": h_talk, "talk_normal": h_talk,
+    "vol_up": h_volume, "vol_down": h_volume,
     "mute": h_mute, "unmute": h_unmute, "repeat": h_repeat, "radio_check": h_radio, "thanks": h_thanks, "help": h_help,
     "hello": h_hello, "praise": h_praise, "scold": h_scold, "joke": h_joke, "tip": h_tip, "how_am_i": h_how_am_i, "fuel_level": h_fuel_level, "fuel_laps": h_fuel_laps, "fuel_use": h_fuel_use, "fuel_end": h_fuel_end,
     "pit_when": h_pit_when, "tyre_temp": h_tyre_temp, "tyre_press": h_tyre_press, "tyre_wear": h_tyre_wear, "tyre_all": h_tyre_all,
