@@ -1675,6 +1675,12 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
         body: JSON.stringify({ base_id: setupId, name: $("#eName").value, changes: chosen.map((c) => ({ path: c.path, delta: c.delta })) }) });
       if (res.already) { $("#eGenOut").innerHTML = `<div class="note okk">Esse setup já existe: <b>${esc(res.name)}</b> (nada novo foi criado).</div>`; return; }
       if (window.PwRecs && r.meta && res.id) PwRecs.mark(res.id, sig, chosen.map((c) => ({ path: c.path, delta: c.delta })));     // a versão nova já nasce com isso aplicado
+      if ((location.hash || "").startsWith("#/setups") && res.id) {                       // na biblioteca: a versão nova entra na lista já selecionada
+        Object.assign(setupsState, { open: res.id, cmp: null, jump: true });
+        toast(`Versão criada: ${res.name}`, "ok");
+        renderSetups();
+        return;
+      }
       const dn = { ...doneNow }; chosen.forEach((c) => { dn[c.path] = res.name; });
       renderEngineer(r, setupId, setupName, { ...opt, checked: [], doneNow: dn, flash: `<div class="note okk">✓ Pronto! <b>${esc(res.name)}</b> foi salvo no ACC (Setups → carro → pista) e na sua biblioteca, com ${chosen.length} ajuste(s).</div>` });
     } catch (e) {
@@ -1684,7 +1690,7 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
 }
 
 // ---------------------------------------------------------------- biblioteca de setups
-const setupsState = { car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name", dir: 1, cmp: null, moreOpen: false };
+const setupsState = { jump: false, car: "", track: "", kind: "", source: "", time: "", inacc: "", q: "", sel: [], open: null, diffOnly: true, page: 0, sort: "name", dir: 1, cmp: null, moreOpen: false };
 const SETUP_PAGE = 40;
 // nomes de exibição das origens (o valor gravado no banco não muda)
 const SRC_LABEL = { "GO Setups": "Coleção Pitwall", "Meu": "Meus", "Pitwall": "Gerados pelo Pitwall", "Equipe": "Da equipe" };
@@ -1771,6 +1777,16 @@ async function renderSetups() {
     if (y == null) return -1;
     return (x < y ? -1 : x > y ? 1 : 0) * st.dir || a.name.localeCompare(b.name);
   });
+  if (st.jump && st.open) {                          // acabou de criar/salvar um setup: ele precisa aparecer (sem filtro que o esconda, na página certa)
+    const oi = list.findIndex((f) => f.id === st.open);
+    if (oi < 0 && all.some((f) => f.id === st.open)) {
+      if (st.q || st.kind || st.source || st.time || st.inacc) Object.assign(st, { q: "", kind: "", source: "", time: "", inacc: "" });
+      else Object.assign(st, { car: "", track: "" });
+      return renderSetups();
+    }
+    if (oi >= 0) st.page = Math.floor(oi / SETUP_PAGE);
+    st.jump = false;
+  }
   const pages = Math.max(1, Math.ceil(list.length / SETUP_PAGE));
   if (st.page >= pages) st.page = pages - 1;
   const pageList = list.slice(st.page * SETUP_PAGE, (st.page + 1) * SETUP_PAGE);
@@ -2001,7 +2017,7 @@ async function showSetup(id) {
   shareBox(id);
   $("#sEditor").onclick = () => genLock
     ? ($("#eOut").innerHTML = `<div class="note warn" style="margin-top:8px">O <b>editor visual</b> (ajustar o setup clicando nas partes do carro, com recomendações) é do plano <b>Pro</b> ou <b>Equipe</b>. No Grátis você usa os seus próprios setups da pasta do ACC. <a href="#/plano">Ver planos</a></div>`)
-    : SetupCar.open(s, { genLock, onSaved: (r) => { if (r && r.id) setupsState.open = r.id; renderSetups(); } });
+    : SetupCar.open(s, { genLock, onSaved: (r) => { if (r && r.id) { setupsState.open = r.id; setupsState.jump = true; } renderSetups(); } });
   const startCmp = (x, y) => { setupsState.cmp = [x, y]; setupsState.sel = [x, y]; renderSetups(); };
   const vp = $("#sVsParent"); if (vp) vp.onclick = () => startCmp(s.parent_id, id);
   const cw = $("#sCmpWith");
