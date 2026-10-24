@@ -4,11 +4,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,700;1,800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   html, body { margin: 0; background: transparent; overflow: hidden; }
-  #c { position: fixed; left: 0; width: 100vw; height: auto; transition: transform .8s cubic-bezier(.2, .8, .2, 1), opacity .6s; transform: translateX(-105%); opacity: 0; }
+  #c { position: fixed; left: 0; width: 100vw; height: 100vh; object-fit: contain; object-position: left top; transition: transform .8s cubic-bezier(.2, .8, .2, 1), opacity .6s; transform: translateX(-105%); opacity: 0; }
   #c.on { transform: none; opacity: 1; }
 </style></head>
 <body><canvas id="c" width="10" height="10"></canvas>
-<script src="../banners.js?v=6"></script>
+<script src="../banners.js?v=7"></script>
 <script>
 /* Banner que aparece de tempos em tempos (fonte "Navegador" do OBS / Streamlabs). Fundo transparente.
    Parâmetros: code, pct, dur (once|forever), fmt (camera|faixa|canto|quadradinho|painel), corner (tl|tr|bl|br),
@@ -20,7 +20,7 @@ window.addEventListener("error", (ev) => fail(ev.error || ev.message));
   const f = BN.FORMATS.find((x) => x.id === q.get("fmt")) || BN.FORMATS.find((x) => x.id === "camera");
   const o = BN.opts({ code: q.get("code") || "PITWALL", pct: q.get("pct") || 10, duration: q.get("dur"), corner: q.get("corner") || "tl" });
   const show = Math.max(3, +q.get("show") || 15), every = Math.max(show + 2, +q.get("every") || 120), preview = q.has("preview") || q.has("loop");
-  cv.style[q.get("pos") === "bottom" ? "bottom" : "top"] = "0";
+  cv.style[q.get("pos") === "bottom" ? "bottom" : "top"] = "0"; if (q.get("pos") === "bottom") cv.style.objectPosition = "left bottom";
   await BN.ready();
   let t0 = 0, on = false, raf = 0, last = 0;
   const frame = (now) => { if (!on) return; if (now - last > 32) { last = now; BN.paint(cv, f, o, ((now - t0) % BN.LOOP) / BN.LOOP, Math.min(1, 1280 / f.w)); } raf = requestAnimationFrame(frame); };

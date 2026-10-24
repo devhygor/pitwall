@@ -282,6 +282,8 @@ const BN = (() => {
         <div id="bnChat"></div></div>
       <div class="panel bn" data-bs="live" style="margin-top:16px;display:none"><h2>Aparecer na live de tempos em tempos</h2>
         <p class="sub">Em vez de ficar parado na tela o tempo todo, o banner entra deslizando, fica alguns segundos e sai, e repete. Tem dois jeitos:</p>
+        <div class="bn-stage" id="bnStage"><iframe id="bnFrame" title="Prévia do banner na live" allowtransparency="true"></iframe><span class="bn-stage-t">Prévia: a sua live (1920×1080)</span></div>
+        <div class="row-actions" style="margin:6px 0 12px"><button class="btn small" id="bnRestart">Reiniciar prévia</button></div>
         <div class="adm-form">
           <label class="bn-f">Modo <select id="bnMode"><option value="blink">Aparece de tempos em tempos</option><option value="loop">Sempre na tela (em loop, sem sumir)</option></select></label>
           <label class="bn-f">Formato <select id="bnLfmt">${LIVE.map((id) => `<option value="${id}">${FORMATS.find((q) => q.id === id).name}</option>`).join("")}</select></label>
@@ -296,7 +298,7 @@ const BN = (() => {
         <p class="sub">Um GIF só, que mostra o banner e depois fica invisível até repetir. Adicione como <b>Fonte de imagem</b> no OBS. Alguns programas ignoram pausas muito longas; se o seu fizer isso, use o link do OBS.</p>
         <div class="row-actions"><button class="btn small" id="bnBlink">Baixar GIF intermitente</button></div></div>`;
     $("#bnDur").value = st.duration;
-    const showTab = (k) => { host.querySelectorAll("[data-bs]").forEach((e) => { e.style.display = e.dataset.bs === k ? "" : "none"; }); host.querySelectorAll("#bnTabs button").forEach((b) => b.classList.toggle("on", b.dataset.bt === k)); };
+    const showTab = (k) => { host.querySelectorAll("[data-bs]").forEach((e) => { e.style.display = e.dataset.bs === k ? "" : "none"; }); host.querySelectorAll("#bnTabs button").forEach((b) => b.classList.toggle("on", b.dataset.bt === k)); if (k === "live") refreshPreview(true); };
     host.querySelectorAll("#bnTabs button").forEach((b) => { b.onclick = () => showTab(b.dataset.bt); });
     const liveUrl = (extra) => {
       const loop = $("#bnMode").value === "loop", p = new URLSearchParams({ code: st.code, pct: st.pct, dur: st.duration, fmt: $("#bnLfmt").value, corner: st.corner, pos: $("#bnPos").value });
@@ -309,7 +311,17 @@ const BN = (() => {
       $("#bnChat").innerHTML = rows.map(([n, v], i) => `<div style="margin-bottom:10px"><b>${esc(n)}</b>${i === 0 ? ` <small class="sub">${tx.length}/500 caracteres</small>` : ""}<code class="lickey" style="word-break:break-all;display:block;margin:4px 0">${esc(v)}</code><button class="btn small" data-cc="${i}">Copiar</button></div>`).join("");
       $("#bnChat").querySelectorAll("[data-cc]").forEach((b) => { b.onclick = async () => { await navigator.clipboard.writeText(rows[+b.dataset.cc][1]); b.textContent = "Copiado!"; toast("Copiado", "ok"); setTimeout(() => { b.textContent = "Copiar"; }, 2000); }; });
     };
-    const refreshUrl = () => { refreshChat(); $("#bnUrl").textContent = liveUrl(); $("#bnTest").href = liveUrl("&preview=1"); };
+    let pvTimer = 0, pvUrl = "";
+    const refreshPreview = (force) => {
+      if (host.querySelector("[data-bs=live]").style.display === "none") return;
+      clearTimeout(pvTimer); pvTimer = setTimeout(() => {
+        const f = FORMATS.find((q) => q.id === $("#bnLfmt").value), fr = $("#bnFrame"), top = $("#bnPos").value !== "bottom";
+        fr.style.width = (f.w / 1920 * 100) + "%"; fr.style.aspectRatio = f.w + " / " + f.h; fr.style.top = top ? "0" : "auto"; fr.style.bottom = top ? "auto" : "0";
+        const u = liveUrl(); if (force || u !== pvUrl) { pvUrl = u; fr.src = u; }
+      }, force ? 0 : 500);
+    };
+    $("#bnRestart").onclick = () => refreshPreview(true);
+    const refreshUrl = () => { refreshChat(); refreshPreview(); $("#bnUrl").textContent = liveUrl(); $("#bnTest").href = liveUrl("&preview=1"); };
     $("#bnCopy").onclick = async () => { await navigator.clipboard.writeText(liveUrl()); $("#bnCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); setTimeout(() => { $("#bnCopy").textContent = "Copiar link"; }, 2000); };
     $("#bnBlink").onclick = async (ev) => { const b = ev.currentTarget, old = b.textContent; b.disabled = true;
       try { const e = Math.max(10, +$("#bnEvery").value || 120), s = Math.min(e - 2, Math.max(3, +$("#bnShow").value || 15)); await exportGifBlink(FORMATS.find((q) => q.id === $("#bnLfmt").value), opts(st), s, e, (p) => { b.textContent = p + "%"; }); } catch (e) { toast(e.message, "err"); }
