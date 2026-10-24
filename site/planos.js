@@ -354,7 +354,8 @@ async function renderReferral() {
       <span class="eyebrow">Indique e ganhe</span>
       <h1 class="plans-h">Traga amigos e ganhe até 50% de desconto</h1>
       <p class="lede">Compartilhe o seu link. Quem entrar por ele ganha <b>${r.invite_pct}% de desconto</b> no primeiro pagamento, e você ganha <b>1% de desconto</b> na sua próxima assinatura a cada 2 amigos que começarem a usar o Pitwall, até <b>${r.max_pct}%</b> com 100 amigos.</p>
-      <div class="acct-grid">
+      <div class="adm-sub" id="refTabs" style="margin-top:18px"><button class="on" data-rt="sum">Meu link e desconto</button><button data-rt="div">Divulgação (banners, GIFs e comandos)</button></div>
+      <div class="acct-grid" id="refSum">
         <div class="panel"><h2>O seu link</h2>
           <code class="lickey" id="refLink">${esc(link)}</code>
           <div class="row-actions"><button class="btn go small" id="refCopy">Copiar link</button>
@@ -380,9 +381,9 @@ async function renderReferral() {
             <li>Vale só para contas novas, e não vale indicar a si mesmo.</li>
           </ul>
         </div>
-        <div id="refBanners" style="grid-column:1/-1"></div>
-      </div></div></section>`;
+      </div><div id="refBanners" style="display:none;margin-top:16px"></div></div></section>`;
   BN.studio($("#refBanners"), { code: r.code, pct: r.invite_pct, duration: "once" });
+  view.querySelectorAll("#refTabs button").forEach((b) => { b.onclick = () => { const d = b.dataset.rt === "div"; $("#refSum").style.display = d ? "none" : ""; $("#refBanners").style.display = d ? "" : "none"; view.querySelectorAll("#refTabs button").forEach((x) => x.classList.toggle("on", x === b)); }; });
   $("#refCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#refCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); };
 }
 
