@@ -7,7 +7,7 @@
   if (!U || U.__tip) return;
   const fmtNum = (v) => (Math.abs(v) >= 100 ? String(Math.round(v)) : String(Math.round(v * 100) / 100)).replace(".", ",");
 
-  function tipPlugin(userSeries) {
+  function tipPlugin(userSeries, uopts) {
     let tip, over;
     const axisFor = (u, scale) => u.axes.findIndex((a) => a.scale === scale);
     const fmtY = (u, i, v) => {
@@ -48,7 +48,7 @@
             rows += `<div class="ctip-r"><i style="background:${c}"></i><span>${ser.label && ser.label !== "Value" ? ser.label : ""}</span><b>${fmtY(u, s, v)}</b></div>`;
           }
           if (!rows) { tip.hidden = true; return; }
-          tip.innerHTML = `<div class="ctip-x">${fmtX(u, x)}</div>${rows}`;
+          tip.innerHTML = `<div class="ctip-x">${uopts && uopts.xTip ? uopts.xTip(i) : fmtX(u, x)}</div>${rows}`;
           tip.hidden = false;
           const w = tip.offsetWidth, h = tip.offsetHeight, ow = over.clientWidth, oh = over.clientHeight;
           let tx = left + 14, ty = (u.cursor.top || 0) + 14;
@@ -62,7 +62,7 @@
 
   function PW(opts, data, el, cb) {
     const c = opts.cursor || {};
-    if (!opts.noTip && c.show !== false && !c.sync) opts.plugins = [...(opts.plugins || []), tipPlugin(opts.series)];
+    if (!opts.noTip && c.show !== false && !c.sync) opts.plugins = [...(opts.plugins || []), tipPlugin(opts.series, opts)];
     return new U(opts, data, el, cb);
   }
   Object.assign(PW, U);

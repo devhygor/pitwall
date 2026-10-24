@@ -1573,3 +1573,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .rowdel { opacity: 0; transition: opacity .12s; } .stable tr:hover .rowdel, .rowdel:focus-visible, .rowdel.armed { opacity: 1; }
 
 .stable td.acts { text-align: right; white-space: nowrap; } .hero-stats b.num:has(.ic), .hero-stats b.best { font-size: 17px; }
+
+.hbars { height: 150px; gap: 4px; }
+.hb { justify-content: flex-start; gap: 3px; }
+.hb em { font-style: normal; font-size: 12px; font-weight: 600; color: var(--text); height: 16px; font-family: var(--mono, ui-monospace, monospace); }
+.hb em.z { color: #46505f; font-weight: 400; }
+.hbar { flex: 1; width: 100%; display: flex; align-items: flex-end; min-height: 0; }
+.hb .dn { color: var(--text); font-size: 11.5px; margin-top: -2px; }
+.hb.today small { color: var(--accent); font-weight: 700; } .hb.today .dn { color: var(--accent); }
+.hmonth { margin: -2px 0 8px; font-size: 12px; }
+
+.hfilters { margin: 0; }
+.hbars.dense .hb em { font-size: 10px; } .hbars.dense { gap: 2px; } .hbars.dense .hb small { font-size: 10px; }
