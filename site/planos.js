@@ -416,6 +416,7 @@ async function renderAffiliate() {
           <div class="adm-form">${piiField("afPix", a.pix_key || "", "Sua chave Pix")}<button class="btn small" id="afPixSave">Salvar</button></div>
           <div class="modal-err" id="afMsg"></div>
         </div>
+        <div id="afBanners" style="grid-column:1/-1"></div>
         <div class="panel"><h2>Comissões</h2>
           ${(a.commissions || []).length ? `<table class="tbl"><tbody>${a.commissions.map((m) => `<tr><td>${dt(m.at)}</td><td class="sub">${esc(m.who)}</td><td>${brl(m.amount_cents)}</td><td>${esc(ST[m.status] || m.status)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Nenhuma comissão ainda.</p>`}
         </div>
@@ -423,6 +424,7 @@ async function renderAffiliate() {
           ${(a.clients || []).length ? `<table class="tbl"><tbody>${a.clients.map((c) => `<tr><td>${esc(c.who)}</td><td>${esc(PLAN_NAME[c.plan] || c.plan)} ${c.period === "year" ? "anual" : "mensal"}</td><td>${esc(SUB[c.status] || c.status)}</td><td class="sub">${dt(c.at)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Ninguém assinou pelo seu link ainda.</p>`}
         </div>
       </div></div></section>`;
+  BN.studio($("#afBanners"), { code: a.code, pct: a.discount_pct, duration: a.discount_duration });
   $("#afCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#afCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); };
   $("#afPixSave").onclick = async () => {
     const m = $("#afMsg");
@@ -461,7 +463,7 @@ function priceCompare(prices) {
 }
 
 // ---------------------------------------------------------------- painel do administrador
-const ADM_TABS = [["geral", "Visão geral"], ["usuarios", "Usuários e versões"], ["assinaturas", "Assinaturas"], ["pagamentos", "Pagamentos"], ["afiliados", "Afiliados"], ["codigos", "Códigos e cupons"], ["comissoes", "Comissões"], ["cortesias", "Cortesias"],
+const ADM_TABS = [["geral", "Visão geral"], ["usuarios", "Usuários e versões"], ["assinaturas", "Assinaturas"], ["pagamentos", "Pagamentos"], ["afiliados", "Afiliados"], ["codigos", "Códigos e cupons"], ["banners", "Banners e GIFs"], ["comissoes", "Comissões"], ["cortesias", "Cortesias"],
   ["testes", "Testes"], ["licencas", "Licenças e computadores"], ["precos", "Preços"], ["bugs", "Bugs"], ["log", "Histórico"]];
 
 // última versão publicada do app (para marcar quem está desatualizado)
@@ -491,7 +493,7 @@ async function renderAdmin() {
   let tab = store.get("pw.admTab") || "geral", q = "";
   const match = (o) => !q || JSON.stringify(o).toLowerCase().includes(q);
   const badge = (s) => `<span class="st st-${s}">${esc(STATUS_NAME[s] || s)}</span>`;
-  const GROUPS = [["Resumo", ["geral"]], ["Pessoas", ["usuarios", "cortesias", "testes", "licencas"]], ["Dinheiro", ["assinaturas", "pagamentos", "precos", "comissoes"]], ["Divulgação", ["afiliados", "codigos"]], ["Sistema", ["bugs", "log"]]];
+  const GROUPS = [["Resumo", ["geral"]], ["Pessoas", ["usuarios", "cortesias", "testes", "licencas"]], ["Dinheiro", ["assinaturas", "pagamentos", "precos", "comissoes"]], ["Divulgação", ["afiliados", "codigos", "banners"]], ["Sistema", ["bugs", "log"]]];
   const grpOf = (t) => (GROUPS.find((g) => g[1].includes(t)) || GROUPS[0]);
   const TABNAME = Object.fromEntries(ADM_TABS);
   const draw = () => {
@@ -514,6 +516,7 @@ async function renderAdmin() {
             u.app_version ? `<b>${esc(u.app_version)}</b>${LATEST && verOlder(u.app_version, LATEST) ? ` <span class="st st-past_due">desatualizado</span>` : ` <span class="st st-active">em dia</span>`}` : `<span class="sub">ainda não apareceu</span>`,
             u.last_seen ? `${dtt(u.last_seen)}<br><small class="sub">${esc(u.device_label || "")}</small>` : "—", u.devices || 0, dt(u.created_at), dtt(u.last_sign_in_at),
             `<button class="btn small" data-um="${esc(u.email)}">Gerenciar</button>`]), true)}</div>`,
+      banners: () => `<div id="bnHost"></div>`,
       afiliados: () => `<div class="panel"><h2>Novo afiliado</h2>
         <div class="adm-form"><input id="afName" type="text" placeholder="nome"><input id="afMail" type="email" placeholder="e-mail do afiliado (evita comissão de si mesmo)">
           <input id="afCode" type="text" placeholder="código (ex.: JOAO10)"><input id="afPix" type="text" placeholder="chave Pix para pagar a comissão"></div>
@@ -659,6 +662,7 @@ async function renderAdmin() {
     q("[data-umd]").forEach((b) => b.onclick = go(() => rpc("admin_revoke_device", { p_id: b.dataset.umd })));
   };
   function bind() {
+    const bh = $("#bnHost"); if (bh) BN.studio(bh, { editable: true, code: store.get("pw.bnCode") || "PITWALL", pct: 10, affiliates: AF.affiliates.filter((a) => a.active) });
     view.querySelectorAll("[data-bst]").forEach((b) => b.onclick = () => { const [id, st] = b.dataset.bst.split(":"); act(() => rpc("admin_set_bug_status", { p_id: id, p_status: st })); });
     view.querySelectorAll("[data-bimg]").forEach((b) => b.onclick = async () => {
       const { data, error } = await sb.storage.from("bug-reports").createSignedUrl(b.dataset.bimg, 600);

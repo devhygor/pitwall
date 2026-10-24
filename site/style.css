@@ -729,3 +729,14 @@ textarea.field { font: inherit; }
 .lfm-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 10px 0 14px; } .lfm-charts h3 { margin: 0 0 6px; font-size: 14px; color: var(--fog); }
 @media (max-width: 800px) { .lfm-charts { grid-template-columns: 1fr; } }
 .pf-chk { display: flex; gap: 8px; align-items: center; font-size: 14px; } .pf-chk input { width: 18px; height: 18px; accent-color: var(--sodium); }
+
+/* ---------------- gerador de banners (afiliado e admin) ---------------- */
+.bn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 14px; }
+.bn-card { background: var(--night); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; }
+.bn-card h3 { margin: 10px 0 2px; font: 700 20px/1.1 var(--display); }
+.bn-card .sub { margin: 0 0 6px; font-size: 14px; }
+.bn-card .row-actions { margin-top: auto; padding-top: 8px; }
+.bn-prev { display: flex; align-items: center; justify-content: center; border-radius: 8px; overflow: hidden; min-height: 120px; }
+.bn-prev.chk { background: repeating-conic-gradient(#222b3b 0 25%, #1a2231 0 50%) 0 0 / 16px 16px; }
+.bn-prev canvas { max-width: 100%; max-height: 300px; width: auto; height: auto; }
+.bn-f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--fog); }
