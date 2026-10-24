@@ -290,3 +290,8 @@ body.edit #root::after { content: attr(data-title) " · arraste para mover"; pos
 .rd-sides canvas.mycar { width: 32px; height: 52px; display: block; }
 
 .radar { transition: opacity .25s; } .radar.rd-hide { opacity: 0; }
+
+/* retardatário (azul) e quem está uma volta à frente (âmbar), no número do carro */
+.lapchip { display: inline-block; padding: 0 5px; border-radius: 5px; font-weight: 800; }
+.lapchip.down { background: #2563ff; color: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
+.lapchip.up { background: #ffc233; color: #0b0d10; }

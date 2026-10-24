@@ -65,6 +65,9 @@ class Monitor:
         self.lap_pit = False
         self.invalid_streak = 0
         self.yellow_prev = [False, False, False]
+        self.y_raw = [False, False, False]            # amarela como o jogo manda (pisca) e a versão estável usada para avisar
+        self.y_change = [0.0, 0.0, 0.0]
+        self.y_stable = [False, False, False]
         self.flag_prev: dict = {}
         self.pos_prev = None
         self.pos_cand = None
@@ -186,6 +189,8 @@ class Monitor:
             self.pos_prev = self.pos_cand = None            # a ordem do grid ainda vai mudar: não é ultrapassagem
             self.pit_prev = f.in_pit_lane
             self.yellow_prev = [False, False, False]
+            self.y_raw = [False, False, False]
+            self.y_stable = [False, False, False]
             for k, v in (f.flags or {}).items():
                 if k != "yellow":
                     self.flag_prev[k] = bool(v)
@@ -205,17 +210,26 @@ class Monitor:
         fl = f.flags or {}
         y = list(fl.get("yellow") or [False] * 3)
         y += [False] * (3 - len(y))
+        # o jogo liga e desliga o amarelo de cada setor várias vezes (carro roda, volta pra pista...): só vale depois de
+        # 0,6 s ligado e só some depois de 4 s desligado, senão o engenheiro fala "amarela" e "fim da amarela" sem parar
+        now = time.monotonic()
+        for i in range(3):
+            if bool(y[i]) != self.y_raw[i]:
+                self.y_raw[i], self.y_change[i] = bool(y[i]), now
+            if self.y_raw[i] != self.y_stable[i] and now - self.y_change[i] >= (0.6 if self.y_raw[i] else 4.0):
+                self.y_stable[i] = self.y_raw[i]
+        y = list(self.y_stable)
         old = self.yellow_prev
         new = [i for i, v in enumerate(y) if v and not old[i]]
         if any(y) and not any(old) and all(y):
-            self.emit("flags", "yellow", phrases.say("yellow_all"), prio=4, ttl=5, cool=20, tag="yellow", check=self._yellow_now(True))
+            self.emit("flags", "yellow", phrases.say("yellow_all"), prio=4, ttl=5, cool=30, tag="yellow", check=self._yellow_now(True))
         elif new:
             if len(new) == 1:
-                self.emit("flags", "yellow", phrases.say("yellow", s=new[0] + 1), prio=4, ttl=5, tag="yellow", check=self._yellow_now(True))
+                self.emit("flags", "yellow", phrases.say("yellow", s=new[0] + 1), prio=4, ttl=5, cool=30, tag="yellow", check=self._yellow_now(True))
             else:
-                self.emit("flags", "yellow", "Bandeira amarela nos setores " + " e ".join(str(i + 1) for i in new) + ".", prio=4, ttl=5, tag="yellow", check=self._yellow_now(True))
+                self.emit("flags", "yellow", "Bandeira amarela nos setores " + " e ".join(str(i + 1) for i in new) + ".", prio=4, ttl=5, cool=30, tag="yellow", check=self._yellow_now(True))
         elif not any(y) and any(old):
-            self.emit("flags", "yellow_end", phrases.say("yellow_end"), prio=3, ttl=6, cool=15, check=self._yellow_now(False))
+            self.emit("flags", "yellow_end", phrases.say("yellow_end"), prio=3, ttl=6, cool=30, check=self._yellow_now(False))
         self.yellow_prev = y
         for k, key, prio, cool in (("blue", "blue", 4, 25), ("red", "red", 4, 10), ("black", "black", 4, 20),
                                    ("white", "white", 3, 60), ("chequered", "chequered", 4, 30)):

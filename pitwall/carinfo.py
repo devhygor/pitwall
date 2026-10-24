@@ -4,6 +4,21 @@ O ACC só informa o número do modelo (`carModelType` do broadcasting); os nomes
 """
 from __future__ import annotations
 
+def lap_diff(me: dict | None, c: dict | None) -> int:
+    """Voltas de diferença para mim, já descontando onde cada um está na pista.
+    -1 = o carro está uma volta (ou mais) atrás de mim: é retardatário, vou dobrá-lo e ele vê bandeira azul.
+    +1 = ele está uma volta à frente: é quem pode me dobrar. 0 = mesma volta (ou sem dados)."""
+    if not me or not c or c is me:
+        return 0
+    try:
+        sp_me, sp_c = float(me.get("spline", 0.0)), float(c.get("spline", 0.0))
+        d = (float(c.get("laps", 0)) + sp_c) - (float(me.get("laps", 0)) + sp_me)
+        g = ((sp_c - sp_me + 0.5) % 1.0) - 0.5
+        return int(round(d - g))
+    except (TypeError, ValueError):
+        return 0
+
+
 # classe -> cor padrão do overlay
 CLASS_COLORS = {"GT3": "#e8505b", "GT4": "#3d8bff", "GT2": "#f2a93b", "CUP": "#6fd36b", "ST": "#b58cff", "TCX": "#46c7c7"}
 

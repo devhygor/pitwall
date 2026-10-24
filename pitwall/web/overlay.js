@@ -340,9 +340,9 @@ function mapOverlay() {
         if (me && c.id === me.id) continue;
         const [x, y] = at(c.spline), num = cfg.numbers && c.number != null;
         upright(x, y, () => {
-          ctx.fillStyle = c.pit ? "rgba(255,194,51,.95)" : "#7fb2ff"; ctx.strokeStyle = "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
+          ctx.fillStyle = c.pit ? "rgba(255,194,51,.95)" : c.ld < 0 ? "#1f6bff" : c.ld > 0 ? "#ffd75e" : "#7fb2ff"; ctx.strokeStyle = c.ld < 0 ? "#fff" : "rgba(0,0,0,.8)"; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.arc(0, 0, num ? (small ? 8 : 9.5) : (small ? 3.8 : 5.5), 0, 7); ctx.stroke(); ctx.fill();
-          if (num) dotNumber(0, 0, c.number, "#0b0d10", small ? 0.85 : 1);
+          if (num) dotNumber(0, 0, c.number, c.ld < 0 ? "#fff" : "#0b0d10", small ? 0.85 : 1);
         });
       }
     }
@@ -382,7 +382,7 @@ function mapOverlay() {
     return out;
   }
   const previewCorners = [0.04, 0.14, 0.27, 0.38, 0.5, 0.63, 0.75, 0.88].map((a, i) => ({ n: i + 1, apex: a, brake: a - 0.03, start: a - 0.06, end: a + 0.06, name: i === 1 ? "Eau Rouge" : "" }));
-  function previewCars(t) { return [0.1, 0.22, 0.4, 0.55, 0.7, 0.86].map((s, i) => ({ id: 100 + i, spline: (s + t / 40) % 1, number: 10 + i * 9, pit: false })); }
+  function previewCars(t) { return [0.1, 0.22, 0.4, 0.55, 0.7, 0.86].map((s, i) => ({ id: 100 + i, spline: (s + t / 40) % 1, number: 10 + i * 9, pit: false, ld: i === 1 ? -1 : i === 4 ? 1 : 0 })); }
   loadMap();
   const loop = () => {
     if (mapTrack !== (data && data.track) && data && data.track && performance.now() - mapAt > 1500) loadMap();
@@ -649,6 +649,7 @@ function radarOverlay() {
     const dpr = (window.devicePixelRatio || 1) * clamp(cfg.scale, 40, 300) / 100;
     if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + "px"; cv.style.height = H + "px"; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const lapGlow = (c) => (c.ld < 0 ? "#3b9cff" : c.ld > 0 ? "#ffc233" : null);      // azul: retardatário · âmbar: uma volta à frente
     const label = (c, x, y) => { if (!cfg.numbers || c.n == null) return; ctx.fillStyle = "#fff"; ctx.font = "700 10px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(c.n), x, y); };
     if (style === "top") {
       const cx = W / 2, cy = H / 2, ky = (H / 2 - 14) / R, kx = (W / 2 - 14) / 9;
@@ -660,7 +661,7 @@ function radarOverlay() {
       for (const c of cars) {
         const x = cx + clamp(c.side, -9, 9) * kx, y = cy - c.fwd * ky, d = Math.hypot(c.fwd, c.side * 1.5), col = tone(c, d);
         danger(c, x, y, 42);
-        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), variant: variantOf(c), special: spOth, glow: alongside(c) ? DANGER : null, label: cfg.numbers ? c.n : null, labelCol: stat && lightStat && !alongside(c) ? "#0b0d10" : "#fff", hi: col });
+        drawCar(ctx, x, y, 42, col, { kind: kindOf(c), variant: variantOf(c), special: spOth, glow: alongside(c) ? DANGER : lapGlow(c), label: cfg.numbers ? c.n : null, labelCol: stat && lightStat && !alongside(c) ? "#0b0d10" : "#fff", hi: col });
         alert(c, x, y, 42);
       }
       drawCar(ctx, cx, cy, 46, "#e8f0ff", { kind: myKind, variant: myVar, special: spMe, glow: "#3ee08f", hi: "#ffffff" });                       // seu carro
@@ -675,7 +676,7 @@ function radarOverlay() {
         if (Math.hypot(x - cx, y - cy) > W / 2 - 8) continue;
         const col = tone(c, d);
         danger(c, x, y, 30);
-        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), variant: variantOf(c), special: spOth, glow: alongside(c) ? DANGER : null, label: cfg.numbers ? c.n : null, labelCol: stat && lightStat && !alongside(c) ? "#0b0d10" : "#fff" });
+        drawCar(ctx, x, y, 30, col, { kind: kindOf(c), variant: variantOf(c), special: spOth, glow: alongside(c) ? DANGER : lapGlow(c), label: cfg.numbers ? c.n : null, labelCol: stat && lightStat && !alongside(c) ? "#0b0d10" : "#fff" });
         alert(c, x, y, 30);
       }
       drawCar(ctx, cx, cy, 38, "#e8f0ff", { kind: myKind, variant: myVar, special: spMe, glow: "#3ee08f", hi: "#ffffff" });
@@ -755,7 +756,7 @@ function standingsOverlay() {
       ["Bruno", "Costa"], ["Ana", "Ribeiro"], ["Caio", "Nunes"], ["Felipe", "Duarte"], ["Yuri", "Matos"], ["Gabriel", "Rocha"]];
     const cars = [["BMW", "M4"], ["FER", "296"], ["POR", "992 R"], ["AUD", "R8 Evo2"], ["MER", "AMG"], ["MCL", "720S"]];
     const rows = names.map((n, i) => { const gt4 = i >= 8, c = gt4 ? ["BMW", "M4 GT4"] : cars[i % cars.length];
-      return { pos: i + 1, number: 10 + i * 7, first: n[0], last: n[1], short: n[1].slice(0, 3).toUpperCase(), cls: gt4 ? "GT4" : "GT3", cls_color: gt4 ? "#3d8bff" : "#e8505b",
+      return { ld: i === 10 ? -1 : i === 11 ? -1 : i === 1 ? 1 : 0, pos: i + 1, number: 10 + i * 7, first: n[0], last: n[1], short: n[1].slice(0, 3).toUpperCase(), cls: gt4 ? "GT4" : "GT3", cls_color: gt4 ? "#3d8bff" : "#e8505b",
         brand: c[0], model: c[1], cls_pos: gt4 ? i - 7 : i + 1, laps: 7, best_ms: 98500 + i * 410, last_ms: i === 0 || i === 2 || i === 8 ? 98500 + i * 410 : 98900 + i * 380, pit: i === 9, me: i === 5,
         gap_leader: i ? { ms: i * 1300 } : null, interval: i ? { ms: 900 + i * 40 } : null, trend_int: i ? { good: [0, 2.5, -3, 0.4, 4, -2, 3, -4, 1, -1, 0, 2][i] } : null, vs_me: i === 5 ? null : { ms: (i - 5) * 1100 },
         trend: i === 5 ? null : (() => { const ahead = i < 5, good = [4, -3, 0.5, -5, 6, 0, 2.5, -4, 3, 0, 1, -2][i]; return { good, per_lap: good * 0.09 }; })() }; });
@@ -798,7 +799,12 @@ function standingsOverlay() {
     const rowHtml = (r) => cols.map((c, ci) => {
       let v = "", cls = COLS[c][1] + (c === "car" && cfg.carstyle === "logo" ? " mid" : ""), style = "";
       if (c === "pos") v = clsPos ? r.cls_pos : r.pos;
-      else if (c === "number") v = r.number != null ? "#" + r.number : "";
+      else if (c === "number") {
+        v = r.number != null ? "#" + r.number : "";
+        // retardatário (uma volta ou mais atrás de você): número azul, é quem vê bandeira azul quando você chega; quem está uma volta à frente: âmbar
+        if (v && r.ld < 0) { v = `<span class="lapchip down" title="Retardatário: ${-r.ld} volta(s) atrás de você">${v}</span>`; }
+        else if (v && r.ld > 0) { v = `<span class="lapchip up" title="${r.ld} volta(s) à sua frente: pode te dobrar">${v}</span>`; }
+      }
       else if (c === "name") v = nameOf(r).replace(/</g, "&lt;");
       else if (c === "car") {
         const mode = cfg.logomode || "color", mdl = r.model ? String(r.model).replace(/</g, "&lt;") : "", tip = esc(r.brand + " " + (r.model || ""));

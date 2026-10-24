@@ -240,8 +240,12 @@ class OverlayHub:
                 if "cars" in want:
                     out["standings"] = self._standings(f)
                     out["me"] = {"spline": f.norm_pos, "x": f.x, "z": f.z, "id": f.player_id}
+                    from .carinfo import lap_diff
+                    race = (f.session_type or "").lower().startswith("race")
+                    me_c = next((c for c in f.cars if c.get("id") == f.player_id), None)
                     out["cars"] = [{"id": c.get("id"), "spline": c.get("spline", 0), "pos": c.get("pos", 0),
-                                    "number": c.get("number"), "pit": c.get("pit", False)} for c in f.cars]
+                                    "number": c.get("number"), "pit": c.get("pit", False),
+                                    "ld": lap_diff(me_c, c) if race else 0} for c in f.cars]
         if "delta" in want and self.recorder is not None:
             live = self.recorder.live or {}
             out["delta"] = {k: live.get(k) for k in ("state", "delta_ms", "predicted_ms", "ref_ms", "ref_kind", "fuel_laps",
@@ -290,7 +294,7 @@ class OverlayHub:
         return {"good": round(good, 2), "per_lap": round(good * ref_ms / 1e6, 3)}
 
     def _standings(self, f) -> dict:
-        from .carinfo import acc_car
+        from .carinfo import acc_car, lap_diff
         cars = f.cars
         if not cars:
             return {"rows": [], "status": f.cars_status or "sem dados dos outros pilotos neste jogo/sessão"}
@@ -313,7 +317,7 @@ class OverlayHub:
         self._win = self._window()
         for i, c in enumerate(order):
             ahead = order[i - 1] if i else None
-            row = {"pos": c.get("pos") or i + 1, "number": c.get("number"), "first": c.get("first", ""), "last": c.get("last", ""),
+            row = {"ld": lap_diff(me, c) if race else 0, "pos": c.get("pos") or i + 1, "number": c.get("number"), "first": c.get("first", ""), "last": c.get("last", ""),
                    "short": c.get("short", ""), "cls": c.get("cls", ""), "cls_color": c.get("cls_color"), "laps": c.get("laps", 0),
                    "brand": c.get("brand", "") if isinstance(c.get("brand"), str) else "", "model": c.get("model", "") if isinstance(c.get("model"), str) else "",
                    "best_ms": c.get("best_ms"), "last_ms": c.get("last_ms"), "pit": bool(c.get("pit")),
