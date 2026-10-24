@@ -98,7 +98,8 @@ function chartTable(el, head, rows) {
 
 // ---------------------------------------------------------------- roteador
 const routes = [
-  [/^#\/?$/, renderSessions],
+  [/^#\/?$/, renderHome],
+  [/^#\/sessions$/, renderSessions],
   [/^#\/session\/(\d+)$/, (m) => renderSession(+m[1])],
   [/^#\/compare(?:\?(.*))?$/, (m) => renderCompare(new URLSearchParams(m[1] || ""))],
   [/^#\/strategy(?:\?(.*))?$/, (m) => renderStrategy(new URLSearchParams(m[1] || ""))],
@@ -266,7 +267,7 @@ function routeInner() {
     if (m) {
       const sec = h.startsWith("#/compare") ? "compare" : h.startsWith("#/replay") ? "replay" : h.startsWith("#/strategy") ? "strategy"
         : h.startsWith("#/settings") ? "settings" : h.startsWith("#/setups") ? "setups"
-        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/perfil") ? "perfil" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : h.startsWith("#/guia") ? "guia" : "sessions";
+        : h.startsWith("#/progress") ? "progress" : h.startsWith("#/team") ? "team" : h.startsWith("#/lfm") ? "lfm" : h.startsWith("#/perfil") ? "perfil" : h.startsWith("#/community") ? "community" : h.startsWith("#/overlays") ? "overlays" : h.startsWith("#/engineer") ? "engineer" : h.startsWith("#/plano") ? "plano" : h.startsWith("#/guia") ? "guia" : (h === "#/" || h === "#" || h === "") ? "home" : "sessions";
       document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === sec));
       fn(m);
       return;
@@ -336,7 +337,7 @@ async function pollLive() {
     if (l.laps_saved !== lastLive.laps_saved || l.session_id !== lastLive.session_id) {
       const changed = lastLive.state !== undefined;
       lastLive = l;
-      if (changed && (current.name === "sessions" ||
+      if (changed && (current.name === "sessions" || current.name === "home" ||
           (current.name === "session" && current.id === l.session_id))) route();
     }
     lastLive = l;
@@ -344,13 +345,137 @@ async function pollLive() {
   setTimeout(pollLive, 1000);
 }
 
+// ---------------------------------------------------------------- início
+const whenText = (iso) => {
+  const d = new Date(iso), n = new Date();
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(n) - day(d)) / 86400000);
+  const hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return diff <= 0 ? `hoje às ${hm}` : diff === 1 ? `ontem às ${hm}` : diff < 7 ? `há ${diff} dias` : fmtDate(iso);
+};
+const navIcon = (k) => { const s = document.querySelector(`[data-nav="${k}"] svg`); return s ? s.outerHTML.replace(/width="\d+" height="\d+"/, 'width="22" height="22"') : ""; };
+
+async function renderHome() {
+  current = { name: "home" };
+  view.innerHTML = `<div class="sub">Carregando…</div>`;
+  const [all, records, P, live, pending, lic] = await Promise.all([api("/api/sessions"), api("/api/records"),
+    api("/api/progress").catch(() => null), api("/api/live").catch(() => ({})), api("/api/setups/pending").catch(() => []), api("/api/license").catch(() => ({}))]);
+  if (current.name !== "home") return;
+  const real = all.filter((s) => s.game !== "demo" && !/^demo_/.test(s.track));
+  const list = (real.length ? real : all).slice().sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)));
+  const name = ((AUTH.user && AUTH.user.name) || "").trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const hello = `${hour < 5 ? "Boa noite" : hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite"}${name ? ", " + esc(name) : ""}`;
+  const gname = live.game === "iracing" ? "iRacing" : "ACC";
+  const liveLine = live.state === "recording"
+    ? `<span class="hlive on"><i></i>Gravando agora${live.track ? " · " + esc(pretty(live.track)) : ""}${live.lap ? " · volta " + live.lap : ""}</span>`
+    : live.state === "pause" ? `<span class="hlive"><i></i>${gname} pausado</span>`
+    : `<span class="hlive"><i></i>Aguardando o jogo. Abra o ACC ou o iRacing e a gravação começa sozinha.</span>`;
+
+  if (!list.length) {
+    view.innerHTML = `<div class="home"><div class="home-top"><div><h1>${hello}</h1><div class="sub">${liveLine}</div></div></div>
+      <div class="panel home-empty"><h2>Vamos começar</h2>
+        <ol class="steps"><li><b>Abra o ACC ou o iRacing</b><span>O Pitwall fica ligado e grava sozinho quando você entra na pista.</span></li>
+          <li><b>Dê algumas voltas</b><span>Cada volta, setor e sessão fica guardada, sem apertar nada.</span></li>
+          <li><b>Volte aqui</b><span>Você vê onde perde tempo, compara com o seu recorde e recebe dicas de setup.</span></li></ol>
+        <a class="btn primary" href="#/guia">Ver os primeiros passos</a></div></div>`;
+    return;
+  }
+
+  const o = (P && P.overall) || { hours: 0, laps: 0, sessions: list.length, days: [] };
+  const last = list[0];
+  const d = last.best_ms && last.pb_ms ? last.best_ms - last.pb_ms : null;
+  const lastRes = last.protected ? `<b class="num best">${ic("trophy")} Recorde</b><small>seu melhor tempo com este carro aqui</small>`
+    : d == null ? `<b class="num">—</b><small>sem volta limpa</small>`
+    : `<b class="num ${d > 0 ? "neg" : "posg"}">${fmtDelta(d)}</b><small>do seu recorde</small>`;
+  const recent = [...records].sort((a, b) => String(b.started_at).localeCompare(String(a.started_at))).slice(0, 6);
+  const days = bucketActivity(o.days || [], "day").slice(-14);
+  const maxL = Math.max(1, ...days.map((x) => x.laps));
+  const sumL = days.reduce((a, x) => a + x.laps, 0);
+  const todo = [];
+  if (pending.length) todo.push([`Dizer qual setup você usou em ${pending.length} sessão${pending.length === 1 ? "" : "ões"}`, "Assim os seus tempos passam a contar em cada setup.", `#/session/${pending[0].id}`, "setup"]);
+  todo.push(["Ver o que treinar agora", "Os trechos onde você mais deixa tempo, no carro e pista da última sessão.", `#/progress?car=${encodeURIComponent(last.car)}&track=${encodeURIComponent(last.track)}`, ""]);
+  if (lic && lic.plan === "free") todo.push(["Conhecer o Pro", "Gerador de setup, overlays completos e engenheiro de voz personalizável.", "#/plano", ""]);
+  const tile = (href, k, t, sub) => `<a class="htile" href="${href}">${navIcon(k)}<span><b>${t}</b><small>${sub}</small></span></a>`;
+
+  view.innerHTML = `<div class="home">
+    <div class="home-top"><div><h1>${hello}</h1><div class="sub">${liveLine}</div></div></div>
+
+    <section class="panel hero">
+      <div class="hero-main">
+        <span class="sub">Última sessão · ${esc(whenText(last.started_at))}</span>
+        <h2>${esc(pretty(last.track))}</h2>
+        <div class="hero-car">${esc(pretty(last.car))} · ${esc(TYPES[last.session_type] || last.session_type)}</div>
+        <div class="hero-act">
+          <a class="btn primary" href="#/session/${last.id}">Abrir sessão</a>
+          <button class="btn" id="hAn" ${last.best_ms ? "" : "disabled"}>Analisar a melhor volta</button>
+          <a class="btn quiet" href="#/progress?car=${encodeURIComponent(last.car)}&track=${encodeURIComponent(last.track)}">Ver progresso</a>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div><span>Melhor volta</span><b class="num">${fmtLap(last.best_ms)}</b></div>
+        <div><span>Voltas</span><b class="num">${last.laps}</b></div>
+        <div><span>Resultado</span>${lastRes}</div>
+      </div>
+    </section>
+
+    <div class="hkpis">
+      <div class="kpi"><span>Recordes</span><b class="num">${records.length}</b></div>
+      <div class="kpi"><span>Horas na pista</span><b class="num">${(o.hours || 0).toFixed(1).replace(".", ",")} h</b></div>
+      <div class="kpi"><span>Voltas</span><b class="num">${o.laps || 0}</b></div>
+      <div class="kpi"><span>Sessões</span><b class="num">${o.sessions || list.length}</b></div>
+    </div>
+
+    <div class="hgrid">
+      <section class="panel">
+        <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Seus recordes</h2><span class="spacer"></span><a class="btn sm quiet" href="#/sessions">Ver todas as sessões</a></div>
+        <div class="hrecs">${recent.map((r) => `<div class="hrec">
+          <div><span class="sub">${esc(pretty(r.track))} · ${esc(pretty(r.car))}</span><b class="num">${fmtLap(r.lap_time_ms)}</b><span class="sub">${esc(whenText(r.started_at))}</span></div>
+          <div class="hrec-a"><a class="btn sm" href="#/compare?a=${r.lap_id}">Analisar</a><a class="btn sm quiet" href="#/replay?a=${r.lap_id}">Replay</a></div></div>`).join("") || `<div class="sub">Os seus recordes aparecem aqui assim que você fizer voltas limpas.</div>`}</div>
+      </section>
+      <div class="hside">
+        <section class="panel">
+          <div class="row" style="margin-bottom:6px"><h2 style="margin:0">Últimos 14 dias</h2><span class="spacer"></span><span class="sub">${sumL} volta${sumL === 1 ? "" : "s"}</span></div>
+          <div class="hbars" role="img" aria-label="Voltas por dia nos últimos 14 dias: ${sumL} no total">${days.map((x) => `<div class="hb" title="${esc(bucketRange(x, "day"))}: ${x.laps} volta${x.laps === 1 ? "" : "s"}"><i style="height:${x.laps ? Math.max(8, Math.round(x.laps / maxL * 100)) : 3}%" class="${x.laps ? "" : "z"}"></i><small>${["D", "S", "T", "Q", "Q", "S", "S"][x.start.getDay()]}</small></div>`).join("")}</div>
+          <a class="lnk" href="#/progress?tab=geral">Ver por dia, semana e mês</a>
+        </section>
+        <section class="panel">
+          <h2 style="margin:0 0 8px">Para fazer agora</h2>
+          <div class="htodo">${todo.map(([t, s, href, tab]) => `<a class="htodo-i" href="${href}" ${tab ? `data-tab="${tab}"` : ""}><span><b>${t}</b><small>${s}</small></span><i aria-hidden="true">›</i></a>`).join("")}</div>
+        </section>
+      </div>
+    </div>
+
+    <h2 class="hh">Atalhos</h2>
+    <div class="htiles">
+      ${tile("#/compare", "compare", "Análise", "Onde você ganha e perde tempo")}
+      ${tile("#/replay", "replay", "Replay", "Duas voltas lado a lado")}
+      ${tile("#/progress", "progress", "Progresso", "Rating, volta ideal e treino")}
+      ${tile("#/setups", "setups", "Setups", "Biblioteca, gerador e editor")}
+      ${tile("#/strategy", "strategy", "Estratégia", "Plano de paradas e combustível")}
+      ${tile("#/overlays", "overlays", "Overlays", "Janelas por cima do jogo")}
+    </div></div>`;
+  const an = $("#hAn");
+  if (an) an.onclick = async () => {
+    an.disabled = true;
+    try {
+      const data = await api(`/api/sessions/${last.id}`);
+      const best = data.summary.best_lap_id, ref = data.pb ? data.pb.lap_id : null;
+      if (best) { location.hash = `#/compare?a=${best}${ref && ref !== best ? "&b=" + ref : ""}`; return; }
+    } catch (e) { /* cai para a sessão */ }
+    location.hash = `#/session/${last.id}`;
+  };
+  view.querySelectorAll(".htodo-i[data-tab]").forEach((a) => a.addEventListener("click", () => { sessionState.tab = a.dataset.tab; }));
+}
+
 // ---------------------------------------------------------------- sessões
-const sessState = { track: "", car: "", type: "", period: "", sel: new Set(), confirm: false };
+const sessState = { track: "", car: "", type: "", period: "", sel: new Set(), confirm: false, selecting: false, open: {} };
+const TYPE_CLS = { Race: "race", Qualify: "quali", Superpole: "quali", Practice: "prac", Hotlap: "prac", Hotstint: "prac" };
 async function renderSessions() {
   current = { name: "sessions" };
   const [list, records] = await Promise.all([api("/api/sessions"), api("/api/records")]);
   if (!list.length) {
-    view.innerHTML = `<div class="panel empty"><b>Nenhuma sessão gravada ainda</b>
+    view.innerHTML = `<div class="head"><div><h1>Sessões</h1></div></div><div class="panel empty"><b>Nenhuma sessão gravada ainda</b>
       Abra o Assetto Corsa Competizione e vá para a pista: a gravação começa sozinha.<br><br>
       Quer só testar? Rode <code>.\\iniciar.bat --seed-demo</code> para criar sessões de exemplo.</div>`;
     return;
@@ -358,77 +483,74 @@ async function renderSessions() {
   const st = sessState;
   const ids = new Set(list.map((s) => s.id));
   st.sel = new Set([...st.sel].filter((i) => ids.has(i)));
+  if (!st.sel.size && !st.selecting) st.confirm = false;
   const days = { "7": 7, "30": 30, "90": 90 };
   const now = Date.now();
   const shown = list.filter((s) => (!st.track || s.track === st.track) && (!st.car || s.car === st.car)
     && (!st.type || s.session_type === st.type)
     && (!st.period || now - new Date(s.started_at).getTime() <= days[st.period] * 86400000));
   const uniq = (k) => [...new Set(list.map((s) => s[k]))].sort();
-  const sel = (id, opts, val, all) => `<select id="${id}"><option value="">${all}</option>${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === val ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
-  // agrupa por pista
+  const sel = (id, opts, val, all) => `<select id="${id}" aria-label="${esc(all)}"><option value="">${all}</option>${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === val ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
   const byTrack = {};
   shown.forEach((s) => (byTrack[s.track] = byTrack[s.track] || []).push(s));
+  const trackKeys = Object.keys(byTrack);
   const recFor = (track) => records.filter((r) => r.track === track && (!st.car || r.car === st.car));
   const selCount = st.sel.size;
   const selProtected = list.filter((s) => st.sel.has(s.id) && s.protected).length;
+  const isOpen = (t, i) => (st.open[t] !== undefined ? st.open[t] : (trackKeys.length === 1 || i === 0));
+  const demoN = list.filter((s) => s.game === "demo" || /^demo_/.test(s.track)).length;
 
   view.innerHTML = `
     <div class="head"><div><h1>Sessões</h1>
-      <div class="sub">${list.length} sessões · ${records.length} recorde(s) pessoal(is) protegido(s) ${ic("trophy")}</div></div></div>
+      <div class="sub">${shown.length === list.length ? `${list.length} sessões` : `${shown.length} de ${list.length} sessões`} · ${records.length} recorde${records.length === 1 ? "" : "s"} ${ic("trophy")}</div></div>
+      <span class="spacer"></span>
+      <button class="btn sm ${st.selecting ? "on" : "quiet"}" id="fsMode">${st.selecting ? "Concluir seleção" : "Selecionar para excluir"}</button></div>
     <div class="filters">
       ${sel("fsTrack", uniq("track").map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
       ${sel("fsCar", uniq("car").map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
       ${sel("fsType", uniq("session_type").map((t) => [t, TYPES[t] || t]), st.type, "Todos os tipos")}
       ${sel("fsPeriod", [["7", "Últimos 7 dias"], ["30", "Últimos 30 dias"], ["90", "Últimos 90 dias"]], st.period, "Qualquer data")}
+      ${(st.track || st.car || st.type || st.period) ? `<button class="btn sm quiet" id="fsReset">Limpar filtros</button>` : ""}
       <span class="spacer"></span>
       ${selCount ? `<span class="sub">${selCount} selecionada(s)${selProtected ? ` · ${selProtected} com recorde (não será excluída)` : ""}</span>
         <button class="btn sm" id="fsClear">Limpar seleção</button>
         <button class="btn danger ${st.confirm ? "armed" : ""}" id="fsDel">${st.confirm ? "Confirmar exclusão" : "Excluir selecionadas"}</button>` : ""}
     </div>
     <div id="fsOut"></div>
-    ${list.some((s) => s.game === "demo" || /^demo_/.test(s.track)) ? `<div class="demo-bar">
-      <div><b>${list.filter((s) => s.game === "demo" || /^demo_/.test(s.track)).length} sessões de demonstração</b>
+    ${demoN ? `<div class="demo-bar"><div><b>${demoN} sessões de demonstração</b>
         <span class="sub">criadas pelo simulador para testar o app. Não são voltas suas.</span></div>
       <button class="btn danger" id="demoDel">Apagar demonstrações</button></div>` : ""}
-    ${Object.keys(byTrack).length ? Object.entries(byTrack).map(([track, ss]) => `
-      <section class="tgroup">
-        <div class="tghead">
-          <h2>${esc(pretty(track))}</h2><span class="sub">${ss.length} sessão(ões)</span><span class="spacer"></span>
-          <label class="sub"><input type="checkbox" data-selall="${esc(track)}"> selecionar todas</label>
-        </div>
-        <div class="recs">${recFor(track).map((r) => `
-          <div class="rec">
-            <span class="trophy">${ic("trophy")}</span>
-            <div><span class="sub">Recorde · ${esc(pretty(r.car))}</span><b class="num">${fmtLap(r.lap_time_ms)}</b>
-              <span class="sub">${fmtDate(r.started_at)} · volta ${r.lap_number}</span></div>
-            <a class="btn sm" href="#/replay?a=${r.lap_id}">Replay</a>
-          </div>`).join("")}</div>
+    ${trackKeys.length ? trackKeys.map((track, i) => { const ss = byTrack[track], recs = recFor(track); return `
+      <details class="tgroup" data-track="${esc(track)}" ${isOpen(track, i) ? "open" : ""}>
+        <summary><span class="tg-name">${esc(pretty(track))}</span><span class="sub">${ss.length} sessão${ss.length === 1 ? "" : "ões"}</span>
+          <span class="tg-recs">${recs.map((r) => `<a class="recchip" href="#/compare?a=${r.lap_id}" title="Seu recorde com ${esc(pretty(r.car))}. Clique para analisar">${ic("trophy")}<b class="num">${fmtLap(r.lap_time_ms)}</b><small>${esc(pretty(r.car))}</small></a>`).join("")}</span>
+        </summary>
         <div class="panel pad0">
-          <table class="stable"><thead><tr><th></th><th>Data</th><th>Carro</th><th>Tipo</th><th>Voltas</th><th>Melhor volta</th><th>vs. recorde</th><th></th><th></th></tr></thead>
+          <table class="stable"><thead><tr>${st.selecting ? `<th><input type="checkbox" data-selall="${esc(track)}" aria-label="Selecionar todas desta pista"></th>` : ""}<th>Quando</th><th>Carro</th><th>Tipo</th><th class="r">Voltas</th><th class="r">Melhor volta</th><th class="r">vs. recorde</th><th></th></tr></thead>
           <tbody>${ss.map((s) => {
             const d = s.best_ms && s.pb_ms ? s.best_ms - s.pb_ms : null;
-            return `<tr class="${st.sel.has(s.id) ? "sel" : ""}">
-              <td><input type="checkbox" data-sel="${s.id}" ${st.sel.has(s.id) ? "checked" : ""}></td>
-              <td><a href="#/session/${s.id}">${fmtDate(s.started_at)}</a></td>
+            return `<tr class="${st.sel.has(s.id) ? "sel" : ""}" data-open="${s.id}">
+              ${st.selecting ? `<td><input type="checkbox" data-sel="${s.id}" ${st.sel.has(s.id) ? "checked" : ""} aria-label="Selecionar sessão"></td>` : ""}
+              <td><a href="#/session/${s.id}">${fmtDate(s.started_at)}</a>${s.has_video ? ` <span class="vidmark" title="Tem vídeo">${ic("video")}</span>` : ""}</td>
               <td>${esc(pretty(s.car))}</td>
-              <td><span class="tag">${esc(TYPES[s.session_type] || s.session_type)}</span></td>
-              <td class="num">${s.laps}</td>
-              <td class="num ${s.protected ? "best" : ""}">${fmtLap(s.best_ms)}</td>
-              <td class="num ${d > 0 ? "neg" : ""}">${s.protected ? ic("trophy") + " recorde" : d == null ? "—" : fmtDelta(d)}</td>
-              <td>${s.has_video ? `<span class="tag" title="Tem vídeo">${ic("video")}</span>` : ""}</td>
-              <td class="acts"><a class="btn sm" href="#/session/${s.id}">Abrir</a>
-                ${s.protected ? `<span class="lock" title="Tem o seu recorde com este carro nesta pista: não pode ser excluída">${ic("lock")}</span>`
-                  : `<button class="btn sm danger" data-del="${s.id}" title="Excluir esta sessão">Excluir</button>`}</td>
+              <td><span class="stype ${TYPE_CLS[s.session_type] || "prac"}">${esc(TYPES[s.session_type] || s.session_type)}</span></td>
+              <td class="num r">${s.laps}</td>
+              <td class="num r ${s.protected ? "best" : ""}">${fmtLap(s.best_ms)}</td>
+              <td class="num r ${d > 0 ? "neg" : ""}">${s.protected ? `<span class="isrec">${ic("trophy")} recorde</span>` : d == null ? "—" : fmtDelta(d)}</td>
+              <td class="acts">${st.selecting ? "" : s.protected ? "" : `<button class="btn sm quiet rowdel" data-del="${s.id}" title="Excluir esta sessão" aria-label="Excluir esta sessão">Excluir</button>`} <a class="btn sm" href="#/session/${s.id}">Abrir</a></td>
             </tr>`;
           }).join("")}</tbody></table>
         </div>
-      </section>`).join("") : `<div class="panel empty"><b>Nenhuma sessão com esses filtros</b></div>`}`;
+      </details>`; }).join("") : `<div class="panel empty"><b>Nenhuma sessão com esses filtros</b></div>`}`;
 
   const re = () => renderSessions();
   $("#fsTrack").onchange = (e) => { st.track = e.target.value; re(); };
   $("#fsCar").onchange = (e) => { st.car = e.target.value; re(); };
   $("#fsType").onchange = (e) => { st.type = e.target.value; re(); };
   $("#fsPeriod").onchange = (e) => { st.period = e.target.value; re(); };
+  if ($("#fsReset")) $("#fsReset").onclick = () => { Object.assign(st, { track: "", car: "", type: "", period: "" }); re(); };
+  $("#fsMode").onclick = () => { st.selecting = !st.selecting; if (!st.selecting) { st.sel.clear(); st.confirm = false; } re(); };
+  view.querySelectorAll("details.tgroup").forEach((d) => d.addEventListener("toggle", () => { st.open[d.dataset.track] = d.open; }));
   if ($("#demoDel")) $("#demoDel").onclick = async () => {
     const b = $("#demoDel");
     if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "Confirmar: apagar todas"; return; }
@@ -445,6 +567,11 @@ async function renderSessions() {
     byTrack[cb.dataset.selall].forEach((s) => (cb.checked ? st.sel.add(s.id) : st.sel.delete(s.id)));
     st.confirm = false; re();
   });
+  // a linha toda abre a sessão (menos os botões, links e caixas)
+  view.querySelectorAll("tr[data-open]").forEach((tr) => tr.addEventListener("click", (e) => {
+    if (st.selecting || e.target.closest("a, button, input, label")) return;
+    location.hash = `#/session/${tr.dataset.open}`;
+  }));
   const clear = $("#fsClear");
   if (clear) clear.onclick = () => { st.sel.clear(); st.confirm = false; re(); };
   const del = $("#fsDel");
@@ -631,7 +758,7 @@ async function renderSession(id) {
     const btn = $("#delBtn");
     if (btn.dataset.confirm !== "1") { btn.dataset.confirm = "1"; btn.textContent = "Confirmar exclusão"; return; }
     await api(`/api/sessions/${id}`, { method: "DELETE" });
-    location.hash = "#/";
+    location.hash = "#/sessions";
   };
   view.querySelectorAll("[data-valid]").forEach((b) => b.onclick = async () => {
     const to = b.dataset.to === "1";
