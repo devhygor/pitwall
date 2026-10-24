@@ -380,7 +380,9 @@ async function renderReferral() {
             <li>Vale só para contas novas, e não vale indicar a si mesmo.</li>
           </ul>
         </div>
+        <div id="refBanners" style="grid-column:1/-1"></div>
       </div></div></section>`;
+  BN.studio($("#refBanners"), { code: r.code, pct: r.invite_pct, duration: "once" });
   $("#refCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#refCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); };
 }
 
