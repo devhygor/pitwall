@@ -265,13 +265,14 @@ const BN = (() => {
         <label class="bn-f">Desconto % <input id="bnPct" type="number" min="0" max="100" value="${st.pct}" ${cfg.editable ? "" : "readonly"} style="width:80px"></label>
         <label class="bn-f">Valor do desconto <select id="bnDur" ${cfg.editable ? "" : "disabled"}><option value="once">no primeiro pagamento</option><option value="forever">em todos os pagamentos</option></select></label>
         <label class="bn-f">Canto da fita <select id="bnCorner"><option value="tl">Superior esquerdo</option><option value="tr">Superior direito</option><option value="bl">Inferior esquerdo</option><option value="br">Inferior direito</option></select></label></div>
-      <div class="bn-grid">${FORMATS.map((f) => `<div class="bn-card" data-f="${f.id}"><div class="bn-prev ${f.alpha ? "chk" : ""}"><canvas></canvas></div>
+      <div class="adm-sub" id="bnTabs" style="margin-top:14px"><button class="on" data-bt="img">Banners e GIFs</button><button data-bt="chat">Comando de chat</button><button data-bt="live">Aparecer na live</button></div>
+      <div class="bn-grid" data-bs="img">${FORMATS.map((f) => `<div class="bn-card" data-f="${f.id}"><div class="bn-prev ${f.alpha ? "chk" : ""}"><canvas></canvas></div>
         <h3>${esc(f.name)} <small class="sub">${f.w}×${f.h}</small></h3><p class="sub">${esc(f.use)}</p>
         <div class="row-actions"><button class="btn small" data-png>Baixar PNG</button><button class="btn go small" data-gif>Baixar GIF</button></div></div>`).join("")}</div></div>
-      <div class="panel bn" style="margin-top:16px"><h2>Comando de chat (!pitwall)</h2>
+      <div class="panel bn" data-bs="chat" style="margin-top:16px;display:none"><h2>Comando de chat (!pitwall)</h2>
         <p class="sub">Cole no chat da sua live (precisa ser moderador/dono do canal) e o seu bot cria o comando <b>!pitwall</b> sozinho. Quando alguém digitar <b>!pitwall</b>, o bot responde com o link e o código. Se o seu bot tem um painel de comandos, use só o <b>texto da resposta</b>.</p>
         <div id="bnChat"></div></div>
-      <div class="panel bn" style="margin-top:16px"><h2>Aparecer na live de tempos em tempos</h2>
+      <div class="panel bn" data-bs="live" style="margin-top:16px;display:none"><h2>Aparecer na live de tempos em tempos</h2>
         <p class="sub">Em vez de ficar parado na tela o tempo todo, o banner entra deslizando, fica alguns segundos e sai, e repete. Tem dois jeitos:</p>
         <div class="adm-form">
           <label class="bn-f">Formato <select id="bnLfmt">${LIVE.map((id) => `<option value="${id}">${FORMATS.find((q) => q.id === id).name}</option>`).join("")}</select></label>
@@ -286,6 +287,8 @@ const BN = (() => {
         <p class="sub">Um GIF só, que mostra o banner e depois fica invisível até repetir. Adicione como <b>Fonte de imagem</b> no OBS. Alguns programas ignoram pausas muito longas; se o seu fizer isso, use o link do OBS.</p>
         <div class="row-actions"><button class="btn small" id="bnBlink">Baixar GIF intermitente</button></div></div>`;
     $("#bnDur").value = st.duration;
+    const showTab = (k) => { host.querySelectorAll("[data-bs]").forEach((e) => { e.style.display = e.dataset.bs === k ? "" : "none"; }); host.querySelectorAll("#bnTabs button").forEach((b) => b.classList.toggle("on", b.dataset.bt === k)); };
+    host.querySelectorAll("#bnTabs button").forEach((b) => { b.onclick = () => showTab(b.dataset.bt); });
     const liveUrl = (extra) => { const p = new URLSearchParams({ code: st.code, pct: st.pct, dur: st.duration, fmt: $("#bnLfmt").value, corner: st.corner, every: $("#bnEvery").value, show: $("#bnShow").value, pos: $("#bnPos").value });
       return location.origin + "/banner-live/?" + p + (extra || ""); };
     const chatText = () => `Pitwall: engenheiro de corrida em português para ACC e iRacing, com telemetria, overlays e setups. Baixe grátis: https://pitwall.hygor.com.br/?ref=${st.code}` + (st.pct > 0 ? ` | Use o código ${st.code} e ganhe ${st.pct}% de desconto na assinatura!` : "");
@@ -318,7 +321,7 @@ const BN = (() => {
     const tick = () => {
       if (!host.isConnected) return clearInterval(timer);
       const o = opts(st), t = (Date.now() % LOOP) / LOOP;
-      for (const { cv, f, el } of cards) { const r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) continue; paint(cv, f, o, t, Math.min(1, 520 / f.w)); }
+      for (const { cv, f, el } of cards) { const r = el.getBoundingClientRect(); if (el.offsetParent === null || r.bottom < 0 || r.top > innerHeight) continue; paint(cv, f, o, t, Math.min(1, 520 / f.w)); }
     };
     const timer = setInterval(tick, 90); tick();
   }

@@ -400,7 +400,8 @@ async function renderAffiliate() {
       <span class="eyebrow">Painel do afiliado</span>
       <h1 class="plans-h">Olá, ${esc(a.name)}</h1>
       <p class="lede">Você ganha <b>${a.commission_pct}%</b> de cada pagamento dos clientes que vierem pelo seu link${a.commission_mode === "first" ? " (só do primeiro pagamento)" : ", todo mês enquanto eles continuarem assinando"}. Quem usa o seu código ganha <b>${a.discount_pct}% de desconto</b>${a.discount_duration === "forever" ? "" : " no primeiro pagamento"}.</p>
-      <div class="acct-grid">
+      <div class="adm-sub" id="afTabs" style="margin-top:18px"><button class="on" data-at="sum">Resumo e comissões</button><button data-at="div">Divulgação (banners, GIFs e comandos)</button></div>
+      <div class="acct-grid" id="afSum">
         <div class="panel"><h2>Seu link</h2>
           <code class="lickey">${esc(link)}</code>
           <div class="row-actions"><button class="btn go small" id="afCopy">Copiar link</button></div>
@@ -418,15 +419,15 @@ async function renderAffiliate() {
           <div class="adm-form">${piiField("afPix", a.pix_key || "", "Sua chave Pix")}<button class="btn small" id="afPixSave">Salvar</button></div>
           <div class="modal-err" id="afMsg"></div>
         </div>
-        <div id="afBanners" style="grid-column:1/-1"></div>
         <div class="panel"><h2>Comissões</h2>
           ${(a.commissions || []).length ? `<table class="tbl"><tbody>${a.commissions.map((m) => `<tr><td>${dt(m.at)}</td><td class="sub">${esc(m.who)}</td><td>${brl(m.amount_cents)}</td><td>${esc(ST[m.status] || m.status)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Nenhuma comissão ainda.</p>`}
         </div>
         <div class="panel"><h2>Clientes</h2>
           ${(a.clients || []).length ? `<table class="tbl"><tbody>${a.clients.map((c) => `<tr><td>${esc(c.who)}</td><td>${esc(PLAN_NAME[c.plan] || c.plan)} ${c.period === "year" ? "anual" : "mensal"}</td><td>${esc(SUB[c.status] || c.status)}</td><td class="sub">${dt(c.at)}</td></tr>`).join("")}</tbody></table>` : `<p class="sub">Ninguém assinou pelo seu link ainda.</p>`}
         </div>
-      </div></div></section>`;
+      </div><div id="afBanners" style="display:none;margin-top:16px"></div></div></section>`;
   BN.studio($("#afBanners"), { code: a.code, pct: a.discount_pct, duration: a.discount_duration });
+  view.querySelectorAll("#afTabs button").forEach((b) => { b.onclick = () => { const d = b.dataset.at === "div"; $("#afSum").style.display = d ? "none" : ""; $("#afBanners").style.display = d ? "" : "none"; view.querySelectorAll("#afTabs button").forEach((x) => x.classList.toggle("on", x === b)); }; });
   $("#afCopy").onclick = async () => { await navigator.clipboard.writeText(link); $("#afCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); };
   $("#afPixSave").onclick = async () => {
     const m = $("#afMsg");
