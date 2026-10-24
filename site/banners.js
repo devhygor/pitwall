@@ -3,6 +3,14 @@
    Usa a biblioteca gifenc (import dinâmico do módulo ESM) e os helpers do app.js ($, esc, toast). */
 "use strict";
 
+// navegadores mais antigos (o do OBS, por exemplo) não têm roundRect
+if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.max(0, Math.min(Array.isArray(r) ? r[0] : r || 0, w / 2, h / 2));
+    this.moveTo(x + r, y); this.arcTo(x + w, y, x + w, y + h, r); this.arcTo(x + w, y + h, x, y + h, r); this.arcTo(x, y + h, x, y, r); this.arcTo(x, y, x + w, y, r); this.closePath();
+  };
+}
+
 const BN = (() => {
   const C = { chalk: "#eef2f7", fog: "#8e9bb2", green: "#2ee59d", blue: "#3b9cff", purple: "#a77bff" };
   const FONT = `"Barlow Condensed","Arial Narrow",sans-serif`;
@@ -207,7 +215,7 @@ const BN = (() => {
     x.restore();
   }
 
-  const ready = () => Promise.all([document.fonts.load(`italic 800 40px "Barlow Condensed"`), document.fonts.load(`600 20px Barlow`)]).catch(() => {});
+  const ready = () => Promise.race([Promise.all([document.fonts.load(`italic 800 40px "Barlow Condensed"`), document.fonts.load(`600 20px Barlow`)]), new Promise((r) => setTimeout(r, 2500))]).catch(() => {});
   const opts = (o) => ({ code: (o.code || "SEUCODIGO").toUpperCase(), pct: Math.max(0, Math.min(100, +o.pct || 0)), duration: o.duration, corner: o.corner });
   function paint(cv, f, o, g, scale) {
     cv.width = Math.round(f.w * scale); cv.height = Math.round(f.h * scale);
@@ -275,6 +283,7 @@ const BN = (() => {
       <div class="panel bn" data-bs="live" style="margin-top:16px;display:none"><h2>Aparecer na live de tempos em tempos</h2>
         <p class="sub">Em vez de ficar parado na tela o tempo todo, o banner entra deslizando, fica alguns segundos e sai, e repete. Tem dois jeitos:</p>
         <div class="adm-form">
+          <label class="bn-f">Modo <select id="bnMode"><option value="blink">Aparece de tempos em tempos</option><option value="loop">Sempre na tela (em loop, sem sumir)</option></select></label>
           <label class="bn-f">Formato <select id="bnLfmt">${LIVE.map((id) => `<option value="${id}">${FORMATS.find((q) => q.id === id).name}</option>`).join("")}</select></label>
           <label class="bn-f">Aparece a cada (segundos) <input id="bnEvery" type="number" min="10" max="3600" value="120" style="width:110px"></label>
           <label class="bn-f">Fica na tela (segundos) <input id="bnShow" type="number" min="3" max="60" value="15" style="width:110px"></label>
@@ -283,13 +292,16 @@ const BN = (() => {
         <code class="lickey" id="bnUrl" style="word-break:break-all"></code>
         <div class="row-actions"><button class="btn go small" id="bnCopy">Copiar link</button><a class="btn small" id="bnTest" target="_blank" rel="noopener">Ver como fica</a></div>
         <p class="sub">No OBS: <b>Fontes → + → Navegador</b>, cole o link em <b>URL</b> e coloque a largura e a altura do formato (ex.: 940×180 na barra da câmera). Depois arraste a fonte para o lugar que quiser, por exemplo logo abaixo da câmera. O fundo já é transparente. Funciona igual no Streamlabs e no TikTok Live Studio.</p>
-        <h3 style="margin:10px 0 4px">2) GIF que some sozinho</h3>
+        <h3 style="margin:10px 0 4px">2) GIF que some sozinho <small class="sub">(só no modo "aparece de tempos em tempos")</small></h3>
         <p class="sub">Um GIF só, que mostra o banner e depois fica invisível até repetir. Adicione como <b>Fonte de imagem</b> no OBS. Alguns programas ignoram pausas muito longas; se o seu fizer isso, use o link do OBS.</p>
         <div class="row-actions"><button class="btn small" id="bnBlink">Baixar GIF intermitente</button></div></div>`;
     $("#bnDur").value = st.duration;
     const showTab = (k) => { host.querySelectorAll("[data-bs]").forEach((e) => { e.style.display = e.dataset.bs === k ? "" : "none"; }); host.querySelectorAll("#bnTabs button").forEach((b) => b.classList.toggle("on", b.dataset.bt === k)); };
     host.querySelectorAll("#bnTabs button").forEach((b) => { b.onclick = () => showTab(b.dataset.bt); });
-    const liveUrl = (extra) => { const p = new URLSearchParams({ code: st.code, pct: st.pct, dur: st.duration, fmt: $("#bnLfmt").value, corner: st.corner, every: $("#bnEvery").value, show: $("#bnShow").value, pos: $("#bnPos").value });
+    const liveUrl = (extra) => {
+      const loop = $("#bnMode").value === "loop", p = new URLSearchParams({ code: st.code, pct: st.pct, dur: st.duration, fmt: $("#bnLfmt").value, corner: st.corner, pos: $("#bnPos").value });
+      if (loop) p.set("loop", "1"); else { const sh = Math.max(3, +$("#bnShow").value || 15); p.set("show", sh); p.set("every", Math.max(sh + 5, +$("#bnEvery").value || 120)); }   // "a cada" nunca menor que o tempo na tela
+      $("#bnEvery").disabled = $("#bnShow").disabled = loop;
       return location.origin + "/banner-live/?" + p + (extra || ""); };
     const chatText = () => `Pitwall: engenheiro de corrida em português para ACC e iRacing, com telemetria, overlays e setups. Baixe grátis: https://pitwall.hygor.com.br/?ref=${st.code}` + (st.pct > 0 ? ` | Use o código ${st.code} e ganhe ${st.pct}% de desconto na assinatura!` : "");
     const refreshChat = () => {
@@ -304,7 +316,7 @@ const BN = (() => {
       b.textContent = old; b.disabled = false; };
     const read = () => { st.code = $("#bnCode").value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ""); st.pct = +$("#bnPct").value || 0; st.duration = $("#bnDur").value; st.corner = $("#bnCorner").value; };
     ["bnCode", "bnPct", "bnDur", "bnCorner"].forEach((id) => { $("#" + id).oninput = () => { read(); refreshUrl(); }; });
-    ["bnLfmt", "bnEvery", "bnShow", "bnPos"].forEach((id) => { $("#" + id).oninput = refreshUrl; });
+    ["bnMode", "bnLfmt", "bnEvery", "bnShow", "bnPos"].forEach((id) => { $("#" + id).oninput = refreshUrl; });
     read(); refreshUrl();
     const af = $("#bnAf"); if (af) af.onchange = () => { const o = af.selectedOptions[0]; if (!o.value) return; $("#bnCode").value = o.value; $("#bnPct").value = o.dataset.pct; $("#bnDur").value = o.dataset.dur === "forever" ? "forever" : "once"; read(); refreshUrl(); };
     host.querySelectorAll(".bn-card").forEach((c) => {
