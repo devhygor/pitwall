@@ -439,7 +439,7 @@ def advice(db, setup_id: int, target: float = 26.5) -> dict:
         applied = 0
         note = ""
         related = ev["direct"] or ev["basis_id"] == s["id"] or ev["basis_id"] in _ancestors(db, s)
-        if res.get("analyzed_laps", 0) < MIN_LAPS and not res.get("error"):
+        if res.get("analyzed_laps", 0) + res.get("partial_laps", 0) < MIN_LAPS and not res.get("error"):
             res["changes"] = []                                 # 1 ou 2 voltas não dizem como o carro se comporta
             note = f"Só {res.get('analyzed_laps', 0)} volta(s) limpa(s) analisada(s): são poucas para recomendar. Dirija pelo menos {MIN_LAPS + 2} voltas limpas e gere de novo."
         elif not ev["direct"] and not related:
@@ -449,6 +449,13 @@ def advice(db, setup_id: int, target: float = 26.5) -> dict:
         elif not ev["direct"] and basis is not None and res.get("changes"):
             res["changes"], applied = _rebase(res["changes"], target_content)
         # os achados descrevem o carro COM O SETUP DE ORIGEM (a tela avisa quando ele não é este)
+        inv, rec = res.get("recent_invalid", 0), res.get("recent_laps", 0)
+        if inv >= 3 and rec and inv / rec >= 0.3 and not res.get("error"):
+            part = res.get("partial_laps", 0)
+            warn = (f"{inv} das últimas {rec} voltas foram inválidas (saída de pista). O carro pode estar instável neste setup. "
+                    + (f"A análise usa também o trecho anterior à saída de {part} dessas voltas." if part else "Só as voltas válidas entraram na análise: dê atenção às recomendações de estabilidade (traseira e freio).")
+                    + " Se o problema for você e não o setup, ignore.")
+            note = (note + " " if note else "") + warn
     progress = None
     if ev["direct"] and laps:
         info_ = info(db, setup_id)
@@ -469,7 +476,7 @@ def advice(db, setup_id: int, target: float = 26.5) -> dict:
             if rb.get("analyzed_laps") and res.get("analyzed_laps"):
                 progress = {**_progress(rb, res, _pace(lb), _pace(laps)), "before_name": before_name}
     stats = db.setup_stats().get(int(setup_id))
-    nlaps = res.get("analyzed_laps") or 0
+    nlaps = (res.get("analyzed_laps") or 0) + (res.get("partial_laps") or 0) // 2
     conf = "alta" if nlaps >= 6 else "média" if nlaps >= 3 else "baixa"
     total = len(res.get("changes") or [])
     return {**res, "meta": {"sessions": ids, "assumed": not ev["direct"], "stats": stats, "next_name": next_version_name(db, s),

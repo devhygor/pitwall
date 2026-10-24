@@ -1583,7 +1583,7 @@ function renderEngineer(r, setupId, setupName, opt = {}) {
   const metaHtml = !r.meta ? "" : `
     ${mt.note ? `<div class="note warn">${esc(mt.note)}</div>` : ""}
     ${mt.basis && mt.basis.known && r.analyzed_laps ? `<div class="adv-basis ${mt.basis.direct ? "direct" : ""}"><b>${mt.basis.direct ? "Análise deste setup" : "Análise das voltas de outro setup"}</b>
-      <span>${mt.basis.direct ? `Baseada em ${r.analyzed_laps} volta(s) limpa(s) com ele.` : `As voltas são do setup “${esc(mt.basis.name)}”. As recomendações abaixo já descontam o que este setup mudou${mt.total ? `: <b>${mt.applied}</b> de <b>${mt.total}</b> já aplicad${mt.total === 1 ? "a" : "as"}` : ""}. Dirija com este setup para uma análise direta.`}</span>
+      <span>${mt.basis.direct ? `Baseada em ${r.analyzed_laps} volta(s) limpa(s) com ele${r.partial_laps ? ` e no trecho antes da saída de pista de ${r.partial_laps} volta(s) inválida(s)` : ""}.` : `As voltas são do setup “${esc(mt.basis.name)}”. As recomendações abaixo já descontam o que este setup mudou${mt.total ? `: <b>${mt.applied}</b> de <b>${mt.total}</b> já aplicad${mt.total === 1 ? "a" : "as"}` : ""}. Dirija com este setup para uma análise direta.`}</span>
       <em class="conf c-${mt.confidence}">confiança ${mt.confidence}</em></div>` : ""}
     ${prog && (prog.items.length || prog.pace) ? `<div class="adv-prog"><h3>O ajuste anterior funcionou?</h3><div class="sub">Comparando as voltas com “${esc(prog.before_name)}” (antes) e com este setup (depois).</div>
       ${prog.items.map((i) => `<div class="pr ${i.verdict}"><i>${verdictIc[i.verdict]}</i><span>${esc(i.label)}</span><b>${esc(i.before)} → ${esc(i.after)}</b><em>${i.verdict}</em></div>`).join("")}

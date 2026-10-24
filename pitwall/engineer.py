@@ -46,7 +46,14 @@ def _resample(lap: dict, points: int = 1500):
     out = {k: np.interp(grid, d, c) for k, c in zip(need[1:], cols[1:])}
     length = _track_length(arr["x"], arr["z"]) or 1.0
     out["dist"] = (grid - grid[0]) * length
+    out["grid"] = grid                      # posição na pista (0..1) de cada ponto: serve para cortar a volta onde ela foi invalidada
     return out
+
+
+def _invalid_cut(lap: dict):
+    """Posição (0..1) em que a volta foi invalidada (saída de pista, corte), ou None se não foi gravada."""
+    pts = [e.get("d") for e in (lap.get("events") or []) if e.get("type") == "invalid" and e.get("d") is not None]
+    return min(pts) if pts else None
 
 
 def _corner_phases(L: dict, seg: dict) -> dict:
@@ -75,8 +82,14 @@ def analyze(laps: list[dict], setup: dict | None = None, target_psi: float = 26.
     racing = [l for l in laps if not l.get("out_lap") and not l.get("in_lap")]
     use = [l for l in racing if l.get("valid")] or racing
     use = use[-10:]
+    # Voltas inválidas (saí da pista) não valem como ritmo, mas o trecho ANTES da saída mostra o carro instável: entra só no equilíbrio.
+    partial = []
+    if any(l.get("valid") for l in racing):
+        partial = [(l, c) for l in racing[-10:] if not l.get("valid") and (c := _invalid_cut(l)) is not None][-5:]
+    recent = racing[-10:]
     res: dict = {"laps_used": [l["lap_number"] for l in use], "findings": [], "changes": [],
-                 "pressures": [], "balance": [], "temps": {}}
+                 "pressures": [], "balance": [], "temps": {},
+                 "recent_laps": len(recent), "recent_invalid": sum(1 for l in recent if not l.get("valid"))}
     if not use:
         res["error"] = "Nenhuma volta completa (sem box) para analisar."
         return res
@@ -84,13 +97,25 @@ def analyze(laps: list[dict], setup: dict | None = None, target_psi: float = 26.
     # ---------------- equilíbrio por fase e tipo de curva
     buckets: dict = {}
     locks_f = locks_r = spins = braking_zones = power_zones = 0
-    analyzed = 0
-    for lap in use:
+    analyzed = partial_n = 0
+    for lap, cut_d in [(l, None) for l in use] + partial:
         L = _resample(lap)
         if L is None:
             continue
-        analyzed += 1
+        cut = None if cut_d is None else int(np.searchsorted(L["grid"], cut_d))
+        if cut is None:
+            analyzed += 1
+        elif cut < 60:
+            continue                                    # invalidada logo no começo: quase nada para aproveitar
+        else:
+            partial_n += 1
         for seg in detect_segments(L["dist"], L["speed"]):
+            if cut is not None:                         # volta inválida: só o trecho antes da saída de pista
+                if seg["start"] >= cut - 5:
+                    continue
+                seg = {**seg, "end": min(seg["end"], cut - 1)}
+                if seg["end"] - seg["start"] < 12:
+                    continue
             ph = _corner_phases(L, seg)
             cls = "slow" if ph["min_speed"] < 140 else "fast"
             for name in ("entry", "mid", "exit"):
@@ -108,6 +133,7 @@ def analyze(laps: list[dict], setup: dict | None = None, target_psi: float = 26.
         res["error"] = ("Estas voltas não têm os dados de equilíbrio (foram gravadas por uma versão "
                         "antiga do Pitwall). Grave uma sessão nova para usar o engenheiro.")
     res["analyzed_laps"] = analyzed
+    res["partial_laps"] = partial_n
 
     changes: dict = {}
 
