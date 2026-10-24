@@ -12,6 +12,13 @@ AppVersion={#AppVersion}
 AppVerName=Pitwall {#AppVersion}
 AppPublisher=Pitwall
 AppPublisherURL=https://pitwall.hygor.com.br/
+AppCopyright=Pitwall - https://pitwall.hygor.com.br
+; Metadados do Setup.exe (sem isso ele aparece sem empresa/descrição, o que pesa nas heurísticas de antivírus)
+VersionInfoVersion={#AppVersion}
+VersionInfoCompany=Pitwall
+VersionInfoDescription=Instalador do Pitwall
+VersionInfoProductName=Pitwall
+VersionInfoProductVersion={#AppVersion}
 AppSupportURL=https://pitwall.hygor.com.br
 DefaultDirName={localappdata}\Programs\Pitwall
 DisableProgramGroupPage=yes

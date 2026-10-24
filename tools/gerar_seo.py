@@ -286,8 +286,13 @@ PAGINAS = [
         "lede": "Um instalador só, sem Python e sem administrador. O Pitwall se atualiza sozinho.",
         "secoes": [
             ("Como instalar", [
-                "Baixe o Pitwall-Setup.exe, abra e siga o instalador. Se o Windows mostrar \"O Windows protegeu o computador\", clique em Mais informações e depois em Executar assim mesmo: o aplicativo ainda não tem assinatura digital.",
+                "Baixe o Pitwall-Setup.exe, abra e siga o instalador. Se o Windows mostrar \"O Windows protegeu o computador\", clique em Mais informações e depois em Executar assim mesmo. Isso acontece porque o Pitwall é um programa novo e pouco baixado: o Windows desconfia de qualquer instalador sem muitos downloads ainda.",
                 "Abra o ACC ou o iRacing e vá para a pista. O selo no topo do Pitwall muda para Gravando.",
+            ]),
+            ("Aviso do Windows ou do antivírus", [
+                "O Pitwall é um programa legítimo, gerado automaticamente a partir do código do projeto, e não instala nada escondido. Como é novo e ainda não tem assinatura digital, o SmartScreen e alguns antivírus podem marcá-lo por engano (falso positivo), principalmente porque ele lê a telemetria do jogo e desenha janelas por cima dele.",
+                "Para conferir que o arquivo é o original, abra o PowerShell na pasta do download e rode: Get-FileHash .\\Pitwall-Setup.exe -Algorithm SHA256. O resultado precisa ser igual ao SHA256 que aparece na página de downloads da versão: github.com/devhygor/pitwall-releases/releases/latest.",
+                "Se o seu antivírus bloquear mesmo assim, confira o SHA256 e, estando igual, marque o arquivo como seguro nas opções do antivírus (exceção/restaurar da quarentena). Também enviamos cada versão aos fabricantes para análise.",
             ]),
             ("Requisitos", [
                 "Windows 10 ou 11. Para o ACC, o jogo precisa estar instalado; para o iRacing, a conta e o jogo instalado. O instalador tem cerca de 150 MB.",
@@ -297,7 +302,7 @@ PAGINAS = [
             ]),
         ],
         "faq": [
-            ("O instalador é seguro?", "Ele é gerado automaticamente a partir do código do projeto. Como ainda não tem assinatura digital, o Windows pede uma confirmação na primeira vez."),
+            ("O instalador é seguro?", "Ele é gerado automaticamente a partir do código do projeto. Como é novo e ainda não tem assinatura digital, o Windows e alguns antivírus podem avisar por engano. Você pode conferir o SHA256 do arquivo na página da versão."),
             ("Funciona em Mac ou Linux?", "Por enquanto o Pitwall é só para Windows."),
         ],
         "cta": ("Baixar o instalador", "https://github.com/devhygor/pitwall-releases/releases/latest/download/Pitwall-Setup.exe"),

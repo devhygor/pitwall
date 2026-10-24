@@ -12,6 +12,10 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # Assinatura de código (opcional): sem os segredos abaixo o build segue normal, só que sem assinar.
+      # Passo a passo em docs/antivirus-e-assinatura.md
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +26,14 @@ jobs:
       - name: Dependências
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-app.txt -r requirements-iracing.txt -r requirements-voice.txt pyinstaller
+          pip install -r requirements.txt -r requirements-app.txt -r requirements-iracing.txt -r requirements-voice.txt
+
+      # Bootloader compilado aqui (MSVC do runner) em vez do binário pré-compilado do PyInstaller: o pré-compilado é o
+      # mesmo para milhares de apps e seu hash está em listas de malware. Se a compilação falhar, usa o pré-compilado.
+      - name: PyInstaller (bootloader compilado localmente)
+        shell: bash
+        run: |
+          pip install --no-binary pyinstaller pyinstaller || { echo "::warning::bootloader local falhou, usando o pré-compilado"; pip install pyinstaller; }
 
       - name: Versão
         id: ver
@@ -35,10 +46,14 @@ jobs:
       - name: Ícone
         run: python -c "from pitwall import tray; tray.save_ico('packaging/pitwall.ico')"
 
+      - name: Metadados de versão do .exe
+        run: python packaging/gerar_versao_exe.py ${{ steps.ver.outputs.version }}
+
       - name: Executável (PyInstaller)
         run: >
-          pyinstaller packaging/pitwall_app.py --name Pitwall --noconfirm --clean --windowed
+          pyinstaller packaging/pitwall_app.py --name Pitwall --noconfirm --clean --windowed --noupx
           --icon packaging/pitwall.ico
+          --version-file packaging/version_info.txt
           --add-data "pitwall/web;pitwall/web"
           --collect-all imageio_ffmpeg
           --collect-all certifi
@@ -65,12 +80,52 @@ jobs:
           test -f dist/Pitwall/Pitwall.exe
           ls dist/Pitwall/_internal/pitwall/web | head
 
+      - name: Assinar Pitwall.exe (Azure Artifact Signing)
+        if: env.AZURE_TENANT_ID != ''
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          files-folder: dist/Pitwall
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
       - name: Instalador (Inno Setup)
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
           & $iscc "/DAppVersion=${{ steps.ver.outputs.version }}" packaging\pitwall.iss
+
+      - name: Assinar o instalador (Azure Artifact Signing)
+        if: env.AZURE_TENANT_ID != ''
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          files-folder: dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: SHA256 do instalador
+        id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist\Pitwall-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  Pitwall-Setup.exe" | Out-File -Encoding ascii dist\SHA256SUMS.txt
+          "sha256=$h" >> $env:GITHUB_OUTPUT
 
       - uses: actions/upload-artifact@v4
         with:
@@ -83,11 +138,16 @@ jobs:
           tag_name: v${{ steps.ver.outputs.version }}
           target_commitish: ${{ github.sha }}
           make_latest: true
-          files: dist/Pitwall-Setup.exe
+          files: |
+            dist/Pitwall-Setup.exe
+            dist/SHA256SUMS.txt
           name: Pitwall ${{ steps.ver.outputs.version }}
           body: |
             Baixe **Pitwall-Setup.exe**, abra e siga o instalador (não pede administrador).
             O Windows pode avisar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.
+
+            **SHA256 do Pitwall-Setup.exe:** `${{ steps.hash.outputs.sha256 }}`
+            Para conferir, no PowerShell: `Get-FileHash .\Pitwall-Setup.exe -Algorithm SHA256`
 
       - name: Publicar no repositório público de downloads
         if: env.RELEASES_TOKEN != ''
@@ -100,8 +160,13 @@ jobs:
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: v${{ steps.ver.outputs.version }}
           make_latest: true
-          files: dist/Pitwall-Setup.exe
+          files: |
+            dist/Pitwall-Setup.exe
+            dist/SHA256SUMS.txt
           name: Pitwall ${{ steps.ver.outputs.version }}
           body: |
             Baixe **Pitwall-Setup.exe**, abra e siga o instalador (não pede administrador).
             O Windows pode avisar "O Windows protegeu o computador": clique em **Mais informações → Executar assim mesmo**.
+
+            **SHA256 do Pitwall-Setup.exe:** `${{ steps.hash.outputs.sha256 }}`
+            Para conferir, no PowerShell: `Get-FileHash .\Pitwall-Setup.exe -Algorithm SHA256`
