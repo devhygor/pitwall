@@ -1443,3 +1443,39 @@ body.gate .sidenav { display: none; }
 .pr { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.06); font-size: 12.5px; } .pr:first-of-type { border-top: 0; }
 .pr i { font-style: normal; font-weight: 800; text-align: center; } .pr span { overflow-wrap: anywhere; } .pr b { font-family: var(--mono); font-weight: 600; white-space: nowrap; } .pr em { font-style: normal; font-size: 11px; padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
 .pr.melhorou i, .pr.melhorou em { color: #8fe3b4; } .pr.melhorou em { background: rgba(63,214,139,.14); } .pr.piorou i, .pr.piorou em { color: #ff8a8a; } .pr.piorou em { background: rgba(255,93,93,.14); } .pr.igual i, .pr.igual em { color: var(--muted); } .pr.igual em { background: rgba(255,255,255,.06); }
+
+/* setup usado (Análise e sessão) */
+.an2-setups { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; }
+.setupchip { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: inherit; cursor: pointer; text-align: left; min-width: 260px; }
+.setupchip:hover { border-color: #3a414d; }
+.setupchip span { display: grid; }
+.setupchip small { color: var(--muted); font-size: 11.5px; }
+.setupchip b { font-size: 14px; }
+.setupchip em { font-style: normal; color: var(--muted); font-size: 12px; }
+.setupchip .sc-ic { font-size: 18px; }
+.setupchip .sc-ch { margin-left: auto; font-size: 12px; color: var(--accent); }
+.setupchip.ok { border-color: rgba(46,229,157,.45); }
+.setupchip.sug { border-color: rgba(255,194,51,.55); background: rgba(255,194,51,.06); }
+.setupchip.none { border-style: dashed; }
+.tabbar { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 14px 0; flex-wrap: wrap; }
+.tabbar button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.tabbar button:hover { color: var(--text, #fff); }
+.tabbar button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.setup-state { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--line); }
+.setup-state.ok { border-color: rgba(46,229,157,.45); background: rgba(46,229,157,.06); }
+.setup-state.sug { border-color: rgba(255,194,51,.55); background: rgba(255,194,51,.07); }
+.setup-state.none { border-style: dashed; }
+
+/* duplicados */
+.dup-modal { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.dup-card { width: min(760px, 100%); max-height: 88vh; display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+.dup-body { overflow: auto; display: grid; gap: 10px; }
+.dup-group { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.dup-group.bad { border-color: #ff5d5d; }
+.dup-h { display: flex; justify-content: space-between; padding: 2px 2px 6px; }
+.dup-f { display: flex; gap: 10px; align-items: center; padding: 6px 4px; border-radius: 8px; cursor: pointer; }
+.dup-f:hover { background: var(--panel-2); }
+.dup-f.keep { background: rgba(46,229,157,.08); }
+.dup-f span { display: grid; }
+.dup-f small { color: var(--muted); font-size: 12px; word-break: break-all; }
+.dup-foot { display: flex; align-items: center; gap: 10px; position: sticky; bottom: 0; background: var(--panel); padding-top: 8px; }

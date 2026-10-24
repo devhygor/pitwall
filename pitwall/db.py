@@ -106,6 +106,16 @@ def unpack(blob: bytes | None) -> dict:
     return json.loads(zlib.decompress(blob))
 
 
+def _pitwall_label(s: dict) -> dict:
+    """Setups de coleções de terceiros aparecem com o nome no padrão do Pitwall ('Pitwall MNZ M4GT3 R Safe 28C 1.10').
+    O nome do arquivo no ACC não muda: fica em `file_name`."""
+    if s.get("source") == "GO Setups":
+        from . import setups as _s
+        s["file_name"] = s["name"]
+        s["name"] = _s.pitwall_name(s)
+    return s
+
+
 class DB:
     def __init__(self, path: Path | str | None = None):
         self.path = str(path or default_db_path())
@@ -398,12 +408,18 @@ class DB:
             cur = c.execute(f"INSERT INTO setups ({cols}) VALUES ({', '.join(':' + k for k in kw)})", kw)
             return cur.lastrowid, True
 
+    def repoint_setup(self, setup_id: int, rel_path: str, name: str, meta: dict):
+        """O arquivo deste setup mudou de lugar (duplicado apagado): aponta para o que ficou."""
+        with self._lock, self.connect() as c:
+            c.execute("UPDATE setups SET rel_path = ?, name = ?, source = ?, version = ?, kind = ?, variant = ?, temp_c = ? WHERE id = ?",
+                      (rel_path, name, meta.get("source"), meta.get("version"), meta.get("kind"), meta.get("variant"), meta.get("temp_c"), setup_id))
+
     def setups_list(self) -> list[dict]:
         with self.connect() as c:
             rows = c.execute("""SELECT id, car, track, name, source, version, kind, variant, temp_c,
                                        rel_path, file_mtime, imported_at
                                 FROM setups ORDER BY car, track, name""").fetchall()
-        return [dict(r) for r in rows]
+        return [_pitwall_label(dict(r)) for r in rows]
 
     def setup_stats(self) -> dict:
         """Por setup: melhor volta válida sua com ele, quantas voltas e sessões, e quando usou por último.
@@ -470,7 +486,7 @@ class DB:
             r = c.execute("SELECT * FROM setups WHERE id = ?", (setup_id,)).fetchone()
         if not r:
             return None
-        d = dict(r)
+        d = _pitwall_label(dict(r))
         d["content"] = json.loads(d["content"])
         return d
 

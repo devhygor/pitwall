@@ -1,0 +1,158 @@
+{
+	"advancedSetup": {
+		"aeroBalance": {
+			"brakeDuct": [
+				4,
+				3
+			],
+			"rearWing": 9,
+			"rideHeight": [
+				0,
+				11,
+				19,
+				18
+			],
+			"rodLength": [
+				51.89436721801758,
+				51.89436721801758,
+				-45.041141510009766,
+				-45.041141510009766
+			],
+			"splitter": 1
+		},
+		"dampers": {
+			"bumpFast": [
+				4,
+				4,
+				3,
+				3
+			],
+			"bumpSlow": [
+				9,
+				9,
+				7,
+				7
+			],
+			"reboundFast": [
+				5,
+				5,
+				4,
+				4
+			],
+			"reboundSlow": [
+				11,
+				11,
+				8,
+				8
+			]
+		},
+		"drivetrain": {
+			"preload": 4
+		},
+		"mechanicalBalance": {
+			"aRBFront": 2,
+			"aRBRear": 1,
+			"brakeBias": 65,
+			"brakeTorque": 20,
+			"bumpStopRateDn": [
+				0,
+				0,
+				10,
+				10
+			],
+			"bumpStopRateUp": [
+				6,
+				6,
+				2,
+				2
+			],
+			"bumpStopWindow": [
+				1,
+				1,
+				50,
+				50
+			],
+			"wheelRate": [
+				5,
+				5,
+				3,
+				3
+			]
+		}
+	},
+	"basicSetup": {
+		"alignment": {
+			"camber": [
+				23,
+				23,
+				10,
+				10
+			],
+			"casterLF": 11,
+			"casterRF": 11,
+			"staticCamber": [
+				-5.3254499435424805,
+				-5.317513942718506,
+				-1.185031771659851,
+				-1.1765977144241333
+			],
+			"steerRatio": 3,
+			"toe": [
+				30,
+				30,
+				55,
+				55
+			],
+			"toeOutLinear": [
+				2.53589496423956e-05,
+				2.5381563318660483e-05,
+				-0.005882980301976204,
+				-0.005882916506379843
+			]
+		},
+		"electronics": {
+			"abs": 3,
+			"eCUMap": 7,
+			"fuelMix": 0,
+			"tC1": 3,
+			"tC2": 4,
+			"telemetryLaps": 0
+		},
+		"strategy": {
+			"frontBrakePadCompound": 1,
+			"fuel": 60,
+			"fuelPerLap": 2.3332622051239014,
+			"nPitStops": 0,
+			"pitStrategy": [
+				{
+					"frontBrakePadCompound": 1,
+					"fuelToAdd": 0,
+					"rearBrakePadCompound": 1,
+					"tyreSet": 2,
+					"tyres": {
+						"tyreCompound": 0,
+						"tyrePressure": [
+							50,
+							62,
+							48,
+							57
+						]
+					}
+				}
+			],
+			"rearBrakePadCompound": 1,
+			"tyreSet": 0
+		},
+		"tyres": {
+			"tyreCompound": 0,
+			"tyrePressure": [
+				50,
+				58,
+				48,
+				57
+			]
+		}
+	},
+	"carName": "porsche_991ii_gt3_r",
+	"trackBopType": 9
+}

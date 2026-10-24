@@ -259,6 +259,20 @@ def version_name_stem(s: dict) -> str:
     return " ".join(b for b in bits if b)
 
 
+def pitwall_name(s: dict) -> str:
+    """Nome de exibição no padrão do Pitwall: 'Pitwall MNZ M4GT3 R Safe 28C 1.10' (pista, carro, Q/R, variante, temperatura, versão)."""
+    bits = ["Pitwall", track_abbr(s["track"]), car_abbr(s["car"])]
+    if s.get("kind") in ("Q", "R"):
+        bits.append(s["kind"])
+    if s.get("variant"):
+        bits.append(str(s["variant"]).strip())
+    if s.get("temp_c") is not None:
+        bits.append(f"{s['temp_c']}C")
+    if s.get("version"):
+        bits.append(str(s["version"]))
+    return " ".join(b for b in bits if b)
+
+
 def next_version_name(db, s: dict) -> str:
     """Nome da próxima versão: 'Pitwall MNZ MCL720S R 28C v1', 'v2'… (continua a contagem entre os setups da mesma pista e carro)."""
     stem = version_name_stem(s)
@@ -845,3 +859,187 @@ def suggest(db, car: str, track: str, session_type: str | None, air: float | Non
         out.append({**s, "score": round(score, 2), "why": why})
     out.sort(key=lambda x: (-x["score"], x["name"]))
     return out[:limit]
+
+
+# ---------------------------------------------------------------------------
+# Base para quem não tem nenhum setup do carro/pista
+# ---------------------------------------------------------------------------
+
+BASES_DIR = Path(__file__).parent / "base_setups"     # <carro>/default.json, salvo do "Default" do jogo (ver tools/coletar_bases.py)
+
+
+def acc_install_dirs() -> list[Path]:
+    """Pastas onde o ACC pode estar instalado (Steam, em qualquer biblioteca)."""
+    out: list[Path] = []
+    env = os.environ.get("PITWALL_ACC_DIR")
+    if env:
+        out.append(Path(env))
+    libs: list[Path] = []
+    if sys.platform == "win32":
+        try:
+            import winreg
+            for hive, sub in ((winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam"), (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam")):
+                try:
+                    with winreg.OpenKey(hive, sub) as k:
+                        libs.append(Path(winreg.QueryValueEx(k, "SteamPath" if hive == winreg.HKEY_CURRENT_USER else "InstallPath")[0]))
+                except OSError:
+                    pass
+        except ImportError:
+            pass
+    libs += [Path(r"C:\Program Files (x86)\Steam")]
+    for lib in list(libs):
+        vdf = lib / "steamapps" / "libraryfolders.vdf"
+        try:
+            libs += [Path(m.replace("\\\\", "\\")) for m in re.findall(r'"path"\s+"([^"]+)"', vdf.read_text(encoding="utf-8", errors="ignore"))]
+        except OSError:
+            pass
+    for lib in libs:
+        out.append(lib / "steamapps" / "common" / "Assetto Corsa Competizione")
+    return [p for p in dict.fromkeys(out) if p.exists()]
+
+
+def _game_preset(car: str, track: str) -> dict | None:
+    """Preset 'safe' que o próprio jogo traz (só existe para alguns carros e pistas)."""
+    for d in acc_install_dirs():
+        base = d / "AC2" / "Content" / "Presets" / "carSetupJson" / car
+        if not base.exists():
+            continue
+        for t in base.iterdir():
+            f = t / "safePreset.json"
+            if t.is_dir() and t.name.lower() == (track or "").lower() and f.exists():
+                try:
+                    return json.loads(f.read_text(encoding="utf-8-sig"))
+                except (OSError, ValueError):
+                    pass
+    return None
+
+
+def _bundled_base(car: str) -> dict | None:
+    f = BASES_DIR / car / "default.json"
+    try:
+        return json.loads(f.read_text(encoding="utf-8-sig")) if f.exists() else None
+    except (OSError, ValueError):
+        return None
+
+
+def has_base(db, car: str, track: str) -> bool:
+    return any(s["car"] == car and (s["track"] or "").lower() == (track or "").lower() for s in db.setups_list())
+
+
+def create_base(db, car: str, track: str) -> dict:
+    """Cria (no banco e na pasta do ACC) um setup-base para o carro e a pista, para o gerador ter de onde partir.
+    Ordem: preset do jogo > base embarcada do carro > algum setup seu do mesmo carro em outra pista."""
+    import datetime as dt
+    import hashlib
+    for s in db.setups_list():                                    # já tem: não cria nada
+        if s["car"] == car and (s["track"] or "").lower() == (track or "").lower():
+            return {"ok": True, "id": s["id"], "name": s["name"], "source": "existente", "already": True}
+    content, origem = _game_preset(car, track), "preset do jogo"
+    if content is None:
+        content, origem = _bundled_base(car), "padrão do carro"
+    if content is None:
+        cands = [s for s in db.setups_list() if s["car"] == car]
+        cands.sort(key=lambda s: (s["kind"] != "R", "safe" not in (s["variant"] or "").lower(), s["name"]))
+        if cands:
+            full = db.setup(cands[0]["id"])
+            content, origem = _as_dict(full["content"]), f"seu setup '{cands[0]['name']}' em outra pista"
+    if content is None:
+        return {"ok": False, "msg": "Ainda não temos o padrão deste carro. No ACC, abra a garagem, escolha o carro e salve o setup padrão com o nome BASE (botão de salvar setup); depois clique em Importar da pasta do ACC."}
+    canon = json.dumps(content, sort_keys=True, separators=(",", ":"))
+    path = _write_acc(car, track, f"Pitwall BASE {track_abbr(track)} {car_abbr(car)}", content)
+    sid, _ = db.upsert_setup(
+        sha1=hashlib.sha1(canon.encode()).hexdigest(), car=car, track=track, name=path.stem,
+        rel_path=path.relative_to(setups_root()).as_posix(), content=canon, file_mtime=path.stat().st_mtime,
+        imported_at=dt.datetime.now().isoformat(timespec="seconds"), source="Pitwall",
+        version=None, kind=None, variant="Base", temp_c=None, notes=f"Setup-base criado pelo Pitwall ({origem})")
+    return {"ok": True, "id": sid, "name": path.stem, "source": origem}
+
+
+# ---------------------------------------------------------------------------
+# Duplicados: arquivos com os mesmos ajustes para o mesmo carro (o nome não importa)
+# ---------------------------------------------------------------------------
+
+def _scan_files() -> dict:
+    """Todos os arquivos de setup da pasta do ACC, agrupados por (carro, conteúdo)."""
+    import hashlib
+    root = setups_root()
+    groups: dict = {}
+    if not root.exists():
+        return groups
+    for f in root.rglob("*.json"):
+        parts = f.relative_to(root).parts
+        if len(parts) < 3:
+            continue
+        try:
+            content = json.loads(f.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        h = hashlib.sha1(json.dumps(content, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        groups.setdefault((parts[0], h), []).append(f)
+    return groups
+
+
+def duplicates(db) -> dict:
+    """Grupos de arquivos idênticos (mesmo carro, mesmos ajustes), com a sugestão de qual manter."""
+    root = setups_root()
+    by_path = {s["rel_path"].replace("\\", "/"): s for s in db.setups_list() if s.get("rel_path")}
+    stats = db.setup_stats()
+    out = []
+    for (car, _h), files in _scan_files().items():
+        if len(files) < 2:
+            continue
+        items = []
+        for f in files:
+            rel = f.relative_to(root).as_posix()
+            row = by_path.get(rel)
+            meta = parse_name(f.stem)
+            st = (stats.get(row["id"]) if row else None) or {}
+            items.append({"path": rel, "file": f.name, "track": f.relative_to(root).parts[1], "in_use": bool(row),
+                          "name": pitwall_name({**meta, "car": car, "track": f.relative_to(root).parts[1]}) if meta["source"] == "GO Setups" else f.stem,
+                          "laps": st.get("laps", 0), "best_ms": st.get("best_ms"), "mtime": f.stat().st_mtime})
+        # quem ficar: o que tem tempos seus, depois o que o Pitwall já usa, o gerado/seu (não da coleção), a pasta principal e o mais novo
+        items.sort(key=lambda i: (-i["laps"], i["path"].count("/") > 2, not i["in_use"], -i["mtime"], i["path"]))
+        items[0]["keep"] = True
+        out.append({"car": car, "files": items})
+    out.sort(key=lambda g: (-len(g["files"]), g["car"]))
+    return {"groups": out, "extra_files": sum(len(g["files"]) - 1 for g in out)}
+
+
+def remove_duplicates(db, paths: list[str]) -> dict:
+    """Apaga os arquivos marcados (guarda uma cópia em Pitwall/setups_removidos). Em cada grupo sempre sobra pelo menos um."""
+    import shutil
+    root = setups_root()
+    groups = {}
+    for (car, h), files in _scan_files().items():
+        for f in files:
+            groups[f.relative_to(root).as_posix()] = (car, h, files)
+    want = [p.replace("\\", "/") for p in paths]
+    for p in want:
+        if p not in groups:
+            raise ValueError(f"não é um setup duplicado: {p}")
+    left: dict = {}
+    for p in want:
+        _, h, files = groups[p]
+        left.setdefault((groups[p][0], h), {f.relative_to(root).as_posix() for f in files}).discard(p)
+    if any(not v for v in left.values()):
+        raise ValueError("Deixe pelo menos um arquivo de cada grupo.")
+    backup = data_dir() / "setups_removidos"
+    done = 0
+    for p in want:
+        src = root / p
+        dst = backup / p
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        n = 2
+        while dst.exists():
+            dst = dst.with_name(f"{dst.stem} ({n}){dst.suffix}")
+            n += 1
+        shutil.move(str(src), str(dst))
+        done += 1
+    # o banco guarda um registro por conteúdo: aponta para o arquivo que ficou
+    for (car, h), keep in left.items():
+        k = sorted(keep, key=lambda x: (x.count("/"), x))[0]
+        for row in db.setups_list():
+            if row.get("rel_path") and row["rel_path"].replace("\\", "/") in want:
+                stem = Path(k).stem
+                db.repoint_setup(row["id"], k, stem, parse_name(stem))
+    return {"removed": done, "backup": str(backup)}

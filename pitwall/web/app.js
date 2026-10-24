@@ -429,12 +429,13 @@ async function renderSessions() {
 }
 
 // ---------------------------------------------------------------- sessão
-const sessionState = { stint: 0, selected: [] };
+const sessionState = { tab: "laps",  stint: 0, selected: [] };
 async function renderSession(id) {
   if (current.name !== "session" || current.id !== id) sessionState.stint = 0, sessionState.selected = [];
   current = { name: "session", id };
   const data = await api(`/api/sessions/${id}`);
   const { session: s, laps, summary: sm, pb } = data;
+  const setupDot = s.setup_id ? "" : ` <span class="nav-dot" title="Setup não definido" style="position:static;display:inline-block;margin-left:4px"></span>`;
   const refId = pb ? pb.lap_id : sm.best_lap_id;   // referência padrão: seu recorde com o carro nesta pista
   const best = sm.best_ms;
   const [b1, b2, b3] = sm.best_sectors;
@@ -483,7 +484,12 @@ async function renderSession(id) {
       <div class="kpi"><span>Média (sem box)</span><b class="num">${fmtLap(sm.avg_ms)}</b></div>
       <div class="kpi"><span>Consumo médio</span><b class="num">${sm.fuel_per_lap != null ? sm.fuel_per_lap.toFixed(2) + " L" : "—"}</b></div>
     </div>
-    <div class="layout">
+    <div class="tabbar" id="sTabs">
+      <button data-tab="laps">Voltas</button>
+      <button data-tab="setup">Setup e engenheiro${setupDot}</button>
+      <button data-tab="stints">Stints e combustível</button>
+    </div>
+    <div data-pane="laps">
       <div>
         <div class="panel" style="margin-bottom:14px">
           <h2>Tempo por volta</h2>${stintChips}
@@ -499,6 +505,8 @@ async function renderSession(id) {
           </table>
         </div>
       </div>
+    </div>
+    <div data-pane="stints" hidden>
       <div class="side">
         <div class="panel">
           <h2>Stints</h2>
@@ -508,14 +516,27 @@ async function renderSession(id) {
             <td class="num">${st.fuel_per_lap ?? "—"}</td></tr>`).join("")}</tbody></table>
         </div>
         ${degPanel(data.stint_trends)}
+        ${fuelPanel({ ...sm, _track: s.track, _car: s.car })}
+      </div>
+    </div>
+    <div data-pane="setup" hidden>
+      <div class="side">
         ${s.suggestions && s.suggestions.length ? `<div class="panel" style="margin-top:14px"><h2>Setup sugerido para estas condições</h2>
           ${s.suggestions.map((x, i) => `<div class="sug ${i === 0 ? "top" : ""}"><b>${esc(x.name)}</b><div class="sub">${esc(x.why || "")}</div></div>`).join("")}
           <div class="note">Pela temperatura ${esc(laps[0] && laps[0].air_temp != null ? `do ar ${Math.round(laps[0].air_temp)}°C / pista ${Math.round(laps[0].road_temp)}°C` : "da sessão")}.
             Ajuste a base (ar ou pista) e a variante preferida em Configurações.</div></div>` : ""}
-        ${fuelPanel({ ...sm, _track: s.track, _car: s.car })}
       </div>
-    </div>
-    <div class="panel" id="engineer" style="margin-top:14px"></div>`;
+      <div class="panel" id="engineer" style="margin-top:14px"></div>
+    </div>`;
+  const tab = ["laps", "setup", "stints"].includes(sessionState.tab) ? sessionState.tab : "laps";
+  const showTab = (t) => {
+    sessionState.tab = t;
+    view.querySelectorAll("[data-pane]").forEach((p) => { p.hidden = p.dataset.pane !== t; });
+    view.querySelectorAll("#sTabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+    if (t === "laps") window.dispatchEvent(new Event("resize"));
+  };
+  view.querySelectorAll("#sTabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+  showTab(tab);
 
   // gráfico de tempos
   const xs = shown.map((l) => l.lap_number);
@@ -721,6 +742,46 @@ function closeLapPicker() {
   if (lapPickerClose) { document.removeEventListener("pointerdown", lapPickerClose); lapPickerClose = null; }
 }
 
+// ---------------------------------------------------------------- setup usado na sessão (Análise e sessão)
+function setupState(i) {
+  if (!i) return { cls: "none", txt: "Sem sessão", sub: "" };
+  if (i.id) return { cls: "ok", txt: i.name, sub: i.src === "auto" ? "reconhecido pelo Pitwall" : "definido por você" };
+  if (i.suggested_id) return { cls: "sug", txt: "Não definido", sub: `só uma sugestão: ${i.suggested_name}. Clique para confirmar` };
+  return { cls: "none", txt: "Não definido", sub: i.src === "skip" ? "você marcou “não sei”. Clique para escolher" : "clique para escolher o setup usado" };
+}
+function setupChipHtml(i, who, tag) {
+  const st = setupState(i);
+  return `<button class="setupchip ${st.cls}" data-setuptag="${tag}" ${i ? "" : "disabled"} title="Definir o setup usado nesta sessão">
+    <span class="sc-ic">🔧</span><span><small>${who}</small><b>${esc(st.txt)}</b><em>${esc(st.sub)}</em></span><span class="sc-ch">Trocar</span></button>`;
+}
+// abre a lista de setups do carro; ao escolher, grava na sessão e chama done()
+async function openSetupPicker(anchor, info, done) {
+  closeLapPicker();
+  const pop = document.createElement("div");
+  pop.className = "lap-pop";
+  pop.innerHTML = `<div class="lp-head"><b>Qual setup você usou?</b><span class="sub">Atualizando a lista a partir da pasta do ACC…</span></div><div class="lp-list"></div>`;
+  document.body.appendChild(pop);
+  const rc = anchor.getBoundingClientRect();
+  pop.style.left = Math.min(window.innerWidth - 392, Math.max(12, rc.left)) + "px";
+  pop.style.top = Math.min(window.innerHeight - 340, rc.bottom + 6) + "px";
+  setTimeout(() => { lapPickerClose = (e) => { if (!pop.contains(e.target)) closeLapPicker(); }; document.addEventListener("pointerdown", lapPickerClose); }, 0);
+  try { await api("/api/setups/import", { method: "POST" }); } catch (e) { /* segue com o que já existe */ }
+  const lib = await api("/api/setups");
+  const car = lib.cars.find((c) => c.car === info.car);
+  const same = car ? car.tracks.filter((t) => t.track.toLowerCase() === String(info.track).toLowerCase()).flatMap((t) => t.files) : [];
+  const other = car ? car.tracks.filter((t) => t.track.toLowerCase() !== String(info.track).toLowerCase()).flatMap((t) => t.files.map((f) => ({ ...f, other: t.track }))) : [];
+  const item = (f) => `<button class="lp-item ${f.id === info.id ? "on" : ""}" data-id="${f.id}"><span><b>${esc(f.name)}</b><small>${f.other ? esc(pretty(f.other)) : esc(pretty(info.track))}${f.id === info.suggested_id ? " · sugerido" : ""}</small></span>${f.id === info.id ? "<b>✓</b>" : ""}</button>`;
+  pop.querySelector(".lp-head .sub").textContent = same.length + other.length ? "Escolha o setup que estava no carro nesta sessão." : "Nenhum setup deste carro na biblioteca. Salve o setup no ACC e abra isto de novo.";
+  pop.querySelector(".lp-list").innerHTML = `<button class="lp-item" data-id=""><span><b>Não sei / sem setup</b><small>Não conta para nenhum setup</small></span></button>
+    ${same.length ? `<div class="lp-group">${esc(pretty(info.track))}</div>${same.map(item).join("")}` : ""}
+    ${other.length ? `<div class="lp-group">Outras pistas</div>${other.map(item).join("")}` : ""}`;
+  pop.querySelectorAll(".lp-item").forEach((b) => b.onclick = async () => {
+    closeLapPicker();
+    await api(`/api/sessions/${info.session_id}/setup`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ setup_id: b.dataset.id ? +b.dataset.id : null }) });
+    done();
+  });
+}
+
 // sua volta mais recente (limpa) + seu recorde, para abrir direto um carro/pista
 async function defaultPair(car, track) {
   const laps = await api(`/api/tracks/${encodeURIComponent(track)}/laps`);
@@ -813,6 +874,11 @@ async function renderCompare(params) {
 
     ${lapStrip(options, LA, LB)}
 
+    ${LA.setup || (LB && LB.setup) ? `<section class="an2-setups">
+      ${setupChipHtml(LA.setup, LB && LB.setup && LB.setup.session_id !== (LA.setup || {}).session_id ? "Setup da sua volta" : "Setup usado", "a")}
+      ${LB && LB.setup && (!LA.setup || LB.setup.session_id !== LA.setup.session_id) ? setupChipHtml(LB.setup, "Setup da referência", "b") : ""}
+    </section>` : ""}
+
     <section class="an2-findings">
       ${hasB ? `<div class="fgroup"><span class="flabel">Onde você perde tempo</span>
         ${worst.length ? worst.map(({ s, k }) => `<button class="fchip loss" data-seg="${k}">Curva ${s.n}<b class="num">+${s.delta.toFixed(2).replace(".", ",")} s</b></button>`).join("")
@@ -876,6 +942,8 @@ async function renderCompare(params) {
   $("#pickB").onclick = (e) => lapPicker(e.currentTarget, options, b, (id) => { location.hash = `#/compare?a=${a}${id ? "&b=" + id : ""}`; }, { allowNone: true, title: "Comparar com" });
 
   bindLapStrip(options, LA, LB, a, b);
+  view.querySelectorAll(".setupchip[data-setuptag]").forEach((btn) => btn.onclick = () =>
+    openSetupPicker(btn, btn.dataset.setuptag === "a" ? LA.setup : LB.setup, () => renderCompare(params)));
 
   AN = { r, LA, LB, hasB, n, segs, evs, seg: 0, focus: true, idx: 0, lastIdx: -1, phaseColors: true, show: shown };
   AN.phA = phases(r.a); AN.runsA = phaseRuns(AN.phA);
@@ -1540,11 +1608,38 @@ async function engineerPanel(s) {
       <label>Pressão alvo a quente (psi) <input id="eTarget" type="number" step="0.1" value="26.5"></label>
       <button class="btn primary" id="eRun">Analisar meu carro</button>
     </div>
-    ${s.setup_src === "auto" ? `<div class="sub" style="margin:-4px 0 10px">✓ O Pitwall reconheceu este setup sozinho (pressão fria dos pneus, TC, ABS e mapa do motor). Se não for esse, é só trocar acima.</div>` : ""}
+    <div class="setup-state ${s.setup_id ? "ok" : preset ? "sug" : "none"}" id="eState"></div>
     <div id="eOut"></div>`;
-  $("#eSetup").onchange = async () => {
+  const paintState = () => {
+    const sel = $("#eSetup").value, saved = s.setup_id ? String(s.setup_id) : "";
+    const name = sel ? $("#eSetup").selectedOptions[0].textContent.replace(/ \(sugerido\)$/, "").trim() : "";
+    const box = $("#eState");
+    if (saved && sel === saved) {
+      box.className = "setup-state ok";
+      box.innerHTML = `<span>✓ <b>Setup desta sessão: ${esc(name)}</b><br><small class="sub">${s.setup_src === "auto" ? "Reconhecido pelo Pitwall (pressão fria, TC, ABS e mapa do motor). Se não for esse, troque acima." : "Definido por você. Os tempos desta sessão contam neste setup."}</small></span>`;
+    } else if (sel) {
+      box.className = "setup-state sug";
+      box.innerHTML = `<span><b>Mostrando a análise com “${esc(name)}”, mas ainda não está definido para a sessão.</b><br><small class="sub">Confirme para os tempos e a Análise passarem a mostrar este setup.</small></span><span class="spacer"></span><button class="btn sm primary" id="eConfirm">Confirmar este setup</button>`;
+      $("#eConfirm").onclick = () => save();
+    } else {
+      box.className = "setup-state none";
+      box.innerHTML = `<span><b>Setup desta sessão: não definido</b><br><small class="sub">Escolha acima o setup que estava no carro. Se ele é novo, ele aparece aqui ao abrir a lista (o Pitwall lê a pasta do ACC).</small></span>`;
+    }
+  };
+  const save = async () => {
     await api(`/api/sessions/${s.id}/setup`, { method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ setup_id: $("#eSetup").value ? +$("#eSetup").value : null }) });
+    s.setup_id = $("#eSetup").value ? +$("#eSetup").value : null; s.setup_src = s.setup_id ? "manual" : null;
+    paintState();
+  };
+  paintState();
+  $("#eSetup").onfocus = async () => {                                  // setups novos na pasta do ACC aparecem sem sair da tela
+    if ($("#eSetup").dataset.fresh) return;
+    $("#eSetup").dataset.fresh = "1";
+    try { await api("/api/setups/import", { method: "POST" }); } catch (e) { return; }
+  };
+  $("#eSetup").onchange = async () => {
+    await save();
     run();
   };
   $("#eRun").onclick = () => run();
@@ -1807,7 +1902,7 @@ async function renderSetups() {
   view.innerHTML = `
     <div class="head"><div><h1>Setups</h1>
       <div class="sub">${all.length} setups · pasta do ACC: <code>${esc(lib.root)}</code>${lib.exists ? "" : " (não encontrada)"}</div></div>
-      <span class="spacer"></span><button class="btn sm" id="sImport" title="Lê a pasta de setups do ACC e traz os novos para o Pitwall">Importar da pasta do ACC</button></div>
+      <span class="spacer"></span><button class="btn sm" id="sDups" title="Acha arquivos com os mesmos ajustes para o mesmo carro, mesmo com nomes diferentes">Duplicados</button> <button class="btn sm" id="sImport" title="Lê a pasta de setups do ACC e traz os novos para o Pitwall">Importar da pasta do ACC</button></div>
     <div class="sbar">
       <input id="fQ" class="sq" type="search" placeholder="Buscar setup pelo nome…" value="${esc(st.q)}">
       ${sel("fCar", cars.map((c) => [c, pretty(c)]), st.car, "Todos os carros", "Carro")}
@@ -1867,6 +1962,7 @@ async function renderSetups() {
   if (pgn) pgn.onclick = () => { st.page++; reRender(); };
   let tq;
   $("#fQ").oninput = (e) => { clearTimeout(tq); tq = setTimeout(() => { st.q = e.target.value; st.page = 0; reRender().then(() => { const i = $("#fQ"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 250); };
+  $("#sDups").onclick = () => openDuplicates(reRender);
   $("#sImport").onclick = async () => {
     $("#sImport").disabled = true;
     const r = await api("/api/setups/import", { method: "POST" });
@@ -1901,6 +1997,54 @@ async function renderSetups() {
   else if (st.open) showSetup(st.open);
   else empty();
 }
+// ---------------------------------------------------------------- setups duplicados (mesmo carro, mesmos ajustes)
+async function openDuplicates(after) {
+  document.querySelectorAll(".dup-modal").forEach((m) => m.remove());
+  const m = document.createElement("div");
+  m.className = "dup-modal";
+  m.innerHTML = `<div class="dup-card"><div class="row"><h2 style="margin:0">Setups duplicados</h2><span class="spacer"></span><button class="btn sm quiet" id="dClose">Fechar</button></div>
+    <div class="sub" id="dSub">Procurando…</div><div id="dBody" class="dup-body"></div></div>`;
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  m.querySelector("#dClose").onclick = close;
+  m.addEventListener("pointerdown", (e) => { if (e.target === m) close(); });
+  const load = async () => {
+    const r = await api("/api/setups/duplicates");
+    const body = m.querySelector("#dBody");
+    m.querySelector("#dSub").innerHTML = r.groups.length
+      ? `<b>${r.groups.length}</b> grupo(s) com os mesmos ajustes para o mesmo carro (o nome não conta). Já marquei os que sobram; o que fica em cada grupo está sem marca. Os apagados vão para <code>Pitwall/setups_removidos</code>, dá para recuperar.`
+      : "Nenhum duplicado: cada arquivo tem ajustes diferentes.";
+    body.innerHTML = r.groups.map((g, gi) => `<div class="dup-group" data-g="${gi}"><div class="dup-h"><b>${esc(pretty(g.car))}</b><span class="sub">${g.files.length} arquivos iguais</span></div>
+      ${g.files.map((f) => `<label class="dup-f ${f.keep ? "keep" : ""}"><input type="checkbox" data-path="${esc(f.path)}" ${f.keep ? "" : "checked"}>
+        <span><b>${esc(f.name)}</b><small>${esc(pretty(f.track))} · arquivo ${esc(f.file)}${f.laps ? ` · ${f.laps} volta(s) suas` : ""}${f.keep ? " · fica" : ""}</small></span></label>`).join("")}</div>`).join("")
+      + (r.groups.length ? `<div class="dup-foot"><span id="dN"></span><span class="spacer"></span><button class="btn danger" id="dDel">Apagar marcados</button></div>` : "");
+    const upd = () => {
+      let n = 0, bad = false;
+      body.querySelectorAll(".dup-group").forEach((gr) => {
+        const boxes = [...gr.querySelectorAll("input")], on = boxes.filter((b) => b.checked).length;
+        n += on; if (on === boxes.length) bad = true;
+        gr.classList.toggle("bad", on === boxes.length);
+      });
+      m.querySelector("#dN").textContent = `${n} arquivo(s) marcados` + (bad ? " · deixe pelo menos um em cada grupo" : "");
+      const d = m.querySelector("#dDel"); if (d) d.disabled = bad || !n;
+    };
+    body.querySelectorAll("input").forEach((b) => b.onchange = upd);
+    upd();
+    const del = m.querySelector("#dDel");
+    if (del) del.onclick = async () => {
+      const paths = [...body.querySelectorAll("input:checked")].map((b) => b.dataset.path);
+      if (!confirm(`Apagar ${paths.length} arquivo(s) duplicado(s) da pasta do ACC? Uma cópia fica guardada em Pitwall/setups_removidos.`)) return;
+      del.disabled = true;
+      try {
+        const x = await api("/api/setups/duplicates/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths }) });
+        toast(`${x.removed} duplicado(s) removido(s).`, "ok");
+        await load(); after && after();
+      } catch (e) { toast(e.message, "err"); del.disabled = false; }
+    };
+  };
+  load().catch((e) => { m.querySelector("#dSub").textContent = e.message; });
+}
+
 // ---------------------------------------------------------------- setups da equipe (plano Equipe)
 const tsState = { team: "", q: "" };
 async function paintTeamSetups() {

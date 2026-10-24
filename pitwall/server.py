@@ -7,7 +7,7 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import analysis, engineer, setups
+from . import analysis, engineer as engineer_mod, setups
 from .db import DB
 
 WEB = Path(__file__).parent / "web"
@@ -200,6 +200,18 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     def track_laps(track: str):
         return db.laps_for_track(track)
 
+    def _session_setup(sid):
+        """Qual setup está ligado à sessão: definido pelo piloto (manual), reconhecido pelo Pitwall (auto), só sugerido ou nenhum."""
+        s = db.session(sid) if sid else None
+        if not s:
+            return None
+        sel, sug = s.get("setup_id"), s.get("suggested_setup_id")
+        full = db.setup(sel) if sel else None
+        sfull = db.setup(sug) if sug and not sel else None
+        return {"session_id": sid, "car": s["car"], "track": s["track"], "id": sel if full else None,
+                "name": full["name"] if full else None, "src": (s.get("setup_src") or "manual") if full else ("skip" if s.get("setup_src") == "skip" else None),
+                "suggested_id": sug if sfull else None, "suggested_name": sfull["name"] if sfull else None}
+
     @app.get("/api/compare")
     def compare(a: int, b: int | None = Query(default=None)):
         la = db.lap(a)
@@ -211,6 +223,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         def strip(l):
             out = {k: v for k, v in l.items() if k not in ("telemetry", "video_path")}
             out["video"] = _lap_video(l)
+            out["setup"] = _session_setup(l.get("session_id"))
             return out
         res["lap_a"] = strip(la)
         res["lap_b"] = strip(lb) if lb else None
@@ -220,6 +233,17 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
     @app.get("/api/setups")
     def setup_library():
         return setups.library(db)
+
+    @app.get("/api/setups/duplicates")
+    def setups_duplicates():
+        return setups.duplicates(db)
+
+    @app.post("/api/setups/duplicates/remove")
+    def setups_duplicates_remove(body: dict = Body(...)):
+        try:
+            return setups.remove_duplicates(db, [str(x) for x in body.get("paths") or []])
+        except (ValueError, OSError) as e:
+            raise HTTPException(400, str(e))
 
     @app.get("/api/setups/pending")
     def setups_pending():
@@ -337,6 +361,15 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         except (FileNotFoundError, OSError) as e:
             raise HTTPException(400, str(e))
 
+    @app.post("/api/setups/base")
+    def setup_base(body: dict = Body(...)):
+        """Quem não tem setup do carro/pista recebe um setup-base (preset do jogo, padrão do carro ou outro seu)."""
+        _need_setup_gen()
+        try:
+            return setups.create_base(db, str(body["car"]), str(body["track"]))
+        except (KeyError, OSError) as e:
+            raise HTTPException(400, str(e))
+
     @app.post("/api/setups/generate")
     def setup_generate(body: dict = Body(...)):
         _need_setup_gen()
@@ -355,7 +388,7 @@ def create_app(db: DB, recorder=None, settings=None, video=None, team=None, lfm=
         if not db.session(sid):
             raise HTTPException(404, "sessão não encontrada")
         base = db.setup(setup_id) if setup_id else None
-        return engineer.analyze(db.session_laps_full(sid), base["content"] if base else None, target)
+        return engineer_mod.analyze(db.session_laps_full(sid), base["content"] if base else None, target)
 
     # --- janela do app e atalhos ---------------------------------------------
     app.state.ui_show = None
