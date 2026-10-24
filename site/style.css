@@ -743,3 +743,17 @@ textarea.field { font: inherit; }
 .bn-stage { position: relative; width: 100%; max-width: 760px; aspect-ratio: 16 / 9; margin-top: 8px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: radial-gradient(120% 120% at 70% 20%, #1c2a1f, #0b0f16 70%); }
 .bn-stage iframe { position: absolute; left: 0; border: 0; background: transparent; color-scheme: normal; }
 .bn-stage-t { position: absolute; right: 10px; bottom: 8px; font-size: 12px; color: var(--fog); }
+
+/* submenu "Minha conta" na barra do app web */
+.topnav details.dd { position: relative; }
+.topnav details.dd summary { list-style: none; cursor: pointer; color: var(--fog); padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 15px; }
+.topnav details.dd summary::-webkit-details-marker { display: none; }
+.topnav details.dd summary::after { content: " \▾"; font-size: 11px; }
+.topnav details.dd summary:hover, .topnav details.dd[open] summary { color: var(--chalk); background: var(--asphalt); }
+.topnav details.dd .menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 210px; display: flex; flex-direction: column; padding: 6px; background: var(--asphalt-2, #0f1622); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,.5); z-index: 70; }
+.topnav details.dd .menu a { padding: 9px 12px; }
+@media (max-width: 860px) { .topnav.open details.dd .menu { position: static; box-shadow: none; border: 0; padding: 0 0 0 10px; } .topnav.open details.dd summary { padding: 12px 14px; font-size: 17px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}

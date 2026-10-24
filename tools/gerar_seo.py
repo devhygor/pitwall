@@ -371,7 +371,7 @@ CSS = """
 :root{--night:#0a0e14;--panel:#111826;--line:#223049;--text:#e8eef9;--fog:#9aa6bb;--sodium:#2ee59d;--blue:#3b9cff;--purple:#a77bff}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;background:radial-gradient(900px 500px at 15% -10%,#0f2a24 0%,transparent 60%),var(--night);color:var(--text);font:17px/1.65 Barlow,system-ui,sans-serif}
-a{color:var(--sodium)}a:hover{text-decoration:none}
+a{color:var(--sodium)}a:hover{text-decoration:none}a:focus-visible,summary:focus-visible,button:focus-visible{outline:2px solid #3b9cff;outline-offset:2px;border-radius:6px}
 .wrap{max-width:900px;margin:0 auto;padding:0 20px}
 header{border-bottom:1px solid var(--line);background:rgba(10,14,20,.85);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5}
 header .wrap{display:flex;align-items:center;gap:14px;height:60px;max-width:1160px}
@@ -398,23 +398,39 @@ details p{margin:10px 0 2px;color:#c9d3e6}
 .consent p{margin:0;flex:1 1 300px;font-size:14px;color:var(--text)}.consent div{display:flex;gap:8px}.consent .btn{padding:8px 14px;font-size:14px}.consent .quiet{background:transparent;border:1px solid var(--line);color:var(--text)}
 footer{margin-top:60px;border-top:1px solid var(--line);padding:28px 0 40px;color:var(--fog);font-size:15px}
 footer .cols{display:flex;gap:22px;flex-wrap:wrap}footer a{color:var(--fog);text-decoration:none}footer a:hover{color:var(--text)}
-@media(max-width:1180px){header nav{display:none}header .wrap{justify-content:space-between}}
-@media(max-width:760px){nav{display:none}header .wrap{justify-content:space-between}}
+details.dd{position:relative;border:0;background:none;padding:0;margin:0}details.dd summary{list-style:none;cursor:pointer;color:var(--fog);padding:6px 10px;border-radius:8px;font-weight:500;font-size:14px;white-space:nowrap}
+details.dd summary::-webkit-details-marker{display:none}details.dd summary::after{content:" \▾";font-size:11px}
+details.dd summary:hover,details.dd[open] summary,details.dd.on summary{color:var(--text);background:var(--panel)}
+details.dd .menu{position:absolute;top:calc(100% + 6px);left:0;min-width:230px;display:flex;flex-direction:column;padding:6px;background:#0f1622;border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.5);z-index:10}
+details.dd .menu a{padding:9px 12px;border-radius:8px;font-size:15px}details.dd .menu small{padding:8px 12px 2px;color:var(--fog);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em}
+details.dd.mob{display:none;margin-left:auto}details.dd.mob .menu{left:auto;right:0}
+@media(max-width:760px){header nav{display:none}details.dd.mob{display:block}header .wrap{gap:10px}details.dd summary{padding:12px 14px}details.dd .menu a{padding:13px 14px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 """
 
 
 # Espaço de anúncio das páginas estáticas: vazio e invisível até config.js ter adsense.client e slots.artigo (ads.js faz o resto).
 ANUNCIO = '<div class="adpos"></div><script>(function(){var e=document.currentScript.previousElementSibling;if(window.adSlot)e.innerHTML=adSlot("artigo")})()</script>'
-ADS_SCRIPTS = '<script src="/config.js"></script><script src="/ads.js?v=1"></script>'
+ADS_SCRIPTS = '<script src="/config.js"></script><script src="/ads.js?v=1"></script><script>document.addEventListener("click",function(e){document.querySelectorAll("details.dd[open]").forEach(function(d){if(!d.contains(e.target))d.removeAttribute("open")})})</script>'
 
 
 def esc(s):
     return html.escape(s, quote=True)
 
 
+# menu do topo agrupado: poucos itens à vista, o resto em submenus (funciona também no celular)
+GRUPOS = [("Recursos", ["telemetria-acc", "comparar-voltas", "overlays-acc-iracing", "engenheiro-de-corrida-em-portugues", "setups-acc", "estrategia-de-corrida-acc"]),
+          ("Comunidade", ["lfm-low-fuel-motorsport", "equipes-e-ranking"])]
+
+
 def cab(extra_head="", on=""):
-    links = "".join(f'<a href="/{p["slug"]}/" class="{"on" if p["slug"] == on else ""}">{esc(p["nav"])}</a>' for p in PAGINAS if p["slug"] not in ("baixar",))
-    return f'''<header><div class="wrap"><a class="brand" href="/">Pit<b>wall</b></a><nav>{links}</nav><a class="btn" href="/baixar/">Baixar grátis</a></div></header>'''
+    nav = {p["slug"]: p["nav"] for p in PAGINAS}
+    link = lambda slug: f'<a href="/{slug}/" class="{"on" if slug == on else ""}">{esc(nav[slug])}</a>'
+    dd = "".join(f'<details class="dd{" on" if on in slugs else ""}"><summary>{esc(nome)}</summary><div class="menu">{"".join(link(x) for x in slugs)}</div></details>' for nome, slugs in GRUPOS)
+    mob = "".join(f'<small>{esc(nome)}</small>{"".join(link(x) for x in slugs)}' for nome, slugs in GRUPOS)
+    desk = f'<nav>{dd}{link("planos-e-precos")}</nav>'
+    mobile = f'<details class="dd mob"><summary aria-label="Menu">Menu ☰</summary><div class="menu">{mob}<small>Planos</small>{link("planos-e-precos")}</div></details>'
+    return f'''<header><div class="wrap"><a class="brand" href="/">Pit<b>wall</b></a>{desk}{mobile}<a class="btn" href="/baixar/">Baixar grátis</a></div></header>'''
 
 
 def rodape():

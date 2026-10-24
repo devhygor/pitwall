@@ -59,6 +59,42 @@ function fmtDate(iso) {
 const TYPES = { Practice: "Treino", Qualify: "Classificação", Race: "Corrida", Hotlap: "Hotlap",
   Hotstint: "Hotstint", Superpole: "Superpole", Unknow: "Sessão" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// ícones SVG (no lugar de emoji): herdam a cor e o tamanho do texto
+const IC = {"wrench": "<path d=\"M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8 6.2 21l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z\"/>", "trophy": "<path d=\"M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3\"/>", "lock": "<rect x=\"5\" y=\"11\" width=\"14\" height=\"9\" rx=\"2\"/><path d=\"M8 11V8a4 4 0 0 1 8 0v3\"/>", "video": "<rect x=\"3\" y=\"6\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M15 10l6-3v10l-6-3\"/>", "car": "<path d=\"M3 15l2-5a2 2 0 0 1 1.9-1.3h10.2A2 2 0 0 1 19 10l2 5v3H3z\"/><circle cx=\"7.5\" cy=\"16\" r=\"1.2\"/><circle cx=\"16.5\" cy=\"16\" r=\"1.2\"/>", "gear": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1\"/>", "bell": "<path d=\"M6 16v-5a6 6 0 0 1 12 0v5l2 2H4zM10 21h4\"/>", "link": "<path d=\"M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1\"/>", "mic": "<rect x=\"9\" y=\"3\" width=\"6\" height=\"11\" rx=\"3\"/><path d=\"M5 11a7 7 0 0 0 14 0M12 18v3\"/>", "bulb": "<path d=\"M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z\"/>", "bolt": "<path d=\"M13 3L5 14h6l-1 7 8-11h-6z\"/>", "palette": "<path d=\"M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-1.2-1-1.5-1-2.6 0-.9.7-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8z\"/><circle cx=\"7.5\" cy=\"11\" r=\"1\"/><circle cx=\"10\" cy=\"7.5\" r=\"1\"/><circle cx=\"15\" cy=\"7.5\" r=\"1\"/>"};
+const ic = (n) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[n] || ""}</svg>`;
+
+// tabela com os mesmos dados do gráfico (teclado e leitores de tela não enxergam o desenho)
+function chartTable(el, head, rows) {
+  if (!el || !rows.length) return;
+  el.insertAdjacentHTML("afterend", `<details class="ctable"><summary>Ver como tabela</summary><div class="tbl-scroll"><table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? "num" : ""}">${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`);
+}
+
+// acessibilidade das abas: papéis ARIA, aba ativa anunciada e setas do teclado
+(function () {
+  const fix = () => {
+    document.querySelectorAll(".set-tabs").forEach((bar) => {
+      bar.setAttribute("role", "tablist");
+      bar.querySelectorAll(".set-tab").forEach((b) => {
+        const on = b.classList.contains("on");
+        b.setAttribute("role", "tab"); b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1;
+      });
+    });
+    document.querySelectorAll(".seg-switch button").forEach((b) => b.setAttribute("aria-pressed", b.classList.contains("on") ? "true" : "false"));
+  };
+  let raf = 0;
+  new MutationObserver(() => { clearTimeout(raf); raf = setTimeout(fix, 30); })
+    .observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+  document.addEventListener("keydown", (e) => {
+    const t = e.target.closest && e.target.closest('[role="tab"]');
+    if (!t || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    const tabs = [...t.parentElement.querySelectorAll('[role="tab"]')];
+    let i = tabs.indexOf(t);
+    i = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    e.preventDefault(); tabs[i].focus(); tabs[i].click();
+  });
+  fix();
+})();
 
 // ---------------------------------------------------------------- roteador
 const routes = [
@@ -257,7 +293,7 @@ async function setupAskCheck() {
   if (!box) { box = document.createElement("div"); box.id = "setupAsk"; document.body.appendChild(box); }
   const best = x.best_ms ? ` · melhor <b>${fmtLap(x.best_ms)}</b>` : "";
   box.innerHTML = `<div class="sa-card" role="dialog" aria-label="Qual setup você usou?">
-    <div class="sa-h"><b>🔧 Qual setup você usou?</b><button class="sa-x" title="Perguntar depois" aria-label="Fechar">✕</button></div>
+    <div class="sa-h"><b>${ic("wrench")} Qual setup você usou?</b><button class="sa-x" title="Perguntar depois" aria-label="Fechar">✕</button></div>
     <div class="sa-s">${esc(TYPES[x.session_type] || x.session_type)} · ${esc(fmtDate(x.started_at))}<br>${esc(pretty(x.car))} · ${esc(pretty(x.track))}<br>${x.clean} volta${x.clean === 1 ? "" : "s"} limpa${x.clean === 1 ? "" : "s"}${best}</div>
     <div class="sa-t">${x.narrowed ? "O Pitwall ficou em dúvida entre estes (pelo que o carro mostrou parado):" : "O Pitwall não conseguiu reconhecer sozinho. Escolha para juntar seus tempos ao setup:"}</div>
     <div class="sa-opts">${x.candidates.map((c) => `<button class="sa-o" data-pick="${c.id}" title="${esc(c.name)}">${esc(c.name)}</button>`).join("")}</div>
@@ -338,7 +374,7 @@ async function renderSessions() {
 
   view.innerHTML = `
     <div class="head"><div><h1>Sessões</h1>
-      <div class="sub">${list.length} sessões · ${records.length} recorde(s) pessoal(is) protegido(s) 🏆</div></div></div>
+      <div class="sub">${list.length} sessões · ${records.length} recorde(s) pessoal(is) protegido(s) ${ic("trophy")}</div></div></div>
     <div class="filters">
       ${sel("fsTrack", uniq("track").map((t) => [t, pretty(t)]), st.track, "Todas as pistas")}
       ${sel("fsCar", uniq("car").map((c) => [c, pretty(c)]), st.car, "Todos os carros")}
@@ -362,7 +398,7 @@ async function renderSessions() {
         </div>
         <div class="recs">${recFor(track).map((r) => `
           <div class="rec">
-            <span class="trophy">🏆</span>
+            <span class="trophy">${ic("trophy")}</span>
             <div><span class="sub">Recorde · ${esc(pretty(r.car))}</span><b class="num">${fmtLap(r.lap_time_ms)}</b>
               <span class="sub">${fmtDate(r.started_at)} · volta ${r.lap_number}</span></div>
             <a class="btn sm" href="#/replay?a=${r.lap_id}">Replay</a>
@@ -378,10 +414,10 @@ async function renderSessions() {
               <td><span class="tag">${esc(TYPES[s.session_type] || s.session_type)}</span></td>
               <td class="num">${s.laps}</td>
               <td class="num ${s.protected ? "best" : ""}">${fmtLap(s.best_ms)}</td>
-              <td class="num ${d > 0 ? "neg" : ""}">${s.protected ? "🏆 recorde" : d == null ? "—" : fmtDelta(d)}</td>
-              <td>${s.has_video ? `<span class="tag" title="Tem vídeo">🎥</span>` : ""}</td>
+              <td class="num ${d > 0 ? "neg" : ""}">${s.protected ? ic("trophy") + " recorde" : d == null ? "—" : fmtDelta(d)}</td>
+              <td>${s.has_video ? `<span class="tag" title="Tem vídeo">${ic("video")}</span>` : ""}</td>
               <td class="acts"><a class="btn sm" href="#/session/${s.id}">Abrir</a>
-                ${s.protected ? `<span class="lock" title="Tem o seu recorde com este carro nesta pista: não pode ser excluída">🔒</span>`
+                ${s.protected ? `<span class="lock" title="Tem o seu recorde com este carro nesta pista: não pode ser excluída">${ic("lock")}</span>`
                   : `<button class="btn sm danger" data-del="${s.id}" title="Excluir esta sessão">Excluir</button>`}</td>
             </tr>`;
           }).join("")}</tbody></table>
@@ -419,7 +455,7 @@ async function renderSessions() {
     st.sel.clear(); st.confirm = false;
     await re();
     $("#fsOut").innerHTML = `<div class="note okk">${r.deleted.length} sessão(ões) excluída(s).${r.skipped.length
-      ? ` ${r.skipped.length} foi(ram) mantida(s) porque guarda(m) um recorde 🏆.` : ""}</div>`;
+      ? ` ${r.skipped.length} foi(ram) mantida(s) porque guarda(m) um recorde ${ic("trophy")}.` : ""}</div>`;
   };
   view.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
     if (b.dataset.armed !== "1") { b.dataset.armed = "1"; b.textContent = "Confirmar"; b.classList.add("armed"); return; }
@@ -475,7 +511,7 @@ async function renderSession(id) {
           ${s.has_video ? ` · <span class="tag" style="border-color:var(--accent);color:var(--accent)">com vídeo</span>` : ""}</div></div>
       <span class="spacer"></span>
       <button class="btn primary" id="cmpBtn" disabled>Analisar selecionadas</button>
-      ${s.protected ? `<span class="lockmsg" title="A sessão com o seu recorde não pode ser excluída">🏆 Tem o seu recorde · protegida</span>`
+      ${s.protected ? `<span class="lockmsg" title="A sessão com o seu recorde não pode ser excluída">${ic("trophy")} Tem o seu recorde · protegida</span>`
         : `<button class="btn danger" id="delBtn">Excluir sessão</button>`}
     </div>
     <div class="kpis">
@@ -484,16 +520,19 @@ async function renderSession(id) {
       <div class="kpi"><span>Média (sem box)</span><b class="num">${fmtLap(sm.avg_ms)}</b></div>
       <div class="kpi"><span>Consumo médio</span><b class="num">${sm.fuel_per_lap != null ? sm.fuel_per_lap.toFixed(2) + " L" : "—"}</b></div>
     </div>
-    <div class="tabbar" id="sTabs">
-      <button data-tab="laps">Voltas</button>
-      <button data-tab="setup">Setup e engenheiro${setupDot}</button>
-      <button data-tab="stints">Stints e combustível</button>
+    <div class="set-tabs" id="sTabs">
+      <button class="set-tab" data-tab="laps">Voltas</button>
+      <button class="set-tab" data-tab="setup">Setup e engenheiro${setupDot}</button>
+      <button class="set-tab" data-tab="stints">Stints e combustível</button>
     </div>
     <div data-pane="laps">
       <div>
         <div class="panel" style="margin-bottom:14px">
           <h2>Tempo por volta</h2>${stintChips}
           <div id="lapChart" class="chart"></div>
+          ${chartLegend([
+            { label: "Todas", color: "#5d6573", kind: "line", desc: "linha cinza: o tempo de todas as voltas de pista (sem saída e entrada do box)" },
+            { label: "Válidas", color: "var(--accent)", kind: "dots", desc: "pontos verdes: voltas que o jogo validou" }])}
         </div>
         <div class="panel">
           <div class="row" style="margin-bottom:6px"><h2 style="margin:0">Voltas</h2><span class="spacer"></span>
@@ -529,14 +568,16 @@ async function renderSession(id) {
       <div class="panel" id="engineer" style="margin-top:14px"></div>
     </div>`;
   const tab = ["laps", "setup", "stints"].includes(sessionState.tab) ? sessionState.tab : "laps";
+  let degDrawn = false;                      // gráficos só medem a largura com a aba visível
   const showTab = (t) => {
     sessionState.tab = t;
+    if (t === "stints" && !degDrawn) { degDrawn = true; setTimeout(() => drawDegCharts(data.stint_trends), 0); }
     view.querySelectorAll("[data-pane]").forEach((p) => { p.hidden = p.dataset.pane !== t; });
     view.querySelectorAll("#sTabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
     if (t === "laps") window.dispatchEvent(new Event("resize"));
   };
   view.querySelectorAll("#sTabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
-  showTab(tab);
+  showTab("laps");
 
   // gráfico de tempos
   const xs = shown.map((l) => l.lap_number);
@@ -553,6 +594,8 @@ async function renderSession(id) {
                { label: "Válidas", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: css("--accent"), width: 0, points: { size: 8, fill: css("--accent") } }],
       cursor: { drag: { x: false, y: false } },
     }, [xs, ys, yv], el));
+    chartTable(el, ["Volta", "Tempo (todas)", "Tempo (válidas)"], shown.map((l) => [String(l.lap_number),
+      l.out_lap || l.in_lap ? "—" : fmtLap(l.lap_time_ms), l.out_lap || l.in_lap || !l.valid ? "—" : fmtLap(l.lap_time_ms)]));
   } else el.innerHTML = `<div class="sub">Poucas voltas para o gráfico.</div>`;
 
   // eventos
@@ -601,8 +644,8 @@ async function renderSession(id) {
     renderSession(id);
   });
   bindFuel();
-  drawDegCharts(data.stint_trends);
   engineerPanel(s);
+  showTab(tab);
 }
 
 function axis(extra = {}) {
@@ -752,7 +795,7 @@ function setupState(i) {
 function setupChipHtml(i, who, tag) {
   const st = setupState(i);
   return `<button class="setupchip ${st.cls}" data-setuptag="${tag}" ${i ? "" : "disabled"} title="Definir o setup usado nesta sessão">
-    <span class="sc-ic">🔧</span><span><small>${who}</small><b>${esc(st.txt)}</b><em>${esc(st.sub)}</em></span><span class="sc-ch">Trocar</span></button>`;
+    <span class="sc-ic">${ic("wrench")}</span><span><small>${who}</small><b>${esc(st.txt)}</b><em>${esc(st.sub)}</em></span><span class="sc-ch">Trocar</span></button>`;
 }
 // abre a lista de setups do carro; ao escolher, grava na sessão e chama done()
 async function openSetupPicker(anchor, info, done) {
@@ -2142,8 +2185,8 @@ async function showSetup(id) {
     ${st ? (st.estimated ? `<div class="sd-note">Tempos estimados: você não marcou este setup nas sessões, então usei o que o Pitwall detectou.</div>` : "")
       : `<div class="sd-note">Você ainda não tem voltas com este setup. Marque-o na sessão (Engenheiro de setup) para juntar seus tempos aqui.</div>`}
     <div class="sd-actions">
-      <button class="btn primary ${genLock ? "locked" : ""}" id="sEditor" title="Desenho do carro com os ajustes em cada parte">${genLock ? "🔒 " : ""}🏎 Editor visual<em class="tier">Pro</em></button>
-      <button class="btn ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? "🔒 " : ""}Gerador de setup<em class="tier">Pro</em></button>
+      <button class="btn primary ${genLock ? "locked" : ""}" id="sEditor" title="Desenho do carro com os ajustes em cada parte">${genLock ? ic("lock") + " " : ""}${ic("car")} Editor visual<em class="tier">Pro</em></button>
+      <button class="btn ${genLock ? "locked" : ""}" id="sAdvice">${genLock ? ic("lock") + " " : ""}Gerador de setup<em class="tier">Pro</em></button>
       ${s.parent_id ? `<button class="btn" id="sVsParent" title="Ver se os ajustes funcionaram">Comparar com o original</button>` : ""}
       ${others.length ? `<div id="sCmpWith"></div>` : ""}
     </div>
@@ -2991,6 +3034,9 @@ function degPanel(trends) {
       <div class="chart" id="deg${t.stint}" style="height:120px"></div></div>`;
   };
   return `<div class="panel" style="margin-top:14px"><h2>Desgaste ao longo do stint</h2>${trends.map(line).join("")}
+    ${chartLegend([
+      { label: "Tempo", color: "var(--accent)", kind: "dots", desc: "cada ponto é uma volta válida do stint" },
+      { label: "Tendência", color: "#8a93a3", kind: "dash", desc: "para onde o tempo está indo: subindo = o carro perde ritmo" }])}
     <div class="note">Tendência das voltas limpas (sem tráfego/erros). Se perde mais de 0,1 s/volta, o pneu está
       sofrendo: veja pressões e o engenheiro de setup abaixo.</div></div>`;
 }
@@ -3014,8 +3060,27 @@ function drawDegCharts(trends) {
              axis({ values: (u, v) => v.map((x) => fmtLap(x * 1000).slice(0, -2)), size: 64 })],
       series, cursor: { drag: { x: false, y: false } },
     }, data, el));
+    chartTable(el, ["Volta", "Tempo"], pts.map((r) => [String(r.i), fmtLap(r.lap_time_ms)]));
   }
 }
+
+// abas padrão do app (mesmo visual das Configurações): botões .set-tab e blocos [data-pp][data-pv]
+const tabsHtml = (id, tabs) => `<div class="set-tabs" id="${id}" role="tablist">${tabs.map(([k, t]) => `<button class="set-tab" data-pt="${k}" role="tab">${t}</button>`).join("")}</div>`;
+function bindTabs(root, id, tabs, key, onShow) {
+  const bar = root.querySelector("#" + id);
+  if (!bar) return;
+  const show = (k) => {
+    if (!tabs.some((t) => t[0] === k)) k = tabs[0][0];
+    bar.querySelectorAll(".set-tab").forEach((b) => b.classList.toggle("on", b.dataset.pt === k));
+    root.querySelectorAll(`[data-pp="${id}"]`).forEach((p) => { p.hidden = p.dataset.pv !== k; });
+    try { localStorage.setItem(key, k); } catch (e) { /* ok */ }
+    if (onShow) onShow(k);
+  };
+  bar.querySelectorAll(".set-tab").forEach((b) => b.onclick = () => show(b.dataset.pt));
+  let k0 = null; try { k0 = localStorage.getItem(key); } catch (e) { /* ok */ }
+  show(k0);
+}
+const PG_TABS = [["resumo", "Resumo"], ["evolucao", "Evolução"], ["treino", "Treino e volta ideal"]];
 
 // ---------------------------------------------------------------- progresso
 async function renderProgress(params) {
@@ -3093,6 +3158,8 @@ async function comboProgress(car, track) {
       ${link ? `<a class="btn sm" href="${link}">Ver na análise</a>` : ""}</div>`;
   }).join("");
   box.innerHTML = `
+    ${tabsHtml("pgTabs", PG_TABS)}
+    <div data-pp="pgTabs" data-pv="resumo">
     <div class="pg-top">
       <div class="panel rating-card">
         ${ratingRing(R.current)}
@@ -3119,13 +3186,24 @@ async function comboProgress(car, track) {
       ${planCards || `<div class="sub">Precisa de pelo menos 2 voltas limpas com esse carro nessa pista.</div>`}
     </div>
 
+    </div>
+    <div data-pp="pgTabs" data-pv="evolucao" hidden>
     <div class="strat two" style="margin-top:14px">
       <div class="panel"><h2>Evolução por sessão</h2><div id="pgTrend" class="chart"></div>
-        <div class="note">Linha cheia: melhor volta · tracejada: média das voltas limpas.</div></div>
+        ${chartLegend([
+          { label: "Melhor volta", color: "var(--accent)", kind: "line", thick: true, desc: "linha cheia verde: a sua melhor volta limpa de cada sessão" },
+          { label: "Média", color: "#8a93a3", kind: "dash", desc: "tracejada cinza: média das voltas limpas da sessão (quanto menor, melhor)" }])}
+        <div class="note">Cada ponto é uma sessão, em ordem de data. Linhas descendo = você está ficando mais rápido.</div></div>
       <div class="panel"><h2>Rating por sessão</h2><div id="pgRate" class="chart"></div>
-        <div class="note">Sobe quando você anda perto do recorde, varia pouco e não sai da pista.</div></div>
+        ${chartLegend([
+          { label: "Rating", color: "var(--good)", kind: "line", thick: true, desc: "linha verde grossa: a nota geral da sessão, de 0 a 100" },
+          { label: "Ritmo", color: "#8a93a3", kind: "dash", desc: "tracejada cinza: quão perto do seu recorde você andou" },
+          { label: "Consistência", color: "#b98cff", kind: "dash", desc: "tracejada roxa: quanto as suas voltas variaram entre si" }])}
+        <div class="note">O rating sobe quando você anda perto do recorde, varia pouco e não sai da pista (a limpeza entra na nota, mas não tem linha própria).</div></div>
     </div>
 
+    </div>
+    <div data-pp="pgTabs" data-pv="treino" hidden>
     <div class="strat two" style="margin-top:14px">
       <div class="panel"><h2>Onde você varia mais</h2><div id="pgMap" class="cmap"></div>
         <div class="legend-row"><span><i style="background:#3fd68b"></i>consistente</span><span><i style="background:#ffd23f"></i>médio</span><span><i style="background:#ff5d5d"></i>varia muito</span></div></div>
@@ -3140,9 +3218,17 @@ async function comboProgress(car, track) {
           ${cons.segments.map((s) => `<tr><td>${s.n}</td><td class="num">${s.best.toFixed(2)}</td><td class="num">${s.mean.toFixed(2)}</td>
             <td class="num">±${s.std.toFixed(2)}</td><td class="num posg">${s.potential.toFixed(2)}</td></tr>`).join("")}</tbody></table></details>
       </div>
+    </div>
     </div>`;
+  let chartsDrawn = false;
+  const drawCharts = () => {   // os gráficos precisam da aba visível para medir a largura
   const S = C.sessions;
-  const dlabel = (arr) => (u, v) => v.map((i) => (Number.isInteger(i) && arr[i] ? new Date(arr[i].started_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : ""));
+  const dlabel = (arr) => {   // várias sessões no mesmo dia: mostra também a hora
+    const day = (x) => new Date(x.started_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+    const n = {}; arr.forEach((x) => { n[day(x)] = (n[day(x)] || 0) + 1; });
+    const every = Math.max(1, Math.ceil(arr.length / 5));   // poucos rótulos: não deixa um por cima do outro
+    return (u, v) => v.map((i) => (Number.isInteger(i) && arr[i] && i % every === 0 ? day(arr[i]) + (n[day(arr[i])] > 1 ? " " + new Date(arr[i].started_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "") : ""));
+  };
   const el = $("#pgTrend");
   if (S.length > 1) {
     plots.push(new uPlot({
@@ -3152,6 +3238,7 @@ async function comboProgress(car, track) {
                { label: "Média", value: (u, v) => fmtLap(Math.round(v * 1000)), stroke: "#8a93a3", width: 1.5, dash: [5, 4], points: { size: 4 } }],
       cursor: { drag: { x: false, y: false } },
     }, [S.map((_, i) => i), S.map((s) => s.best_ms / 1000), S.map((s) => s.avg_ms / 1000)], el));
+    chartTable(el, ["Sessão", "Melhor volta", "Média"], S.map((s) => [fmtDate(s.started_at), fmtLap(s.best_ms), fmtLap(s.avg_ms)]));
   } else el.innerHTML = `<div class="sub">Precisa de 2 sessões ou mais.</div>`;
   const RS = R.sessions || [], el2 = $("#pgRate");
   if (RS.length > 1) {
@@ -3163,8 +3250,11 @@ async function comboProgress(car, track) {
                { label: "Consistência", stroke: "#b98cff", width: 1, dash: [4, 4], points: { show: false } }],
       cursor: { drag: { x: false, y: false } },
     }, [RS.map((_, i) => i), RS.map((s) => s.rating), RS.map((s) => s.pace), RS.map((s) => s.consistency)], el2));
+    chartTable(el2, ["Sessão", "Rating", "Ritmo", "Consistência"], RS.map((s) => [fmtDate(s.started_at), String(s.rating ?? "—"), String(s.pace ?? "—"), String(s.consistency ?? "—")]));
   } else el2.innerHTML = `<div class="sub">Precisa de 2 sessões ou mais.</div>`;
+  };
   consistencyMap($("#pgMap"), cons);
+  bindTabs(box, "pgTabs", PG_TABS, "pitwall.pgtab", (k) => { if (k === "evolucao" && !chartsDrawn) { chartsDrawn = true; drawCharts(); } });
   $("#pgGen").onclick = async () => {
     $("#pgGen").disabled = true; $("#pgGenOut").textContent = "Montando…";
     try {
@@ -3174,6 +3264,84 @@ async function comboProgress(car, track) {
     } catch (e) { $("#pgGenOut").textContent = e.message; }
     $("#pgGen").disabled = false;
   };
+}
+
+// legenda de gráfico: cor, tipo de linha (cheia, tracejada, pontos, barras) e o que cada uma quer dizer
+function chartLegend(items) {
+  const sample = (i) => i.kind === "dots" ? `<svg viewBox="0 0 28 10" width="28" height="10"><circle cx="14" cy="5" r="3.5" fill="${i.color}"/></svg>`
+    : i.kind === "bar" ? `<svg viewBox="0 0 28 10" width="28" height="10"><rect x="8" y="1" width="12" height="8" rx="2" fill="${i.color}" opacity=".7"/></svg>`
+    : `<svg viewBox="0 0 28 10" width="28" height="10"><line x1="1" y1="5" x2="27" y2="5" stroke="${i.color}" stroke-width="${i.thick ? 3 : 2}" ${i.kind === "dash" ? 'stroke-dasharray="5 4"' : ""} stroke-linecap="round"/></svg>`;
+  return `<div class="clegend">${items.map((i) => `<span class="cl-i">${sample(i)}<span><b>${esc(i.label)}</b>${i.desc ? `<small>${esc(i.desc)}</small>` : ""}</span></span>`).join("")}</div>`;
+}
+
+const MES_ABR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const _dmy = (d) => `${d.getDate()} ${MES_ABR[d.getMonth()]}`;
+// agrupa os dias em dia / semana (seg a dom) / mês, sem buracos
+function bucketActivity(days, mode) {
+  if (!days.length) return [];
+  const map = new Map(days.map((d) => [d.day, d]));
+  const first = new Date(days[0].day + "T12:00:00"), last = new Date();
+  last.setHours(12, 0, 0, 0);
+  const startOf = (d) => {
+    const x = new Date(d);
+    if (mode === "week") x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    else if (mode === "month") x.setDate(1);
+    return x;
+  };
+  const next = (d) => { const x = new Date(d); if (mode === "day") x.setDate(x.getDate() + 1); else if (mode === "week") x.setDate(x.getDate() + 7); else x.setMonth(x.getMonth() + 1); return x; };
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const out = [];
+  for (let b = startOf(first); b <= last; b = next(b)) {
+    const end = new Date(next(b)); end.setDate(end.getDate() - 1);
+    let laps = 0, hours = 0;
+    for (let d = new Date(b); d <= end && d <= last; d.setDate(d.getDate() + 1)) {
+      const r = map.get(iso(d)); if (r) { laps += r.laps; hours += r.hours; }
+    }
+    out.push({ start: new Date(b), end, laps, hours });
+  }
+  return out;
+}
+function bucketRange(b, mode) {
+  if (mode === "day") return `${b.start.toLocaleDateString("pt-BR", { weekday: "short" })}, ${_dmy(b.start)}`;
+  if (mode === "month") return `${MES_ABR[b.start.getMonth()]} de ${b.start.getFullYear()}`;
+  return b.start.getMonth() === b.end.getMonth() ? `${b.start.getDate()} a ${_dmy(b.end)}` : `${_dmy(b.start)} a ${_dmy(b.end)}`;
+}
+const actState = { mode: "day", metric: "laps", all: false };
+function drawActivity(o) {
+  const box = $("#pgAct");
+  if (!box) return;
+  const WIN = { day: 30, week: 12, month: 12 };
+  const NOUN = { day: ["dia", "dias"], week: ["semana", "semanas"], month: ["mês", "meses"] }[actState.mode];
+  let B = bucketActivity(o.days || [], actState.mode);
+  const total = B.length;
+  if (!actState.all) B = B.slice(-WIN[actState.mode]);
+  const val = (b) => (actState.metric === "laps" ? b.laps : +b.hours.toFixed(2));
+  const sum = B.reduce((a, b) => a + val(b), 0), active = B.filter((b) => b.laps).length;
+  const unit = actState.metric === "laps" ? "voltas" : "h";
+  const fmtV = (v) => (actState.metric === "laps" ? String(v) : v.toFixed(1).replace(".", ","));
+  const chip = (grp, k, label) => `<button class="btn xs ${actState[grp] === k ? "on" : ""}" data-act="${grp}:${k}">${label}</button>`;
+  box.innerHTML = `<div class="row" style="margin-bottom:6px;gap:8px;flex-wrap:wrap"><h2 style="margin:0">${actState.metric === "laps" ? "Voltas" : "Horas"} por ${NOUN[0]}</h2><span class="spacer"></span>
+      <div class="seg-switch">${chip("mode", "day", "Dia")}${chip("mode", "week", "Semana")}${chip("mode", "month", "Mês")}</div>
+      <div class="seg-switch">${chip("metric", "laps", "Voltas")}${chip("metric", "hours", "Horas")}</div></div>
+    <div class="sub">${actState.all ? "Todo o período" : `${actState.mode === "week" ? "Últimas" : "Últimos"} ${B.length} ${B.length === 1 ? NOUN[0] : NOUN[1]}`}: <b>${fmtV(sum)} ${unit}</b> · treinou em ${active} de ${B.length} ${NOUN[1]}${total > WIN[actState.mode] ? ` · <a class="lnk" href="#" id="actAll">${actState.all ? "ver só os recentes" : "ver tudo"}</a>` : ""}</div>
+    <div id="pgWeeks" class="chart"></div>
+    <div class="act-info" id="actInfo">Passe o mouse numa barra para ver o período exato.</div>`;
+  box.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => { const [g, k] = b.dataset.act.split(":"); actState[g] = k; if (g === "mode") actState.all = false; drawActivity(o); });
+  const all = $("#actAll"); if (all) all.onclick = (e) => { e.preventDefault(); actState.all = !actState.all; drawActivity(o); };
+  const el = $("#pgWeeks");
+  const info = (i) => { const b = B[i]; $("#actInfo").innerHTML = b ? `<b>${esc(bucketRange(b, actState.mode))}</b> · ${b.laps} volta${b.laps === 1 ? "" : "s"} · ${b.hours.toFixed(1).replace(".", ",")} h` : "Passe o mouse numa barra para ver o período exato."; };
+  const lbl = (b) => (actState.mode === "month" ? MES_ABR[b.start.getMonth()] : _dmy(b.start));
+  const every = Math.max(1, Math.ceil(B.length / 8));
+  plots.push(new uPlot({
+    width: el.clientWidth, height: 220, legend: { show: false }, scales: { x: { time: false, range: [-0.6, B.length - 0.4] } },
+    axes: [axis({ values: (u, v) => v.map((i) => (Number.isInteger(i) && B[i] && i % every === 0 ? lbl(B[i]) : "")) }), axis({ size: 44 })],
+    series: [{}, { label: unit, fill: "rgba(46,229,157,.55)", stroke: css("--accent"), width: 1, paths: uPlot.paths.bars({ size: [0.7, 40] }), points: { show: false } }],
+    cursor: { drag: { x: false, y: false }, points: { show: false } },
+    hooks: { setCursor: [(u) => info(u.cursor.idx)] },
+  }, [B.map((_, i) => i), B.map(val)], el));
+  chartTable(el, ["Período", "Voltas", "Horas"], B.map((b) => [bucketRange(b, actState.mode), String(b.laps), b.hours.toFixed(1).replace(".", ",")]));
+  const per = { day: "no dia", week: "na semana (segunda a domingo)", month: "no mês" }[actState.mode];
+  box.insertAdjacentHTML("beforeend", chartLegend([{ label: `Cada barra: ${actState.metric === "laps" ? "voltas" : "horas"} ${per}`, color: css("--accent"), kind: "bar", desc: "soma de todas as suas sessões (ACC e iRacing)" }]));
 }
 
 function progressGeneral(P) {
@@ -3188,7 +3356,7 @@ function progressGeneral(P) {
       <div class="kpi"><span>Sessões</span><b class="num">${o.sessions}</b></div>
     </div>
     <div class="strat two">
-      <div class="panel"><h2>Voltas por semana</h2><div id="pgWeeks" class="chart"></div></div>
+      <div class="panel" id="pgAct"></div>
       <div class="panel"><h2>Seus carros e pistas</h2>
         <table><thead><tr><th>Pista</th><th>Carro</th><th>Recorde</th><th>Rating</th><th></th></tr></thead><tbody>
         ${combos.map((c) => { const r = recBy[c.car + "|" + c.track]; return `<tr><td>${esc(pretty(c.track))}</td><td>${esc(pretty(c.car))}</td>
@@ -3196,17 +3364,7 @@ function progressGeneral(P) {
           <td class="acts"><a class="btn sm" href="#/progress?car=${encodeURIComponent(c.car)}&track=${encodeURIComponent(c.track)}">Abrir</a></td></tr>`; }).join("")}
         </tbody></table></div>
     </div>`;
-  const el = $("#pgWeeks"), W = o.weeks;
-  if (W.length) {
-    plots.push(new uPlot({
-      width: el.clientWidth, height: 220, legend: { show: false }, scales: { x: { time: false, range: [-0.6, W.length - 0.4] } },
-      axes: [axis({ values: (u, v) => v.map((i) => (Number.isInteger(i) && W[i] ? new Date(W[i].week + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "")) }),
-             axis({ size: 44 })],
-      series: [{}, { label: "Voltas", fill: "rgba(46,229,157,.55)", stroke: css("--accent"), width: 1,
-        paths: uPlot.paths.bars({ size: [0.6, 40] }), points: { show: false } }],
-      cursor: { drag: { x: false, y: false } },
-    }, [W.map((_, i) => i), W.map((w) => w.laps)], el));
-  }
+  drawActivity(o);
 }
 
 function idealCard(ideal, pb) {
@@ -3374,7 +3532,7 @@ function towerRows(rows, recs, mode) {
       <b class="num t">${fmtLap(r.lap_time_ms)}</b>
       <span class="num gap">${pos > 1 ? fmtGap(r.lap_time_ms - (r._lead != null ? r._lead : lead)) : ""}</span>
       <span class="secs3 num">${[r.s1_ms, r.s2_ms, r.s3_ms].map(fmtSec).join(" · ")}</span>
-      <span class="tags">${r.setup_name && OV_FEATS.has("team_setups") ? `<button class="tag2" data-setup="${r.id}" title="${esc(r.setup_name)}">⚙ setup</button>` : r.setup_name ? `<span class="tag2" title="Os setups da comunidade são do plano Pro ou Equipe">🔒 setup</span>` : ""}${r.clip_url ? `<span class="tag2" title="Tem vídeo da volta">▶ vídeo</span>` : ""}</span>
+      <span class="tags">${r.setup_name && OV_FEATS.has("team_setups") ? `<button class="tag2" data-setup="${r.id}" title="${esc(r.setup_name)}">${ic("gear")} setup</button>` : r.setup_name ? `<span class="tag2" title="Os setups da comunidade são do plano Pro ou Equipe">${ic("lock")} setup</span>` : ""}${r.clip_url ? `<span class="tag2" title="Tem vídeo da volta">▶ vídeo</span>` : ""}</span>
       <span class="acts">${r.me ? "" : `<button class="btn xs" data-imp="${r.id}" data-mode="compare" data-a="${mine ? mine.lap_id : ""}">Analisar</button>
         <button class="btn xs" data-imp="${r.id}" data-mode="replay" data-a="${mine ? mine.lap_id : ""}">Replay</button>`}</span>
     </div>`; }).join("");
@@ -3780,7 +3938,7 @@ const OV_FEATS = new Set();
 const OV_TIER = { overlay_styles: "Pro", overlay_styles_team: "Pro", overlay_custom: "Pro" };
 // opções com plano: sem o recurso a opção fica travada no valor básico (tabela OPT_LOCK em carshapes.js)
 const ovLocked = (n, k) => !!(OPT_LOCK[n] && k in OPT_LOCK[n] && !OV_FEATS.has(OPT_FEATURE));
-const ovTag = (need, lock) => `<em class="tier ">${lock ? "🔒 " : ""}${OV_TIER[need]}</em>`;
+const ovTag = (need, lock) => `<em class="tier ">${lock ? ic("lock") + " " : ""}${OV_TIER[need]}</em>`;
 const ovChip = (n, k, label, v, tip) => {
   const lk = ovLocked(n, k);
   if (lk) v = !!OPT_LOCK[n][k];
@@ -3801,6 +3959,40 @@ const ovSlider = (n, k, label, v, min, max, step, unit) => {
   return `<label class="ovslide ${lk ? "locked" : ""}" ${lk ? `data-need="${OPT_FEATURE}"` : ""}><span>${label}${lk ? ovTag(OPT_FEATURE, true) : ""}</span><input type="range" data-ov="${n}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${v}" ${lk ? "disabled" : ""}><output data-unit="${unit}">${v}${unit}</output></label>`;
 };
 const ovGroup = (title, body, hint) => `<section class="ovg"><h3>${title}${hint ? `<small>${hint}</small>` : ""}</h3>${body}</section>`;
+
+// separa as opções de cada overlay em abas: Geral, Aparência, Conteúdo e Ajustes
+const OV_TABMAP = [["geral", "Geral", /^(quando aparece|tamanho e fundo|lados)/i],
+  ["aparencia", "Aparência", /^(modelo|estilo|modo do mapa|aparência|carro \(|nome do piloto|cor dos carros|carrinhos|carros especiais)/i],
+  ["conteudo", "Conteúdo", /^(mostrar|quais pilotos|cabeçalho|colunas)/i]];
+const ovTabState = {};
+function ovTabs(box) {
+  const kids = [...box.children].filter((e) => !e.classList.contains("ovp-head"));
+  const groups = kids.filter((e) => e.classList.contains("ovg"));
+  if (groups.length < 4) return;
+  const tabOf = (e) => {
+    const t = ((e.querySelector("h3, summary") || {}).textContent || "").trim();
+    const m = OV_TABMAP.find((x) => x[2].test(t));
+    return m ? m[0] : "ajustes";
+  };
+  let cur = "geral";
+  for (const e of kids) { if (e.classList.contains("ovg")) cur = tabOf(e); e.dataset.ovt = cur; }
+  const present = [...OV_TABMAP.map((x) => [x[0], x[1]]), ["ajustes", "Ajustes"]].filter(([k]) => kids.some((e) => e.dataset.ovt === k));
+  if (present.length < 2) return;
+  const name = box.querySelector(".ovp-head h2");
+  const key = name ? name.textContent : "x";
+  const bar = document.createElement("div");
+  bar.className = "set-tabs ov-tabs";
+  const show = (k) => {
+    if (!present.some((p) => p[0] === k)) k = present[0][0];
+    ovTabState[key] = k;
+    bar.querySelectorAll(".set-tab").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
+    kids.forEach((e) => { e.hidden = e.dataset.ovt !== k; });
+  };
+  bar.innerHTML = present.map(([k, t]) => `<button type="button" class="set-tab" data-k="${k}">${t}</button>`).join("");
+  bar.querySelectorAll(".set-tab").forEach((b) => b.onclick = () => show(b.dataset.k));
+  box.querySelector(".ovp-head").after(bar);
+  show(ovTabState[key]);
+}
 
 function ovPanel(n, S) {
   const c = S.overlays[n];
@@ -3986,6 +4178,7 @@ async function renderOverlays() {
   function paintPanel() {
     const box = $("#ovPanel");
     box.innerHTML = ovPanel(sel, S);
+    ovTabs(box);
     bindOverlayPanel(box, sel, put, async (v) => { await put(v); paintTiles(); });
   }
   function makeBox(name) {
@@ -4484,7 +4677,7 @@ async function renderLfm(force) {
             <div class="ls-sess" data-ev="${x.event_id}"></div>
             <div class="row"><button class="btn xs primary" data-ext="${esc(x.sessions_url)}">Inscrever</button><button class="btn xs" data-ext="${esc(x.url)}">Série</button>
               ${x.next_race ? `<button class="bell" title="Me avisar quando o servidor abrir" data-bell="${esc(x.slug + "@" + x.next_race)}"
-                data-info='${esc(JSON.stringify({ series: x.name, slug: x.slug, track: x.track, date: x.next_race, url: x.sessions_url }))}'>🔔</button>` : ""}</div>
+                data-info='${esc(JSON.stringify({ series: x.name, slug: x.slug, track: x.track, date: x.next_race, url: x.sessions_url }))}'>${ic("bell")}</button>` : ""}</div>
           </div></div>`).join("") || `<div class="sub">Nenhuma série encontrada.</div>`}</div>
       <p class="sub" style="margin-top:12px">Dados do lowfuelmotorsport.com, atualizados a cada poucos minutos. A inscrição é feita na página do LFM, que abre numa janela do próprio Pitwall.</p>
     </div>
@@ -4536,7 +4729,7 @@ function lfmSetup(D, changing) {
 
 function lfmAccountBar(D) {
   const A = D.account || {};
-  if (A.connected) return `<div class="lfm-acc ok"><span>🔗 Conta do LFM conectada${A.name ? ` como <b>${esc(A.name)}</b>` : ""}.
+  if (A.connected) return `<div class="lfm-acc ok"><span>${ic("link")} Conta do LFM conectada${A.name ? ` como <b>${esc(A.name)}</b>` : ""}.
       O Pitwall vê suas inscrições e toca o alerta quando o servidor abrir.</span>
     <button class="btn xs ghost" id="lfDisc">Desconectar</button></div>`;
   return `<div class="lfm-acc"><span>${A.expired ? "A conexão com a sua conta do LFM expirou. " : ""}<b>Conecte sua conta do LFM</b> para ver suas inscrições,
@@ -4609,7 +4802,7 @@ async function lfmExtras(D) {
   view.querySelectorAll("[data-bell]").forEach((b) => b.classList.toggle("on", watched.has(b.dataset.bell)));
   const sess = S.sessions || [];
   const bell = (r) => `<button class="bell ${r.watch || watched.has(String(r.race_id)) ? "on" : ""}" title="Me avisar quando o servidor abrir" data-bell="${r.race_id}"
-    data-info='${esc(JSON.stringify({ race_id: r.race_id, series: r.series, slug: r.slug, track: r.track, date: r.date, server_name: r.server_name, server_password: r.server_password, url: r.url }))}'>🔔</button>`;
+    data-info='${esc(JSON.stringify({ race_id: r.race_id, series: r.series, slug: r.slug, track: r.track, date: r.date, server_name: r.server_name, server_password: r.server_password, url: r.url }))}'>${ic("bell")}</button>`;
   view.querySelectorAll(".ls-sess").forEach((el) => {
     const mine = sess.filter((r) => String(r.event_id) === el.dataset.ev && r.date && new Date(r.date) > Date.now() - 15 * 60e3).slice(0, 4);
     if (!mine.length) return;

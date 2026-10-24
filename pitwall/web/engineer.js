@@ -108,7 +108,7 @@ async function renderVoiceEngineer() {
     <section class="set-sec" data-sec="testar">
       <div class="set-card"><h2>Conversar (teste)</h2>
         <div class="sub" style="margin-bottom:8px">Digite uma pergunta ou clique em “Falar” e pergunte pelo microfone (ele para sozinho quando você se calar). Funciona com os dados do jogo, ou do simulador (modo demo).</div>
-        <div class="eng-ask"><input id="eAsk" type="text" placeholder="Ex.: quem está atrás de mim?" style="flex:1"><button class="btn primary" id="eAskBtn">Perguntar</button><button class="btn" id="eMicBtn" title="Fale uma pergunta no microfone escolhido">🎤 Falar</button></div>
+        <div class="eng-ask"><input id="eAsk" type="text" placeholder="Ex.: quem está atrás de mim?" style="flex:1"><button class="btn primary" id="eAskBtn">Perguntar</button><button class="btn" id="eMicBtn" title="Fale uma pergunta no microfone escolhido">${ic("mic")} Falar</button></div>
         <div id="eAns" class="eng-ans"></div>
         <div class="eng-log" id="eLog"></div>
       </div>
@@ -123,7 +123,7 @@ async function renderVoiceEngineer() {
   // ---- personalização só para assinantes: no Grátis estas opções ficam travadas no padrão
   const FE = new Set((lic.features || []).map((f) => f.id)), custom = FE.has("voice_custom");
   if (!custom) {
-    const tag = ` <em class="tier">🔒 Pro</em>`, def = { "#eRate": 100, "#eRadioLv": 60, "#eRadioNz": 30, "#eVerb": "normal", "#eHumLv": "normal", "#ePiper": "pt_BR-faber-medium", "#eWin": "" };
+    const tag = ` <em class="tier">${ic("lock")} Pro</em>`, def = { "#eRate": 100, "#eRadioLv": 60, "#eRadioNz": 30, "#eVerb": "normal", "#eHumLv": "normal", "#ePiper": "pt_BR-faber-medium", "#eWin": "" };
     const lockRow = (sel) => {
       const el = $(sel); if (!el) return;
       el.disabled = true;

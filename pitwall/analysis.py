@@ -446,8 +446,12 @@ def evolution(laps: list[dict]) -> dict:
     """Totais, voltas/horas por semana e histórico do recorde (voltas suas, em ordem)."""
     import datetime as dt
     weeks: dict = {}
+    days: dict = {}
     for l in laps:
         d = dt.date.fromisoformat(l["started_at"][:10])
+        dd = days.setdefault(d.isoformat(), {"day": d.isoformat(), "laps": 0, "hours": 0.0})
+        dd["laps"] += 1
+        dd["hours"] += l["lap_time_ms"] / 3_600_000
         monday = d - dt.timedelta(days=d.weekday())
         w = weeks.setdefault(monday.isoformat(), {"week": monday.isoformat(), "laps": 0, "hours": 0.0})
         w["laps"] += 1
@@ -458,6 +462,7 @@ def evolution(laps: list[dict]) -> dict:
         "hours": round(total_ms / 3_600_000, 2), "sessions": len({l["session_id"] for l in laps}),
         "combos": len({(l["car"], l["track"]) for l in laps}),
         "weeks": [dict(w, hours=round(w["hours"], 2)) for w in sorted(weeks.values(), key=lambda w: w["week"])],
+        "days": [dict(x, hours=round(x["hours"], 3)) for x in sorted(days.values(), key=lambda x: x["day"])],
     }
 
 

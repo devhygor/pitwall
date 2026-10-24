@@ -182,8 +182,8 @@
       const lock = ctx.genLock;
       return `<b>${esc(spots[k] || k)}</b>
         <div class="tv">${(key.length ? key : its.slice(0, 5)).map((x) => `<div><span>${esc(x.label)}${x.side ? " " + esc(x.side) : ""}</span><b>${esc(dispVal(x.kind, cur(x)))}${x.unit ? " " + x.unit : ""}${edits[x.path] ? ` <em>(era ${esc(dispVal(x.kind, x.raw))})</em>` : ""}</b></div>`).join("")}</div>
-        ${lock ? `<div class="tr lock">🔒 Recomendações do Pitwall: plano Pro</div>`
-          : recs.length ? `<div class="tr">${recs.slice(0, 3).map((c) => { const s = recState(c); return `<div class="${s === "applied" || s === "saved" ? "ok" : ""}">${s === "applied" || s === "saved" ? "✓" : "💡"} <b>${esc(c.label)}</b>: ${signed(c.delta)} clique(s)${s === "applied" ? " · <em>aplicada</em>" : s === "saved" ? " · <em>já gravada</em>" : ""}<small>${esc((c.reasons || [])[0] || "")}</small></div>`; }).join("")}</div>`
+        ${lock ? `<div class="tr lock">${ic("lock")} Recomendações do Pitwall: plano Pro</div>`
+          : recs.length ? `<div class="tr">${recs.slice(0, 3).map((c) => { const s = recState(c); return `<div class="${s === "applied" || s === "saved" ? "ok" : ""}">${s === "applied" || s === "saved" ? "✓" : ic("bulb")} <b>${esc(c.label)}</b>: ${signed(c.delta)} clique(s)${s === "applied" ? " · <em>aplicada</em>" : s === "saved" ? " · <em>já gravada</em>" : ""}<small>${esc((c.reasons || [])[0] || "")}</small></div>`; }).join("")}</div>`
             : `<div class="tr none">${advice.error ? "Sem voltas suas para analisar ainda." : "Sem recomendação para esta parte."}</div>`}
         <div class="th">Clique para ajustar</div>`;
     };
@@ -222,10 +222,10 @@
       box.hidden = false;
       const pct = Math.round(done / total * 100), all = done === total;
       box.className = "sc-recs" + (all ? " all" : "");
-      box.innerHTML = `<div class="sc-rt"><b>${all ? "✓" : "💡"} Recomendações do Pitwall</b><span><b>${done}</b> de ${total} aplicadas</span></div>
+      box.innerHTML = `<div class="sc-rt"><b>${all ? "✓" : ic("bulb")} Recomendações do Pitwall</b><span><b>${done}</b> de ${total} aplicadas</span></div>
         <div class="sc-prog"><i style="width:${pct}%"></i></div>
         <div class="sc-rb">${all ? `<span class="sc-rok">Todas as recomendações já estão nas alterações. Revise e salve abaixo.</span>`
-          : `<button class="btn primary sm" id="scRecAll" title="Coloca todas as recomendações nas alterações pendentes (nada é salvo até você criar a versão)">⚡ Aplicar todas (${todo.length})</button>`}
+          : `<button class="btn primary sm" id="scRecAll" title="Coloca todas as recomendações nas alterações pendentes (nada é salvo até você criar a versão)">${ic("bolt")} Aplicar todas (${todo.length})</button>`}
           ${done > 0 && recs().some((c) => recState(c) === "applied") ? `<button class="btn sm quiet" id="scRecUndo">Desfazer as recomendações</button>` : ""}</div>`;
       const a = $q("#scRecAll"); if (a) a.onclick = () => { for (const c of todo) edits[c.path] = c.delta; paintAll(true); toast(`${todo.length} recomendação(ões) aplicada(s). Falta salvar.`, "ok"); };
       const u = $q("#scRecUndo"); if (u) u.onclick = () => { for (const c of recs()) if (recState(c) === "applied") delete edits[c.path]; paintAll(true); };
@@ -270,7 +270,7 @@
       const its = items.filter((x) => x.spot === sel), recMap = Object.fromEntries((adviceBySpot()[sel] || []).map((c) => [c.path, c]));
       const partTodo = Object.values(recMap).filter((c) => !["applied", "saved"].includes(recState(c)));
       const sections = [...new Set(its.map((x) => x.section))];
-      p.innerHTML = `<div class="sc-ph"><h3>${esc(spots[sel] || sel)}</h3>${partTodo.length ? `<button class="btn sm primary" id="scPartAll" title="Aplica as recomendações só desta parte">⚡ Aplicar as ${partTodo.length} desta parte</button>` : ""}${MIRROR[sel] ? `<label class="sc-mir"><input type="checkbox" id="scMir" ${mirror ? "checked" : ""}> Espelhar no ${sel === "w0" || sel === "w2" ? "lado direito" : "lado esquerdo"}</label>` : ""}</div>
+      p.innerHTML = `<div class="sc-ph"><h3>${esc(spots[sel] || sel)}</h3>${partTodo.length ? `<button class="btn sm primary" id="scPartAll" title="Aplica as recomendações só desta parte">${ic("bolt")} Aplicar as ${partTodo.length} desta parte</button>` : ""}${MIRROR[sel] ? `<label class="sc-mir"><input type="checkbox" id="scMir" ${mirror ? "checked" : ""}> Espelhar no ${sel === "w0" || sel === "w2" ? "lado direito" : "lado esquerdo"}</label>` : ""}</div>
         ${sections.map((sc) => `<div class="sc-sec"><h4>${esc(sc)}</h4>${its.filter((x) => x.section === sc).map((x) => {
           const c = recMap[x.path], d = edits[x.path] || 0, rs = c ? recState(c) : "";
           return `<div class="sc-row ${d ? "chg" : ""} ${rs === "applied" || rs === "saved" ? "applied" : ""}" data-p="${esc(x.path)}">
@@ -278,7 +278,7 @@
               ${!c ? "" : rs === "saved" ? `<span class="sc-sug saved" title="${esc((c.reasons || []).join(" · "))}">✓ Já gravada neste setup (${signed(c.delta)})</span>`
         : rs === "applied" ? `<button class="sc-sug done" data-unsug="${esc(x.path)}" title="${esc((c.reasons || []).join(" · "))} — clique para desfazer">✓ Aplicada (${signed(c.delta)}) · desfazer</button>`
         : rs === "other" ? `<button class="sc-sug diff" data-sug="${esc(x.path)}" title="${esc((c.reasons || []).join(" · "))}">↻ Você mudou ${signed(d)} · usar a sugestão (${signed(c.delta)})</button>`
-        : `<button class="sc-sug" data-sug="${esc(x.path)}" title="${esc((c.reasons || []).join(" · "))}">💡 Sugestão: ${signed(c.delta)} · aplicar</button>`}</div>
+        : `<button class="sc-sug" data-sug="${esc(x.path)}" title="${esc((c.reasons || []).join(" · "))}">${ic("bulb")} Sugestão: ${signed(c.delta)} · aplicar</button>`}</div>
             <div class="sc-step"><button data-d="-1" aria-label="Diminuir">−</button><b>${esc(dispVal(x.kind, cur(x)))}${x.unit ? ` <small>${x.unit}</small>` : ""}</b><button data-d="1" aria-label="Aumentar">+</button>
               ${d ? `<button class="rst" data-r="1" title="Voltar ao valor original (${esc(dispVal(x.kind, x.raw))})">↺</button>` : ""}</div></div>`;
         }).join("")}</div>`).join("")}`;
@@ -319,8 +319,8 @@
     const paintTools = () => {
       const t = $q("#sc3dTools"); if (!stage) return;
       t.innerHTML = `${[["car", "Carro"], ["front", "Frente"], ["side", "Lateral"], ["rear", "Traseira"], ["top", "Topo"]].map(([v, n]) => `<button type="button" data-v="${v}">${n}</button>`).join("")}
-        <button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura Pitwall (verde neon e carbono) e ${stage.isModel && !stage.isRaw ? "a pintura original do modelo (com os decalques dele)" : "a cor da marca"}">🎨 Pintura ${paintMode === "pitwall" ? "Pitwall" : stage.isModel && !stage.isRaw ? "original" : "da marca"}</button>
-        <button type="button" class="${stage.xray ? "on" : ""}" id="sc3dX" title="Mostra molas, amortecedores, braços e barras estabilizadoras (o carro fica transparente)">🔧 Suspensão</button>`;
+        <button type="button" class="${paintMode === "pitwall" ? "on" : ""}" id="sc3dP" title="Alterna entre a pintura Pitwall (verde neon e carbono) e ${stage.isModel && !stage.isRaw ? "a pintura original do modelo (com os decalques dele)" : "a cor da marca"}">${ic("palette")} Pintura ${paintMode === "pitwall" ? "Pitwall" : stage.isModel && !stage.isRaw ? "original" : "da marca"}</button>
+        <button type="button" class="${stage.xray ? "on" : ""}" id="sc3dX" title="Mostra molas, amortecedores, braços e barras estabilizadoras (o carro fica transparente)">${ic("wrench")} Suspensão</button>`;
       t.querySelectorAll("[data-v]").forEach((b) => b.onclick = () => stage.view(b.dataset.v));
       $q("#sc3dX").onclick = () => { stage.setXray(!stage.xray); paintTools(); };
       const pb = $q("#sc3dP"); if (pb) pb.onclick = () => { paintMode = paintMode === "pitwall" ? "original" : "pitwall"; stage.setPaint(paintMode); paintTools(); };
@@ -359,7 +359,7 @@
       $q("#scFind").innerHTML = mnote ? `<span class="sc-fd muted">${esc(mnote)}</span>` : f.length ? f.map((x) => `<span class="sc-fd" title="${esc(x.detail || "")}">⚠ ${esc(x.title)}</span>`).join("")
         : advice.error ? `<span class="sc-fd muted">${esc(advice.error)}</span>` : `<span class="sc-fd ok">✓ Nada fora do normal nas suas últimas voltas</span>`;
       paintAll();
-    } else $q("#scFind").innerHTML = `<span class="sc-fd muted">🔒 Editar e salvar são do plano Pro ou Equipe. Você pode explorar o carro e ver os valores.</span>`;
+    } else $q("#scFind").innerHTML = `<span class="sc-fd muted">${ic("lock")} Editar e salvar são do plano Pro ou Equipe. Você pode explorar o carro e ver os valores.</span>`;
   }
 
   window.PwRecs = PwRecs;

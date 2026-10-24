@@ -20,6 +20,7 @@ const PLAN_FEATURES = [
 ];
 const SRC_NAMES = { subscription: "Assinatura", grant: "Cortesia", trial: "Teste grátis", team: "Chave da equipe", free: "", dev: "Desenvolvimento" };
 
+const PL_TABS = [["plano", "Minha licença"], ["extras", "Indicar e presentes"], ["comparar", "Comparar planos"]];
 async function renderPlano() {
   current = { name: "plano" };
   view.innerHTML = `<div class="sub">Carregando…</div>`;
@@ -34,6 +35,7 @@ async function renderPlano() {
   const until = !paid ? "" : endsFar ? "Sem data para acabar." : shownEnd ? `Válido até ${fmt(shownEnd)}.` : "";
   view.innerHTML = `
     <div class="head"><div><h1>Plano</h1><div class="sub">O que o seu plano libera e como mudar.</div></div></div>
+    ${tabsHtml("plTabs", PL_TABS)}
     <div class="set-sec on">
       <div class="set-card plan-hero ${paid ? "paid" : ""}">
         <div class="plan-top">
@@ -52,14 +54,15 @@ async function renderPlano() {
         </div>
       </div>
 
-      <div class="set-card"><h2>Chave de licença</h2>
+      <div data-pp="plTabs" data-pv="plano"><div class="set-card"><h2>Chave de licença</h2>
         ${setRow("Tenho uma chave", "Se você pagou com um e-mail diferente do Google, cole a chave que aparece na sua conta no site (PW-XXXX-XXXX-XXXX-XXXX).",
           `<div class="eng-inline"><input id="pKey" type="text" placeholder="PW-XXXX-XXXX-XXXX-XXXX" value="" style="min-width:230px"><button class="btn" id="pKeyBtn">Ativar</button></div>`)}
         ${s.license_key ? `<div class="kv"><span>Sua chave</span><code>${pii(s.license_key, "key")}</code></div>` : ""}
         ${(paid && s.source !== "dev") ? `<div class="sub" style="margin-top:8px"><button class="btn sm" id="pClear">Remover a licença deste computador</button></div>` : ""}
       </div>
 
-      <div class="set-card"><h2>Indique e ganhe</h2>
+      </div>
+      <div data-pp="plTabs" data-pv="extras" hidden><div class="set-card"><h2>Indique e ganhe</h2>
         ${setRow("Seu link de indicação", "Cada amigo que entrar pelo seu link ganha 5% no primeiro pagamento, e você ganha 1% de desconto na próxima assinatura a cada 2 amigos que usarem o Pitwall, até 50%.",
           `<button class="btn" id="pRefer">Ver meu link</button>`)}
       </div>
@@ -69,15 +72,17 @@ async function renderPlano() {
           `<div class="eng-inline"><input id="pGift" type="text" placeholder="PW-… ou PWT-… (chave da equipe)" style="min-width:230px"><button class="btn" id="pGiftBtn">Resgatar</button></div>`)}
       </div>
 
-      <div class="set-card"><h2>O que cada plano libera</h2>
+      </div>
+      <div data-pp="plTabs" data-pv="comparar" hidden><div class="set-card"><h2>O que cada plano libera</h2>
         <div class="plan-table">
           ${PLAN_FEATURES.map(([t, need]) => {
             const ok = need === "free" || (need === "pro" ? paid : s.plan === "team");
-            return `<div class="plan-row ${ok ? "on" : ""}"><i>${ok ? "✓" : "🔒"}</i><span>${esc(t)}</span>${need === "pro" ? `<em>Pro</em>` : need === "team" ? `<em>Equipe</em>` : ""}</div>`;
+            return `<div class="plan-row ${ok ? "on" : ""}"><i>${ok ? "✓" : ic("lock")}</i><span>${esc(t)}</span>${need === "pro" ? `<em>Pro</em>` : need === "team" ? `<em>Equipe</em>` : ""}</div>`;
           }).join("")}
         </div>
-      </div>
+      </div></div>
     </div>`;
+  bindTabs(view, "plTabs", PL_TABS, "pitwall.pltab");
   const act = async (fn) => { try { await fn(); } catch (e) { alert(e.message); } renderPlano(); };
   for (const [id, plan] of [["#pTrial", "pro"], ["#pTrialTeam", "team"]]) {
     const t = $(id);
