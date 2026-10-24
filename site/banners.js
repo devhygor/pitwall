@@ -9,10 +9,16 @@ const BN = (() => {
   const fd = (s) => `italic 800 ${Math.round(s)}px ${FONT}`;                      // títulos
   const fb = (s, w = 600) => `${w} ${Math.round(s)}px "Barlow","Segoe UI",sans-serif`; // texto
   const TAU = Math.PI * 2;
-  const LOOP = 7200;          // duração de um ciclo completo da animação (ms)
+  const LOOP = 14400;          // duração de um ciclo completo da animação (ms)
   let G = 0;                  // progresso do ciclo (0..1) do quadro que está sendo desenhado
   const LIVE = ["camera", "faixa", "canto", "quadradinho", "painel"];
-  const FACTS = ["Engenheiro de voz em português", "Telemetria automática de cada volta", "Overlays por cima do jogo", "Compare voltas e veja o delta", "Biblioteca e gerador de setups", "Ranking e equipes"];
+  // recursos mostrados nas cenas "detalhes": título + duas linhas de apoio
+  const FEATS = [
+    { t: "ENGENHEIRO DE VOZ", s: ["Fala português e avisa", "tudo o que rola na pista"] },
+    { t: "TELEMETRIA AUTOMÁTICA", s: ["Cada volta gravada sozinha", "com delta e comparação"] },
+    { t: "OVERLAYS NO JOGO", s: ["Delta, pneus e mapa", "por cima do ACC e iRacing"] },
+    { t: "SETUPS PRONTOS", s: ["Biblioteca e gerador", "com editor 3D do carro"] },
+  ];
   const MARK_BOX = new Path2D("M10 3h12a7 7 0 0 1 7 7v12a7 7 0 0 1-7 7H10a7 7 0 0 1-7-7V10a7 7 0 0 1 7-7z");
   const MARK_P = new Path2D("M10 22V10h6.5a4 4 0 0 1 0 8H10");
 
@@ -33,7 +39,6 @@ const BN = (() => {
     const k = G * n, i = Math.floor(k) % n, u = k - Math.floor(k), s = u < .16 ? u / .16 : u > .84 ? (1 - u) / .16 : 1;
     x.save(); x.translate(X, Y); x.scale(1, Math.max(.02, s)); x.translate(-X, -Y); fn(i); x.restore();
   }
-  const fact = (x, X, Y, fn, size, fill, align, maxW, base) => flip(x, X, Y, FACTS.length, (i) => { const s = fit(x, FACTS[i], fn, maxW, size); T(x, FACTS[i], X, Y, fn(s), fill, align, base); });
 
   function bg(x, w, h, t) {
     const g = x.createLinearGradient(0, 0, w, h); g.addColorStop(0, "#0a101a"); g.addColorStop(1, "#18233a"); x.fillStyle = g; x.fillRect(0, 0, w, h);
@@ -58,7 +63,7 @@ const BN = (() => {
   }
   function mark(x, X, Y, s) {
     x.save(); x.translate(X, Y); x.scale(s / 32, s / 32);
-    const u = (G * 3) % 1, sx = u < .25 ? Math.cos(u / .25 * TAU) : 1;      // gira como uma moeda 3 vezes por ciclo
+    const u = (G * 4) % 1, sx = u < .25 ? Math.cos(u / .25 * TAU) : 1;      // gira como uma moeda a cada cena
     x.translate(16, 0); x.scale(Math.abs(sx) < .04 ? .04 : sx, 1); x.translate(-16, 0);
     const g = x.createLinearGradient(3, 3, 29, 29); g.addColorStop(0, C.green); g.addColorStop(.55, C.blue); g.addColorStop(1, "#b98cff");
     x.strokeStyle = g; x.lineWidth = 2.5; x.lineJoin = "round"; x.stroke(MARK_BOX); x.stroke(MARK_P);
@@ -82,30 +87,29 @@ const BN = (() => {
 
   // ----------------------------------------------------------------- formatos
   const FORMATS = [
-    { id: "story", name: "Stories do Instagram", use: "Vertical 9:16 (Stories e Reels). O conteúdo fica na área segura.", w: 1080, h: 1920, gif: .4, n: 48, draw(x, o, t) {
+    { id: "story", name: "Stories do Instagram", use: "Vertical 9:16 (Stories e Reels). O conteúdo fica na área segura.", w: 1080, h: 1920, gif: .35, n: 90, dl: 160, draw(x, o, t) {
       bg(x, 1080, 1920, t); logo(x, 80, 250, 96);
       const lines = ["SEU ENGENHEIRO", "DE CORRIDA", "EM PORTUGUÊS"], sz = Math.min(...lines.map((l) => fit(x, l, fd, 920, 140)));
       T(x, lines[0], 540, 520, fd(sz), C.chalk, "center"); T(x, lines[1], 540, 520 + sz * 1.0, fd(sz), C.chalk, "center"); GT(x, lines[2], 540, 520 + sz * 2.0, fd(sz), t, "center");
-      fact(x, 540, 520 + sz * 2.0 + 70, fb, 40, C.fog, "center", 900);
+      T(x, "Telemetria, overlays e voz para ACC e iRacing", 540, 520 + sz * 2.0 + 70, fb(38), C.fog, "center");
       if (o.pct > 0) { pop(x, 540, 1040, t, () => GT(x, o.pct + "%", 540, 1090, fd(330), t, "center")); T(x, "DE DESCONTO", 540, 1180, fd(92), C.chalk, "center"); T(x, durTxt(o), 540, 1236, fb(38), C.fog, "center"); }
       codeBox(x, 120, 1280, 840, 190, o, t); T(x, link + "  ·  baixe grátis", 540, 1540, fb(38), C.fog, "center"); shine(x, 1080, 1920, t);
     } },
-    { id: "quadrado", name: "Post quadrado", use: "Feed do Instagram, X, Discord e WhatsApp (1:1).", w: 1080, h: 1080, gif: .45, n: 48, draw(x, o, t) {
+    { id: "quadrado", name: "Post quadrado", use: "Feed do Instagram, X, Discord e WhatsApp (1:1).", w: 1080, h: 1080, gif: .4, n: 90, dl: 160, draw(x, o, t) {
       bg(x, 1080, 1080, t); logo(x, 70, 64, 80);
       const sz = fit(x, "ENGENHEIRO DE CORRIDA", fd, 940, 130);
       T(x, "ENGENHEIRO DE CORRIDA", 70, 290, fd(sz), C.chalk); GT(x, "EM PORTUGUÊS", 70, 290 + sz * .98, fd(sz), t);
-      fact(x, 70, 290 + sz * .98 + 56, fb, 34, C.fog, "left", 940);
+      T(x, "Telemetria, overlays e voz para ACC e iRacing", 70, 290 + sz * .98 + 56, fb(32), C.fog);
       if (o.pct > 0) { const nf = fd(290), W = wid(x, o.pct + "%", nf); pop(x, 70 + W / 2, 640, t, () => GT(x, o.pct + "%", 70, 770, nf, t));
         T(x, "DE", 70 + W + 30, 680, fd(70), C.chalk); T(x, "DESCONTO", 70 + W + 30, 755, fd(84), C.chalk); T(x, durTxt(o), 70, 825, fb(32), C.fog); }
       codeBox(x, 70, 850, 940, 150, o, t); T(x, link, 540, 1046, fb(28), C.fog, "center"); shine(x, 1080, 1080, t);
     } },
-    { id: "camera", name: "Barra embaixo da câmera", use: "Barra fininha para colar logo abaixo da sua câmera na live (OBS, Streamlabs). Mesma proporção das da imagem.", w: 940, h: 180, gif: .6, alpha: true, draw(x, o, t) {
+    { id: "camera", name: "Barra embaixo da câmera", use: "Barra fininha para colar logo abaixo da sua câmera na live (OBS, Streamlabs). Mesma proporção das da imagem.", w: 940, h: 180, gif: .6, alpha: true, r: 22, draw(x, o, t) {
       x.save(); rr(x, 0, 0, 940, 180, 22); x.clip(); bg(x, 940, 180, t);
       mark(x, 30, 26, 80); T(x, "PITWALL", 70, 140, fd(30), C.chalk, "center", "middle");
       const X0 = 150, W = 770, cx = X0 + W / 2;
-      const offer = `${o.pct}% DE DESCONTO NA ASSINATURA`;
-      flip(x, cx, 70, 6, (i) => { if (i % 2 === 0 && o.pct > 0) GT(x, offer, cx, 70, fd(fit(x, offer, fd, W, 56)), t, "center", "middle");
-        else { const f = FACTS[o.pct > 0 ? i >> 1 : i].toUpperCase(); T(x, f, cx, 70, fd(fit(x, f, fd, W, 52)), C.chalk, "center", "middle"); } });
+      const offer = o.pct > 0 ? `${o.pct}% DE DESCONTO NA ASSINATURA` : "ENGENHEIRO DE CORRIDA EM PORTUGUÊS";
+      GT(x, offer, cx, 70, fd(fit(x, offer, fd, W, 56)), t, "center", "middle");
       const a = "USE O CÓDIGO: ", sa = fit(x, a + o.code, fd, W, 70), w1 = wid(x, a, fd(sa)), w2 = wid(x, o.code, fd(sa * 1.08)), x1 = cx - (w1 + w2) / 2;
       T(x, a, x1, 132, fd(sa), C.chalk, "left", "middle");
       x.save(); x.shadowColor = `rgba(46,229,157,${.3 + .4 * (.5 + .5 * Math.sin(t * TAU))})`; x.shadowBlur = 22; T(x, o.code, x1 + w1, 132, fd(sa * 1.08), C.green, "left", "middle"); x.restore();
@@ -126,14 +130,15 @@ const BN = (() => {
       x.fillStyle = "#101826"; x.fillRect(-S, -bh / 2, S * 2, bh); x.shadowColor = "transparent";
       const g = x.createLinearGradient(-S, 0, S, 0); g.addColorStop(0, C.green); g.addColorStop(.5, C.blue); g.addColorStop(1, C.purple);
       x.fillStyle = g; x.fillRect(-S, -bh / 2, S * 2, 7); x.fillRect(-S, bh / 2 - 7, S * 2, 7);
-      const l1 = o.pct > 0 ? `PITWALL · ${o.pct}% OFF` : "PITWALL", l2 = "CÓDIGO: " + o.code, W = 330, s1 = fit(x, l1, fd, W, 46), s2 = fit(x, l2, fd, W, 52);
-      T(x, l1, 0, -22, fd(s1), C.chalk, "center", "middle");
-      x.save(); x.shadowColor = `rgba(46,229,157,${.3 + .4 * (.5 + .5 * Math.sin(t * TAU))})`; x.shadowBlur = 16; T(x, l2, 0, 24, fd(s2), C.green, "center", "middle"); x.restore();
+      const W = 330, st = [[o.pct > 0 ? `PITWALL · ${o.pct}% OFF` : "PITWALL", "CÓDIGO: " + o.code, 1], [FEATS[0].t, "pitwall.hygor.com.br", 0], ["USE O CÓDIGO", o.code, 1], [FEATS[1].t, "baixe grátis", 0]];
+      flip(x, 0, 0, 4, (i) => { const [l1, l2, hi] = st[i], s1 = fit(x, l1, fd, W, 46), s2 = fit(x, l2, fd, W, 52);
+        T(x, l1, 0, -22, fd(s1), C.chalk, "center", "middle");
+        x.save(); if (hi) { x.shadowColor = `rgba(46,229,157,${.3 + .4 * (.5 + .5 * Math.sin(t * TAU))})`; x.shadowBlur = 16; } T(x, l2, 0, 24, fd(s2), hi ? C.green : C.fog, "center", "middle"); x.restore(); });
       const p = t < .6 || t > .9 ? null : (t - .6) / .3;
       if (p != null) { const X = -S + p * S * 2, sg = x.createLinearGradient(X, 0, X + 90, 0); sg.addColorStop(0, "rgba(255,255,255,0)"); sg.addColorStop(.5, "rgba(255,255,255,.28)"); sg.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = sg; x.fillRect(X, -bh / 2, 90, bh); }
       x.restore();
     } },
-    { id: "quadradinho", name: "Quadradinho", use: "Selo pequeno com cantos arredondados e fundo transparente. Coloque em cima ou ao lado da câmera.", w: 400, h: 400, gif: .75, alpha: true, draw(x, o, t) {
+    { id: "quadradinho", name: "Quadradinho", use: "Selo pequeno com cantos arredondados e fundo transparente. Coloque em cima ou ao lado da câmera.", w: 400, h: 400, gif: .75, alpha: true, r: 44, draw(x, o, t) {
       x.save(); rr(x, 0, 0, 400, 400, 44); x.clip(); bg(x, 400, 400, t); logo(x, 30, 28, 44);
       if (o.pct > 0) { pop(x, 200, 160, t, () => GT(x, o.pct + "%", 200, 235, fd(190), t, "center")); T(x, "DE DESCONTO", 200, 282, fd(46), C.chalk, "center"); }
       codeBox(x, 24, o.pct > 0 ? 306 : 190, 352, 72, o, t); shine(x, 400, 400, t); x.restore();
@@ -141,36 +146,83 @@ const BN = (() => {
     { id: "painel", name: "Painel da Twitch", use: "Painel para colocar abaixo do vídeo no seu canal da Twitch (largura de 320 px, aqui em alta resolução).", w: 640, h: 260, gif: .75, draw(x, o, t) {
       bg(x, 640, 260, t); logo(x, 28, 22, 52);
       if (o.pct > 0) GT(x, o.pct + "% OFF", 612, 50, fd(fit(x, o.pct + "% OFF", fd, 250, 66)), t, "right", "middle");
-      fact(x, 28, 116, fb, 26, C.fog, "left", 584); codeBox(x, 28, 140, 584, 88, o, t);
+      T(x, "Engenheiro de corrida em português", 28, 116, fb(25), C.fog); codeBox(x, 28, 140, 584, 88, o, t);
       T(x, link, 320, 246, fb(18), C.fog, "center"); shine(x, 640, 260, t);
     } },
     { id: "capa", name: "Capa do canal (Twitch / YouTube)", use: "Banner de perfil 1200×480 para a Twitch (serve também como capa de outras redes).", w: 1200, h: 480, gif: .6, draw(x, o, t) {
       bg(x, 1200, 480, t); logo(x, 60, 56, 88);
       const lines = ["SEU ENGENHEIRO", "DE CORRIDA"], sz = fit(x, "SEU ENGENHEIRO", fd, 620, 100);
       T(x, lines[0], 60, 220, fd(sz), C.chalk); T(x, lines[1], 60, 220 + sz * .95, fd(sz), C.chalk); GT(x, "EM PORTUGUÊS", 60, 220 + sz * 1.9, fd(sz), t);
-      fact(x, 60, 440, fb, 28, C.fog, "left", 640);
+      T(x, "Telemetria, overlays e voz para ACC e iRacing  ·  " + link, 60, 440, fb(26), C.fog);
       if (o.pct > 0) { pop(x, 930, 170, t, () => GT(x, o.pct + "%", 930, 262, fd(250), t, "center")); T(x, "DE DESCONTO", 930, 322, fd(58), C.chalk, "center"); }
       codeBox(x, 750, 340, 360, 100, o, t); shine(x, 1200, 480, t);
     } },
   ];
 
+  FORMATS.forEach((f, i) => { f.fi = i; f.scenes = f.id !== "canto"; });
+
+  // ----------------------------------------------------------------- cenas: o modelo inteiro troca de tempos em tempos
+  // 0 oferta (o desenho principal do formato) · 1 recurso · 2 código gigante · 3 outro recurso
+  const SCENES = [[0, 0], [1, 0], [2, 0], [1, 1]];
+  function generic(x, f, o, t, v, feat) {
+    const w = f.w, h = f.h, a = w / h, F = FEATS[feat], mode = a >= 3.5 ? "wide" : a >= 1.8 ? "mid" : "box", pulse = .5 + .5 * Math.sin(t * TAU);
+    const glow = (fn) => { x.save(); x.shadowColor = `rgba(46,229,157,${.3 + .4 * pulse})`; x.shadowBlur = h * .06; fn(); x.restore(); };
+    bg(x, w, h, t);
+    if (mode === "wide") {
+      mark(x, h * .22, h * .25, h * .5); const X0 = h * 1.05, W = w - X0 - h * .25;
+      if (v === 1) { GT(x, F.t, X0, h * .36, fd(fit(x, F.t, fd, W, h * .36)), t, "left", "middle"); const sub = F.s.join(" "); T(x, sub, X0, h * .74, fb(fit(x, sub, fb, W, h * .17)), C.fog, "left", "middle"); }
+      else { T(x, "USE O CÓDIGO", X0, h * .2, fb(h * .13, 700), C.fog, "left", "middle");
+        const cs = fit(x, o.code, fd, W * .6, h * .62); glow(() => T(x, o.code, X0, h * .62, fd(cs), C.chalk, "left", "middle"));
+        if (o.pct > 0) { const ps = o.pct + "% OFF"; GT(x, ps, w - h * .25, h * .42, fd(fit(x, ps, fd, W * .32, h * .5)), t, "right", "middle"); T(x, durTxt(o), w - h * .25, h * .78, fb(h * .1), C.fog, "right", "middle"); } }
+    } else if (mode === "mid") {
+      logo(x, w * .05, h * .08, h * .17);
+      if (v === 1) { GT(x, F.t, w * .06, h * .46, fd(fit(x, F.t, fd, w * .88, h * .2)), t, "left", "middle");
+        T(x, F.s[0], w * .06, h * .63, fb(h * .085), C.fog, "left", "middle"); T(x, F.s[1], w * .06, h * .74, fb(h * .085), C.fog, "left", "middle"); codeBox(x, w * .06, h * .81, w * .88, h * .14, o, t); }
+      else { T(x, "USE O CÓDIGO", w / 2, h * .3, fb(h * .075, 700), C.fog, "center", "middle");
+        const cs = fit(x, o.code, fd, w * .8, h * .36); glow(() => T(x, o.code, w / 2, h * .54, fd(cs), C.chalk, "center", "middle"));
+        if (o.pct > 0) { const ps = `${o.pct}% DE DESCONTO`; GT(x, ps, w / 2, h * .77, fd(fit(x, ps, fd, w * .8, h * .12)), t, "center", "middle"); T(x, durTxt(o), w / 2, h * .9, fb(h * .06), C.fog, "center", "middle"); } }
+    } else {
+      logo(x, w * .07, a < .7 ? h * .13 : a < 1.1 && h > 500 ? h * .06 : h * .07, w * .09); const bh = Math.min(h * .14, w * .18), big = h > 500;
+      if (v === 1) { GT(x, F.t, w / 2, h * .38, fd(fit(x, F.t, fd, w * .88, w * .16)), t, "center", "middle");
+        const ss = fit(x, F.s[1], fb, w * .88, w * .05); T(x, F.s[0], w / 2, h * .38 + w * .1, fb(ss), C.fog, "center", "middle"); T(x, F.s[1], w / 2, h * .38 + w * .16, fb(ss), C.fog, "center", "middle");
+        codeBox(x, w * .08, h * .64, w * .84, bh, o, t); if (big) T(x, link, w / 2, h * .64 + bh + w * .06, fb(w * .032), C.fog, "center", "middle"); }
+      else { T(x, "USE O CÓDIGO", w / 2, h * .3, fb(w * .05, 700), C.fog, "center", "middle");
+        const cs = fit(x, o.code, fd, w * .9, w * .22); glow(() => T(x, o.code, w / 2, h * .44, fd(cs), C.chalk, "center", "middle"));
+        if (o.pct > 0) { const ps = `${o.pct}% DE DESCONTO`; GT(x, ps, w / 2, h * .58, fd(fit(x, ps, fd, w * .9, w * .1)), t, "center", "middle"); T(x, durTxt(o), w / 2, h * .58 + w * .085, fb(w * .036), C.fog, "center", "middle"); }
+        if (big) T(x, link, w / 2, h * .72, fb(w * .034), C.fog, "center", "middle"); }
+    }
+    shine(x, w, h, t);
+  }
+  const drawScene = (x, f, o, t, i) => { const [v, fo] = SCENES[i]; if (v === 0) f.draw(x, o, t); else generic(x, f, o, t, v, (f.fi * 2 + fo) % FEATS.length); };
+  function frame(x, f, o, g) {
+    const t = (g * 10) % 1; G = g;
+    if (!f.scenes) return f.draw(x, o, t);
+    const n = SCENES.length, k = g * n, i = Math.floor(k) % n, u = k - Math.floor(k);
+    x.save(); if (f.r) { rr(x, 0, 0, f.w, f.h, f.r); x.clip(); }
+    if (u < .12) {                                           // transição: slide nas cenas ímpares, virada nas pares
+      const p = 1 - Math.pow(1 - u / .12, 3), prev = (i + n - 1) % n;
+      if (i % 2 === 1) { x.save(); x.translate(-p * f.w, 0); drawScene(x, f, o, t, prev); x.restore(); x.save(); x.translate((1 - p) * f.w, 0); drawScene(x, f, o, t, i); x.restore(); }
+      else { const sc = p < .5 ? 1 - p * 2 : p * 2 - 1; x.translate(0, f.h / 2); x.scale(1, Math.max(.02, sc)); x.translate(0, -f.h / 2); drawScene(x, f, o, t, p < .5 ? prev : i); }
+    } else drawScene(x, f, o, t, i);
+    x.restore();
+  }
+
   const ready = () => Promise.all([document.fonts.load(`italic 800 40px "Barlow Condensed"`), document.fonts.load(`600 20px Barlow`)]).catch(() => {});
   const opts = (o) => ({ code: (o.code || "SEUCODIGO").toUpperCase(), pct: Math.max(0, Math.min(100, +o.pct || 0)), duration: o.duration, corner: o.corner });
   function paint(cv, f, o, g, scale) {
-    G = g; const t = (g * 5) % 1;
     cv.width = Math.round(f.w * scale); cv.height = Math.round(f.h * scale);
-    const x = cv.getContext("2d", { willReadFrequently: true }); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.scale(scale, scale); f.draw(x, o, t); return x;
+    const x = cv.getContext("2d", { willReadFrequently: true }); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.scale(scale, scale); frame(x, f, o, g); return x;
   }
   const save = (blob, name) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
   const fname = (f, o, ext) => `pitwall-${o.code.toLowerCase()}-${f.id}.${ext}`;
 
   async function exportPng(f, o) {
-    await ready(); const cv = document.createElement("canvas"); paint(cv, f, o, .083, 1);
+    await ready(); const cv = document.createElement("canvas"); paint(cv, f, o, .1, 1);
     cv.toBlob((b) => save(b, fname(f, o, "png")), "image/png");
   }
   async function exportGif(f, o, prog) {
     await ready();
-    const { GIFEncoder, quantize, applyPalette } = await import("https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js"), N = f.n || 72, dl = f.n ? 150 : 100, cv = document.createElement("canvas"), gif = GIFEncoder();
+    const { GIFEncoder, quantize, applyPalette } = await import("https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js"), N = f.n || 120, dl = f.dl || 120, cv = document.createElement("canvas"), gif = GIFEncoder();
     for (let i = 0; i < N; i++) {
       const x = paint(cv, f, o, i / N, f.gif), { data } = x.getImageData(0, 0, cv.width, cv.height);
       if (f.alpha) {
@@ -221,7 +273,7 @@ const BN = (() => {
         <div class="adm-form">
           <label class="bn-f">Formato <select id="bnLfmt">${LIVE.map((id) => `<option value="${id}">${FORMATS.find((q) => q.id === id).name}</option>`).join("")}</select></label>
           <label class="bn-f">Aparece a cada (segundos) <input id="bnEvery" type="number" min="10" max="3600" value="120" style="width:110px"></label>
-          <label class="bn-f">Fica na tela (segundos) <input id="bnShow" type="number" min="3" max="60" value="12" style="width:110px"></label>
+          <label class="bn-f">Fica na tela (segundos) <input id="bnShow" type="number" min="3" max="60" value="15" style="width:110px"></label>
           <label class="bn-f">Posição <select id="bnPos"><option value="top">Em cima</option><option value="bottom">Embaixo</option></select></label></div>
         <h3 style="margin:10px 0 4px">1) Fonte de navegador do OBS (recomendado)</h3>
         <code class="lickey" id="bnUrl" style="word-break:break-all"></code>
@@ -236,7 +288,7 @@ const BN = (() => {
     const refreshUrl = () => { $("#bnUrl").textContent = liveUrl(); $("#bnTest").href = liveUrl("&preview=1"); };
     $("#bnCopy").onclick = async () => { await navigator.clipboard.writeText(liveUrl()); $("#bnCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); setTimeout(() => { $("#bnCopy").textContent = "Copiar link"; }, 2000); };
     $("#bnBlink").onclick = async (ev) => { const b = ev.currentTarget, old = b.textContent; b.disabled = true;
-      try { const e = Math.max(10, +$("#bnEvery").value || 120), s = Math.min(e - 2, Math.max(3, +$("#bnShow").value || 12)); await exportGifBlink(FORMATS.find((q) => q.id === $("#bnLfmt").value), opts(st), s, e, (p) => { b.textContent = p + "%"; }); } catch (e) { toast(e.message, "err"); }
+      try { const e = Math.max(10, +$("#bnEvery").value || 120), s = Math.min(e - 2, Math.max(3, +$("#bnShow").value || 15)); await exportGifBlink(FORMATS.find((q) => q.id === $("#bnLfmt").value), opts(st), s, e, (p) => { b.textContent = p + "%"; }); } catch (e) { toast(e.message, "err"); }
       b.textContent = old; b.disabled = false; };
     const read = () => { st.code = $("#bnCode").value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ""); st.pct = +$("#bnPct").value || 0; st.duration = $("#bnDur").value; st.corner = $("#bnCorner").value; };
     ["bnCode", "bnPct", "bnDur", "bnCorner"].forEach((id) => { $("#" + id).oninput = () => { read(); refreshUrl(); }; });
@@ -261,5 +313,5 @@ const BN = (() => {
     };
     const timer = setInterval(tick, 90); tick();
   }
-  return { studio, paint, FORMATS, opts, ready };
+  return { studio, paint, FORMATS, opts, ready, LOOP };
 })();

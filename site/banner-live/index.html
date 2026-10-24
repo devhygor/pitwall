@@ -8,7 +8,7 @@
   #c.on { transform: none; opacity: 1; }
 </style></head>
 <body><canvas id="c" width="10" height="10"></canvas>
-<script src="../banners.js?v=2"></script>
+<script src="../banners.js?v=3"></script>
 <script>
 /* Banner que aparece de tempos em tempos (fonte "Navegador" do OBS / Streamlabs). Fundo transparente.
    Parâmetros: code, pct, dur (once|forever), fmt (camera|faixa|canto|quadradinho|painel), corner (tl|tr|bl|br),
@@ -17,11 +17,11 @@
   const q = new URLSearchParams(location.search), cv = document.getElementById("c");
   const f = BN.FORMATS.find((x) => x.id === q.get("fmt")) || BN.FORMATS.find((x) => x.id === "camera");
   const o = BN.opts({ code: q.get("code") || "PITWALL", pct: q.get("pct") || 10, duration: q.get("dur"), corner: q.get("corner") || "tl" });
-  const show = Math.max(3, +q.get("show") || 12), every = Math.max(show + 2, +q.get("every") || 120), preview = q.has("preview");
+  const show = Math.max(3, +q.get("show") || 15), every = Math.max(show + 2, +q.get("every") || 120), preview = q.has("preview");
   cv.style[q.get("pos") === "bottom" ? "bottom" : "top"] = "0";
   await BN.ready();
   let t0 = 0, on = false, raf = 0, last = 0;
-  const frame = (now) => { if (!on) return; if (now - last > 32) { last = now; BN.paint(cv, f, o, ((now - t0) % 7200) / 7200, Math.min(1, 1280 / f.w)); } raf = requestAnimationFrame(frame); };
+  const frame = (now) => { if (!on) return; if (now - last > 32) { last = now; BN.paint(cv, f, o, ((now - t0) % BN.LOOP) / BN.LOOP, Math.min(1, 1280 / f.w)); } raf = requestAnimationFrame(frame); };
   const appear = () => { on = true; t0 = performance.now(); BN.paint(cv, f, o, 0, Math.min(1, 1280 / f.w)); raf = requestAnimationFrame(frame); requestAnimationFrame(() => cv.classList.add("on")); };
   const vanish = () => { cv.classList.remove("on"); setTimeout(() => { on = false; cancelAnimationFrame(raf); }, 900); };
   if (preview) return appear();
