@@ -268,6 +268,9 @@ const BN = (() => {
       <div class="bn-grid">${FORMATS.map((f) => `<div class="bn-card" data-f="${f.id}"><div class="bn-prev ${f.alpha ? "chk" : ""}"><canvas></canvas></div>
         <h3>${esc(f.name)} <small class="sub">${f.w}×${f.h}</small></h3><p class="sub">${esc(f.use)}</p>
         <div class="row-actions"><button class="btn small" data-png>Baixar PNG</button><button class="btn go small" data-gif>Baixar GIF</button></div></div>`).join("")}</div></div>
+      <div class="panel bn" style="margin-top:16px"><h2>Comando de chat (!pitwall)</h2>
+        <p class="sub">Cole no chat da sua live (precisa ser moderador/dono do canal) e o seu bot cria o comando <b>!pitwall</b> sozinho. Quando alguém digitar <b>!pitwall</b>, o bot responde com o link e o código. Se o seu bot tem um painel de comandos, use só o <b>texto da resposta</b>.</p>
+        <div id="bnChat"></div></div>
       <div class="panel bn" style="margin-top:16px"><h2>Aparecer na live de tempos em tempos</h2>
         <p class="sub">Em vez de ficar parado na tela o tempo todo, o banner entra deslizando, fica alguns segundos e sai, e repete. Tem dois jeitos:</p>
         <div class="adm-form">
@@ -285,7 +288,13 @@ const BN = (() => {
     $("#bnDur").value = st.duration;
     const liveUrl = (extra) => { const p = new URLSearchParams({ code: st.code, pct: st.pct, dur: st.duration, fmt: $("#bnLfmt").value, corner: st.corner, every: $("#bnEvery").value, show: $("#bnShow").value, pos: $("#bnPos").value });
       return location.origin + "/banner-live/?" + p + (extra || ""); };
-    const refreshUrl = () => { $("#bnUrl").textContent = liveUrl(); $("#bnTest").href = liveUrl("&preview=1"); };
+    const chatText = () => `Pitwall: engenheiro de corrida em português para ACC e iRacing, com telemetria, overlays e setups. Baixe grátis: https://pitwall.hygor.com.br/?ref=${st.code}` + (st.pct > 0 ? ` | Use o código ${st.code} e ganhe ${st.pct}% de desconto na assinatura!` : "");
+    const refreshChat = () => {
+      const tx = chatText(), rows = [["Texto da resposta (para colar no painel do seu bot)", tx], ["Nightbot", "!commands add !pitwall " + tx], ["StreamElements", "!command add pitwall " + tx], ["Streamlabs Cloudbot", "!addcom !pitwall " + tx]];
+      $("#bnChat").innerHTML = rows.map(([n, v], i) => `<div style="margin-bottom:10px"><b>${esc(n)}</b>${i === 0 ? ` <small class="sub">${tx.length}/500 caracteres</small>` : ""}<code class="lickey" style="word-break:break-all;display:block;margin:4px 0">${esc(v)}</code><button class="btn small" data-cc="${i}">Copiar</button></div>`).join("");
+      $("#bnChat").querySelectorAll("[data-cc]").forEach((b) => { b.onclick = async () => { await navigator.clipboard.writeText(rows[+b.dataset.cc][1]); b.textContent = "Copiado!"; toast("Copiado", "ok"); setTimeout(() => { b.textContent = "Copiar"; }, 2000); }; });
+    };
+    const refreshUrl = () => { refreshChat(); $("#bnUrl").textContent = liveUrl(); $("#bnTest").href = liveUrl("&preview=1"); };
     $("#bnCopy").onclick = async () => { await navigator.clipboard.writeText(liveUrl()); $("#bnCopy").textContent = "Copiado!"; toast("Link copiado", "ok"); setTimeout(() => { $("#bnCopy").textContent = "Copiar link"; }, 2000); };
     $("#bnBlink").onclick = async (ev) => { const b = ev.currentTarget, old = b.textContent; b.disabled = true;
       try { const e = Math.max(10, +$("#bnEvery").value || 120), s = Math.min(e - 2, Math.max(3, +$("#bnShow").value || 15)); await exportGifBlink(FORMATS.find((q) => q.id === $("#bnLfmt").value), opts(st), s, e, (p) => { b.textContent = p + "%"; }); } catch (e) { toast(e.message, "err"); }
