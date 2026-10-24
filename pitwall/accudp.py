@@ -8,7 +8,9 @@ O formato das mensagens é o do SDK oficial (protocolo v4).
 from __future__ import annotations
 
 import json
+import os
 import socket
+import sys
 import struct
 import threading
 import time
@@ -17,17 +19,38 @@ from pathlib import Path
 NONE_MS = 2147483647
 
 
+def _config_files() -> list[Path]:
+    """Onde pode estar o broadcasting.json: a pasta Documentos pode estar no OneDrive ou em outro drive."""
+    roots: list[Path] = []
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(260)
+            ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf)    # CSIDL_PERSONAL
+            if buf.value:
+                roots.append(Path(buf.value))
+        except Exception:  # noqa: BLE001
+            pass
+        for env in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+            if os.environ.get(env):
+                roots += [Path(os.environ[env]) / "Documents", Path(os.environ[env]) / "Documentos"]
+    home = Path.home()
+    roots += [home / "Documents", home / "Documentos", home / "OneDrive" / "Documents", home / "OneDrive" / "Documentos"]
+    return [r / "Assetto Corsa Competizione" / "Config" / "broadcasting.json" for r in roots]
+
+
 def _config() -> tuple[int, str]:
     port, pw = 9000, "asd"
-    p = Path.home() / "Documents" / "Assetto Corsa Competizione" / "Config" / "broadcasting.json"
-    try:
-        raw = p.read_bytes()
-        txt = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" in raw[:4] else raw.decode("utf-8-sig")
-        cfg = json.loads(txt)
-        port = int(cfg.get("updListenerPort", port))
-        pw = str(cfg.get("connectionPassword", pw))
-    except Exception:  # noqa: BLE001
-        pass
+    for p in _config_files():
+        try:
+            raw = p.read_bytes()
+            txt = raw.decode("utf-16") if raw[:2] in (b"\xff\xfe", b"\xfe\xff") or b"\x00" in raw[:4] else raw.decode("utf-8-sig")
+            cfg = json.loads(txt)
+            port = int(cfg.get("updListenerPort", cfg.get("udpListenerPort", port)))
+            pw = str(cfg.get("connectionPassword", pw))
+            break
+        except Exception:  # noqa: BLE001
+            continue
     return port, pw
 
 
