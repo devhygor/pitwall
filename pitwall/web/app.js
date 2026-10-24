@@ -3087,7 +3087,7 @@ async function renderSettings() {
 
       <section class="set-sec" data-sec="video">
         <div class="set-card"><h2>Gravação de vídeo</h2>
-          ${setRow("Gravar vídeo nas sessões", "Grava a tela durante a sessão, sincronizada com a telemetria.", `<input id="cVid" class="tgl" type="checkbox" ${s.video_enabled ? "checked" : ""}>`)}
+          ${setRow("Gravar vídeo nas sessões", "Grava a tela durante a sessão, sincronizada com a telemetria. Pode reduzir o FPS do jogo em alguns PCs.", `<input id="cVid" class="tgl" type="checkbox" ${s.video_enabled ? "checked" : ""}>`)}
           ${setRow("Monitor do jogo", "Qual tela gravar.", sel("cMon", [[0, "1 (principal)"], [1, "2"], [2, "3"], [3, "4"]], s.video_monitor))}
           ${setRow("Encoder", "Automático tenta NVIDIA, depois AMD e, por último, o processador.", sel("cEnc", [["auto", "Automático"], ["nvenc", "NVIDIA (NVENC)"], ["amf", "AMD (AMF)"], ["cpu", "Processador (720p)"]], s.video_encoder))}
           ${setRow("Quadros por segundo", "", sel("cFps", [[30, "30"], [60, "60"]], s.video_fps))}

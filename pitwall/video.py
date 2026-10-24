@@ -27,6 +27,8 @@ from .settings import Settings
 
 IS_WIN = sys.platform == "win32"
 NO_WINDOW = 0x08000000 if IS_WIN else 0   # CREATE_NO_WINDOW
+# o ffmpeg grava junto com o jogo: prioridade baixa para não competir por CPU com ele
+LOW_PRIORITY = NO_WINDOW | (0x00004000 if IS_WIN else 0)   # BELOW_NORMAL_PRIORITY_CLASS
 
 
 def find_ffmpeg() -> Optional[str]:
@@ -149,7 +151,7 @@ class VideoRecorder:
                                  self.settings.get("video_bitrate_mbps")),
                "-an", "-progress", "pipe:1", "-stats_period", "0.25", "-y", str(path)]
         self._proc = proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE, creationflags=NO_WINDOW)
+                                             stderr=subprocess.PIPE, creationflags=LOW_PRIORITY)
         sid = self._session_id
         threading.Thread(target=self._read_progress, args=(proc, sid), daemon=True).start()
         threading.Thread(target=self._read_errors, args=(proc,), daemon=True).start()

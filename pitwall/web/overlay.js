@@ -20,6 +20,14 @@ const DEFAULT_CFG = { mode: "off", scale: 100, bg: 0, cars: true, numbers: true,
   mapstyle: "asphalt", mapmode: "full", fzoom: 350, brakepts: false, dist: true, brakepoint: true, lead: 250, next: true, cstyle: "full",
   rstyle: "top", range: 40, gap: true, bstyle: "dot", always: true, carcolor: "heat", carstatic: "#f4f7ff", showmode: "always", nearm: 30, special: null, specialfor: "me" };
 
+// os overlays rodam por cima do jogo: redesenhar a cada frame do monitor (144 Hz+) só tira FPS do jogo, então limita a ~30 quadros/s
+const OV_FRAME_MS = 33;
+let lastFrameAt = 0;
+function nextFrame(fn) {
+  const wait = Math.max(0, OV_FRAME_MS - (performance.now() - lastFrameAt));
+  setTimeout(() => requestAnimationFrame((t) => { lastFrameAt = performance.now(); fn(t); }), wait);
+}
+
 let cfg = { ...DEFAULT_CFG };
 // modelos extras de overlay: Pro (overlay_styles); sem o recurso, volta para o modelo simples
 const FEATS = new Set();
@@ -388,9 +396,9 @@ function mapOverlay() {
     if (mapTrack !== (data && data.track) && data && data.track && performance.now() - mapAt > 1500) loadMap();
     else if (filled < 0.95 && performance.now() - mapAt > 5000) loadMap();
     draw();
-    requestAnimationFrame(loop);
+    nextFrame(loop);
   };
-  requestAnimationFrame(loop);
+  nextFrame(loop);
   return { onData() {}, onCfg() { bounds = null; } };
 }
 
@@ -465,9 +473,9 @@ function cornerOverlay() {
   const loop = () => {
     if (!plan.length && performance.now() - planAt > 4000) loadPlan();
     else if (data && data.track && planTrack !== data.track && performance.now() - planAt > 1500) loadPlan();
-    render(); requestAnimationFrame(loop);
+    render(); nextFrame(loop);
   };
-  loadPlan(); requestAnimationFrame(loop);
+  loadPlan(); nextFrame(loop);
   return { onData() {}, onCfg() {} };
 }
 
@@ -583,8 +591,8 @@ function pedalsOverlay() {
     lg.innerHTML = `<span class="g">ACEL <b class="num">${Math.round(last[1] * 100)}</b></span><br><span class="r">FREIO <b class="num">${Math.round(last[2] * 100)}</b></span>` +
       (cfg.coast ? `<br><span class="a">${none ? "<b>SEM PEDAL</b>" : "sem pedal"} <span class="num">${Math.round(coastN * 100)}%</span></span>` : "");
   }
-  const loop = () => { draw(); requestAnimationFrame(loop); };
-  requestAnimationFrame(loop);
+  const loop = () => { draw(); nextFrame(loop); };
+  nextFrame(loop);
   onCfg();
   return { onData() {}, onCfg };
 }
@@ -696,8 +704,8 @@ function radarOverlay() {
       drawCar(ctx, cx, cy, 84, "#e8f0ff", { kind: myKind, variant: myVar, special: spMe, hi: "#ffffff" });
     }
   }
-  const loop = () => { draw(); requestAnimationFrame(loop); };
-  requestAnimationFrame(loop);
+  const loop = () => { draw(); nextFrame(loop); };
+  nextFrame(loop);
   return { onData() {}, onCfg() {}, draw };
 }
 
@@ -726,8 +734,8 @@ function blindOverlay(side) {                                    // side: "L" | 
     bs.dataset.n = n > 1 ? n : "";
     bs.classList.toggle("hid", cfg.always === false && state === "off");
   }
-  const loop = () => { draw(); requestAnimationFrame(loop); };
-  requestAnimationFrame(loop);
+  const loop = () => { draw(); nextFrame(loop); };
+  nextFrame(loop);
   return { onData() {}, onCfg() { bs.dataset.st = ""; } };
 }
 
